@@ -37,3 +37,34 @@ class InstanceRegistryTests(unittest.TestCase):
 
         with self.assertRaises(InstanceStateTransitionError):
             registry.transition_status("mumu-0", InstanceStatus.BUSY)
+
+    def test_sync_preserves_runtime_metadata_and_disconnects_missing_instances(self) -> None:
+        registry = InstanceRegistry()
+        initial = InstanceState(
+            instance_id="mumu-0",
+            label="MuMu 0",
+            adb_serial="127.0.0.1:16384",
+            status=InstanceStatus.READY,
+        )
+
+        registry.sync([initial])
+        registry.get("mumu-0").metadata["profile_id"] = "main-account"
+
+        registry.sync(
+            [
+                InstanceState(
+                    instance_id="mumu-0",
+                    label="MuMu 0",
+                    adb_serial="127.0.0.1:16384",
+                    status=InstanceStatus.BUSY,
+                )
+            ]
+        )
+
+        refreshed = registry.get("mumu-0")
+        self.assertEqual(refreshed.status, InstanceStatus.BUSY)
+        self.assertEqual(refreshed.metadata["profile_id"], "main-account")
+
+        registry.sync([])
+
+        self.assertEqual(registry.get("mumu-0").status, InstanceStatus.DISCONNECTED)

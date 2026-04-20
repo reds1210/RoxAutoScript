@@ -44,13 +44,52 @@ QLabel#titleLabel {
     color: #1e352e;
 }
 
+QLabel#subtitleLabel,
+QLabel#subtleLabel,
+QLabel#fieldLabel {
+    color: #5d5a52;
+}
+
 QLabel#sectionTitle {
     font-size: 18px;
     font-weight: 700;
     color: #274a3f;
 }
 
-QLabel#emergencyLabel {
+QLabel#statusBanner {
+    background: #efe3c4;
+    border: 1px solid #cabd9f;
+    border-radius: 8px;
+    padding: 8px 10px;
+    color: #4b4336;
+    font-weight: 600;
+}
+
+QLabel#warningLabel,
+QPushButton#emergencyButton {
     color: #8b1e1e;
     font-weight: 700;
+}
+
+QGroupBox#summaryCard {
+    background: #f7f1e3;
+}
+
+QLabel#metricValue {
+    font-size: 22px;
+    font-weight: 700;
+    color: #274a3f;
+}
+
+QLabel#fieldValue {
+    color: #1f2d28;
+    font-weight: 600;
+}
+
+QLabel#previewFrame {
+    background: #f3ead6;
+    border: 1px dashed #b9ad95;
+    border-radius: 8px;
+    color: #4f4a42;
+    padding: 18px;
 }

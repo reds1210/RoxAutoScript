@@ -100,3 +100,51 @@ class ProfileStoreTests(unittest.TestCase):
 
             self.assertIsNotNone(binding)
             self.assertEqual(binding.profile_id, "main-account")
+
+    def test_store_can_auto_resolve_binding_for_unique_instance_override(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            store = JsonProfileStore(Path(tmp_dir))
+            store.save(
+                Profile(
+                    profile_id="main-account",
+                    display_name="Main Account",
+                    server_name="TW-1",
+                    character_name="Knight",
+                    instance_overrides={
+                        "mumu-0": InstanceProfileOverride(
+                            instance_id="mumu-0",
+                            adb_serial="127.0.0.1:16384",
+                            notes="Primary emulator",
+                        )
+                    },
+                )
+            )
+
+            binding = store.resolve_binding_for_instance("mumu-0", adb_serial="127.0.0.1:16384")
+
+            self.assertIsNotNone(binding)
+            self.assertEqual(binding.profile_id, "main-account")
+            self.assertEqual(binding.notes, "Primary emulator")
+
+    def test_store_does_not_auto_resolve_ambiguous_instance_override(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            store = JsonProfileStore(Path(tmp_dir))
+            for profile_id in ("main-account", "alt-account"):
+                store.save(
+                    Profile(
+                        profile_id=profile_id,
+                        display_name=profile_id,
+                        server_name="TW-1",
+                        character_name="Knight",
+                        instance_overrides={
+                            "mumu-0": InstanceProfileOverride(
+                                instance_id="mumu-0",
+                                adb_serial="127.0.0.1:16384",
+                            )
+                        },
+                    )
+                )
+
+            binding = store.resolve_binding_for_instance("mumu-0", adb_serial="127.0.0.1:16384")
+
+            self.assertIsNone(binding)
