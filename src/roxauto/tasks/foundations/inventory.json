@@ -1,0 +1,60 @@
+{
+  "inventory_id": "pre_gate_3_task_foundations",
+  "metadata": {
+    "purpose": "task_foundation_inventory"
+  },
+  "records": [
+    {
+      "fixture_profile_paths": [
+        "fixture_profiles/default_tw_daily.fixture.json"
+      ],
+      "golden_root": "daily_ui/daily_ui.claim_rewards/{screen_slug}",
+      "implementation_state": "spec_only",
+      "manifest_path": "packs/daily_ui/daily_claim_rewards.task.json",
+      "metadata": {
+        "source": "curated_inventory"
+      },
+      "pack_id": "daily_ui",
+      "required_anchors": [
+        "common.close_button",
+        "daily_ui.claim_button"
+      ],
+      "task_id": "daily_ui.claim_rewards"
+    },
+    {
+      "fixture_profile_paths": [
+        "fixture_profiles/default_tw_guild.fixture.json"
+      ],
+      "golden_root": "daily_ui/daily_ui.guild_check_in/{screen_slug}",
+      "implementation_state": "spec_only",
+      "manifest_path": "packs/daily_ui/guild_check_in.task.json",
+      "metadata": {
+        "source": "curated_inventory"
+      },
+      "pack_id": "daily_ui",
+      "required_anchors": [
+        "common.close_button",
+        "daily_ui.guild_check_in_button"
+      ],
+      "task_id": "daily_ui.guild_check_in"
+    },
+    {
+      "fixture_profile_paths": [
+        "fixture_profiles/default_tw_odin.fixture.json"
+      ],
+      "golden_root": "odin/odin.preset_entry/{screen_slug}",
+      "implementation_state": "spec_only",
+      "manifest_path": "packs/odin/odin_preset_entry.task.json",
+      "metadata": {
+        "source": "curated_inventory"
+      },
+      "pack_id": "odin",
+      "required_anchors": [
+        "common.close_button",
+        "odin.start_button"
+      ],
+      "task_id": "odin.preset_entry"
+    }
+  ],
+  "version": "0.1.0"
+}

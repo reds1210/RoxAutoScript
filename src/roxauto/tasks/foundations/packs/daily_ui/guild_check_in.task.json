@@ -1,0 +1,66 @@
+{
+  "fixture_profile_paths": [
+    "fixture_profiles/default_tw_guild.fixture.json"
+  ],
+  "golden_cases": [
+    {
+      "notes": "Guild hub screen and check-in button states.",
+      "screen_slug": "guild_hub",
+      "variants": [
+        "baseline",
+        "check_in_ready",
+        "checked_in",
+        "failure"
+      ]
+    }
+  ],
+  "implementation_state": "spec_only",
+  "metadata": {
+    "phase": "pre_gate_3",
+    "task_pack_owner": "engine_d"
+  },
+  "notes": "Specification-only blueprint for a future guild check-in UI task.",
+  "pack_id": "daily_ui",
+  "required_anchors": [
+    "common.close_button",
+    "daily_ui.guild_check_in_button"
+  ],
+  "task_manifest": {
+    "entry_condition": "Guild panel is reachable through deterministic menu navigation and the account belongs to a guild.",
+    "failure_condition": "Guild hub, check-in affordance, or success state cannot be verified in the allowed retries.",
+    "metadata": {
+      "implementation_state": "spec_only",
+      "phase": "pre_gate_3"
+    },
+    "name": "Guild Check-In",
+    "recovery_policy": "abort",
+    "requires": [
+      "common.close_button",
+      "daily_ui.guild_check_in_button"
+    ],
+    "stop_conditions": [
+      {
+        "condition_id": "daily_ui.guild_check_in.timeout",
+        "enabled": true,
+        "kind": "timeout",
+        "message": "Guild check-in fixture exceeded task-side timeout.",
+        "metadata": {
+          "scope": "task"
+        },
+        "timeout_ms": 90000
+      },
+      {
+        "condition_id": "daily_ui.guild_check_in.vision",
+        "enabled": true,
+        "kind": "vision_mismatch",
+        "message": "Expected guild anchors did not match stable UI.",
+        "metadata": {
+          "scope": "vision"
+        }
+      }
+    ],
+    "success_condition": "Guild check-in success state or already-claimed state is visible without actionable check-in controls.",
+    "task_id": "daily_ui.guild_check_in",
+    "version": "0.1.0"
+  }
+}

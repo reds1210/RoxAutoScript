@@ -1,0 +1,75 @@
+{
+  "fixture_profile_paths": [
+    "fixture_profiles/default_tw_daily.fixture.json"
+  ],
+  "golden_cases": [
+    {
+      "notes": "Primary reward panel in idle state.",
+      "screen_slug": "reward_panel",
+      "variants": [
+        "baseline",
+        "reward_claimable",
+        "reward_claimed",
+        "failure"
+      ]
+    },
+    {
+      "notes": "Claim confirmation modal state.",
+      "screen_slug": "reward_confirm_modal",
+      "variants": [
+        "baseline",
+        "confirm_ready",
+        "failure"
+      ]
+    }
+  ],
+  "implementation_state": "spec_only",
+  "metadata": {
+    "phase": "pre_gate_3",
+    "task_pack_owner": "engine_d"
+  },
+  "notes": "Specification-only blueprint for a future fixed-UI reward claim task.",
+  "pack_id": "daily_ui",
+  "required_anchors": [
+    "common.close_button",
+    "daily_ui.claim_button"
+  ],
+  "task_manifest": {
+    "entry_condition": "Home HUD is visible and the fixed reward panel can be opened through deterministic UI navigation.",
+    "failure_condition": "The reward panel, claim button, or confirmation modal cannot be verified within retry budget.",
+    "metadata": {
+      "implementation_state": "spec_only",
+      "phase": "pre_gate_3"
+    },
+    "name": "Daily Reward Claim",
+    "recovery_policy": "abort",
+    "requires": [
+      "common.close_button",
+      "daily_ui.claim_button"
+    ],
+    "stop_conditions": [
+      {
+        "condition_id": "daily_ui.claim_rewards.timeout",
+        "enabled": true,
+        "kind": "timeout",
+        "message": "Task-side fixture budget exceeded.",
+        "metadata": {
+          "scope": "task"
+        },
+        "timeout_ms": 90000
+      },
+      {
+        "condition_id": "daily_ui.claim_rewards.manual_stop",
+        "enabled": true,
+        "kind": "manual",
+        "message": "Operator stop should abort immediately.",
+        "metadata": {
+          "scope": "operator"
+        }
+      }
+    ],
+    "success_condition": "A claimed state indicator is visible and no actionable claim button remains in the same panel.",
+    "task_id": "daily_ui.claim_rewards",
+    "version": "0.1.0"
+  }
+}

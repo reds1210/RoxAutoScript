@@ -1,0 +1,75 @@
+{
+  "fixture_profile_paths": [
+    "fixture_profiles/default_tw_odin.fixture.json"
+  ],
+  "golden_cases": [
+    {
+      "notes": "Pre-hunt panel and consumable preset state.",
+      "screen_slug": "odin_setup_panel",
+      "variants": [
+        "baseline",
+        "preset_ready",
+        "consumable_low",
+        "failure"
+      ]
+    },
+    {
+      "notes": "Idle combat state validation target.",
+      "screen_slug": "odin_idle_state",
+      "variants": [
+        "baseline",
+        "combat_active",
+        "failure"
+      ]
+    }
+  ],
+  "implementation_state": "spec_only",
+  "metadata": {
+    "phase": "pre_gate_3",
+    "task_pack_owner": "engine_d"
+  },
+  "notes": "Specification-only blueprint for a future Odin preset task. This file does not contain runtime automation steps.",
+  "pack_id": "odin",
+  "required_anchors": [
+    "common.close_button",
+    "odin.start_button"
+  ],
+  "task_manifest": {
+    "entry_condition": "Character is in a deterministic pre-hunt state with Odin panel reachable through fixed navigation.",
+    "failure_condition": "Preset, start button, or idle combat verification cannot be matched within the recovery budget.",
+    "metadata": {
+      "implementation_state": "spec_only",
+      "phase": "pre_gate_3"
+    },
+    "name": "Odin Preset Entry",
+    "recovery_policy": "abort",
+    "requires": [
+      "common.close_button",
+      "odin.start_button"
+    ],
+    "stop_conditions": [
+      {
+        "condition_id": "odin.preset_entry.timeout",
+        "enabled": true,
+        "kind": "timeout",
+        "message": "Odin fixture exceeded task-side timeout.",
+        "metadata": {
+          "scope": "task"
+        },
+        "timeout_ms": 120000
+      },
+      {
+        "condition_id": "odin.preset_entry.health",
+        "enabled": true,
+        "kind": "health_check_failed",
+        "message": "Device health degraded during Odin fixture planning.",
+        "metadata": {
+          "scope": "device"
+        }
+      }
+    ],
+    "success_condition": "A stable idle-combat verification screen is visible and can be represented by golden fixtures for later implementation.",
+    "task_id": "odin.preset_entry",
+    "version": "0.1.0"
+  }
+}
