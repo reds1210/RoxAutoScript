@@ -1,0 +1,24 @@
+{
+  "repository_id": "daily_ui",
+  "display_name": "Daily UI Templates",
+  "version": "0.1.0",
+  "metadata": {
+    "owner": "vision-lab",
+    "purpose": "anchors for fixed UI daily flows"
+  },
+  "anchors": [
+    {
+      "anchor_id": "daily_ui.claim_reward",
+      "label": "Claim Reward Button",
+      "template_path": "anchors/daily_claim_button.svg",
+      "confidence_threshold": 0.91,
+      "match_region": [0, 0, 1920, 1080],
+      "description": "Daily reward claim action.",
+      "tags": ["daily", "reward"],
+      "metadata": {
+        "workflow": "daily-ui"
+      }
+    }
+  ]
+}
+

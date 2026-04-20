@@ -1,0 +1,36 @@
+{
+  "repository_id": "common",
+  "display_name": "Common UI Templates",
+  "version": "0.1.0",
+  "metadata": {
+    "owner": "vision-lab",
+    "purpose": "shared anchors for dialogs and popups"
+  },
+  "anchors": [
+    {
+      "anchor_id": "common.close_button",
+      "label": "Close Button",
+      "template_path": "anchors/common_close_button.svg",
+      "confidence_threshold": 0.9,
+      "match_region": [0, 0, 1920, 1080],
+      "description": "Fallback close button for modal dialogs.",
+      "tags": ["dialog", "dismiss"],
+      "metadata": {
+        "priority": "high"
+      }
+    },
+    {
+      "anchor_id": "common.confirm_button",
+      "label": "Confirm Button",
+      "template_path": "anchors/common_confirm_button.svg",
+      "confidence_threshold": 0.88,
+      "match_region": [0, 0, 1920, 1080],
+      "description": "Primary confirmation action in dialogs and alerts.",
+      "tags": ["dialog", "confirm"],
+      "metadata": {
+        "priority": "high"
+      }
+    }
+  ]
+}
+

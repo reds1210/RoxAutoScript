@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="260" height="90" viewBox="0 0 260 90">
+  <rect x="2" y="2" width="256" height="86" rx="14" fill="#4f3a12" stroke="#f5c85c" stroke-width="4"/>
+  <rect x="20" y="22" width="220" height="46" rx="10" fill="#8a661a"/>
+  <text x="130" y="52" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#ffffff">Claim</text>
+</svg>
+
