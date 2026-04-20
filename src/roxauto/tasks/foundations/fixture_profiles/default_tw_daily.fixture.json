@@ -5,7 +5,9 @@
   "locale": "zh-TW",
   "metadata": {
     "account_tier": "sample",
-    "purpose": "daily_ui"
+    "client_build": "tma.sample",
+    "purpose": "daily_ui",
+    "region": "tw"
   },
   "notes": "Reference fixture for stable TW client UI states before gameplay automation exists.",
   "resolution": [

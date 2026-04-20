@@ -5,7 +5,9 @@
   "locale": "zh-TW",
   "metadata": {
     "account_tier": "sample",
-    "purpose": "guild"
+    "client_build": "tma.sample",
+    "purpose": "guild",
+    "region": "tw"
   },
   "notes": "Reference fixture for guild-panel screenshots and task-side fixtures.",
   "resolution": [

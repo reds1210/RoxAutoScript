@@ -24,6 +24,22 @@
     }
   ],
   "implementation_state": "spec_only",
+  "steps": [
+    {
+      "step_id": "open_odin_panel",
+      "action": "deterministic_navigation",
+      "success_condition": "Odin setup panel is visible with preset and consumable state available.",
+      "failure_condition": "Odin setup panel could not be validated.",
+      "notes": "Foundations only; no routeing or battle logic is encoded."
+    },
+    {
+      "step_id": "verify_idle_combat_target",
+      "action": "vision_verify",
+      "success_condition": "Idle-combat target state can be represented by future goldens.",
+      "failure_condition": "Expected Odin start or idle state remains unverified.",
+      "notes": "Future runtime should bind this to TaskSpec after Gate 3."
+    }
+  ],
   "metadata": {
     "phase": "pre_gate_3",
     "task_pack_owner": "engine_d"

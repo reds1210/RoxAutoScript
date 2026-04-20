@@ -1,0 +1,40 @@
+{
+  "pack_id": "daily_ui",
+  "version": "0.1.0",
+  "entries": [
+    {
+      "task_id": "daily_ui.claim_rewards",
+      "blueprint_path": "packs/daily_ui/daily_claim_rewards.task.json",
+      "display_name": "Daily Reward Claim",
+      "fixture_profile_paths": [
+        "fixture_profiles/default_tw_daily.fixture.json"
+      ],
+      "required_anchors": [
+        "common.close_button",
+        "daily_ui.claim_reward"
+      ],
+      "metadata": {
+        "phase": "pre_gate_3"
+      }
+    },
+    {
+      "task_id": "daily_ui.guild_check_in",
+      "blueprint_path": "packs/daily_ui/guild_check_in.task.json",
+      "display_name": "Guild Check-In",
+      "fixture_profile_paths": [
+        "fixture_profiles/default_tw_guild.fixture.json"
+      ],
+      "required_anchors": [
+        "common.close_button",
+        "daily_ui.guild_check_in_button"
+      ],
+      "metadata": {
+        "phase": "pre_gate_3"
+      }
+    }
+  ],
+  "metadata": {
+    "owner": "engine_d",
+    "purpose": "daily_ui_foundations"
+  }
+}
