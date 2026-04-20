@@ -28,15 +28,41 @@ class InstanceRegistry:
 
     def sync(self, states: Iterable[InstanceState]) -> list[InstanceState]:
         synced: list[InstanceState] = []
+        seen_instance_ids: set[str] = set()
         for state in states:
-            self._instances[state.instance_id] = state
-            synced.append(state)
+            seen_instance_ids.add(state.instance_id)
+            existing = self._instances.get(state.instance_id)
+            if existing is None:
+                synced_state = state
+                self._instances[state.instance_id] = synced_state
+            else:
+                existing.label = state.label
+                existing.adb_serial = state.adb_serial
+                existing.status = state.status
+                existing.last_seen_at = state.last_seen_at
+                existing.metadata.update(state.metadata)
+                synced_state = existing
+            synced.append(synced_state)
             self._event_bus.publish(
                 EVENT_INSTANCE_UPDATED,
                 {
-                    "instance_id": state.instance_id,
-                    "label": state.label,
-                    "status": state.status.value,
+                    "instance_id": synced_state.instance_id,
+                    "label": synced_state.label,
+                    "status": synced_state.status.value,
+                },
+            )
+        for instance_id in sorted(set(self._instances) - seen_instance_ids):
+            instance = self._instances[instance_id]
+            if instance.status == InstanceStatus.DISCONNECTED:
+                continue
+            instance.status = InstanceStatus.DISCONNECTED
+            instance.last_seen_at = utc_now()
+            self._event_bus.publish(
+                EVENT_INSTANCE_UPDATED,
+                {
+                    "instance_id": instance.instance_id,
+                    "label": instance.label,
+                    "status": instance.status.value,
                 },
             )
         return synced

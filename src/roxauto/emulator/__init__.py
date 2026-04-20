@@ -10,6 +10,7 @@ from roxauto.emulator.execution import (
     HealthCheckService,
     ScreenshotCapturePipeline,
 )
+from roxauto.emulator.live_runtime import LiveRuntimeSession, LiveRuntimeSnapshot
 
 __all__ = [
     "ActionExecutor",
@@ -20,6 +21,8 @@ __all__ = [
     "EmulatorAdapter",
     "HealthCheckResult",
     "HealthCheckService",
+    "LiveRuntimeSession",
+    "LiveRuntimeSnapshot",
     "ScreenshotCapturePipeline",
 ]
 
