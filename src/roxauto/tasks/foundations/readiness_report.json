@@ -1,0 +1,159 @@
+{
+  "report_id": "pre_gate_3_task_readiness",
+  "version": "0.1.0",
+  "reports": [
+    {
+      "task_id": "daily_ui.claim_rewards",
+      "pack_id": "daily_ui",
+      "builder_readiness_state": "ready",
+      "implementation_readiness_state": "blocked_by_runtime",
+      "builder_requirements": [],
+      "implementation_requirements": [
+        {
+          "requirement_id": "runtime.daily_ui.dispatch_bridge",
+          "domain": "runtime",
+          "summary": "Daily UI fixed-flow tasks still need a production runtime action-dispatch bridge.",
+          "satisfied": false,
+          "blocking": true,
+          "details": "Requirement is not yet satisfied by current task foundations.",
+          "metadata": {
+            "domain": "runtime"
+          }
+        }
+      ],
+      "warning_requirements": [
+        {
+          "requirement_id": "warning.daily_ui.claim_rewards:template:daily_ui.claim_reward",
+          "domain": "asset",
+          "summary": "Template asset is still placeholder scaffolding.",
+          "satisfied": false,
+          "blocking": false,
+          "details": "asset_status=placeholder source_path=assets/templates/daily_ui/manifest.json#daily_ui.claim_reward",
+          "metadata": {}
+        },
+        {
+          "requirement_id": "warning.daily_ui.claim_rewards:golden:reward_panel",
+          "domain": "asset",
+          "summary": "Golden screenshots are still planned and not curated yet.",
+          "satisfied": false,
+          "blocking": false,
+          "details": "asset_status=planned source_path=daily_ui/daily_ui_claim_rewards/reward_panel/daily_ui_claim_rewards__reward_panel__baseline__v1.png",
+          "metadata": {}
+        },
+        {
+          "requirement_id": "warning.daily_ui.claim_rewards:golden:reward_confirm_modal",
+          "domain": "asset",
+          "summary": "Golden screenshots are still planned and not curated yet.",
+          "satisfied": false,
+          "blocking": false,
+          "details": "asset_status=planned source_path=daily_ui/daily_ui_claim_rewards/reward_confirm_modal/daily_ui_claim_rewards__reward_confirm_modal__baseline__v1.png",
+          "metadata": {}
+        }
+      ],
+      "metadata": {
+        "implementation_state": "spec_only"
+      }
+    },
+    {
+      "task_id": "daily_ui.guild_check_in",
+      "pack_id": "daily_ui",
+      "builder_readiness_state": "blocked_by_asset",
+      "implementation_readiness_state": "blocked_by_asset",
+      "builder_requirements": [
+        {
+          "requirement_id": "asset.daily_ui.guild_check_in_button",
+          "domain": "asset",
+          "summary": "Guild check-in still requires a curated guild check-in button asset, not just placeholder scaffolding.",
+          "satisfied": false,
+          "blocking": true,
+          "details": "asset_status=placeholder source_path=assets/templates/daily_ui/manifest.json#daily_ui.guild_check_in_button",
+          "metadata": {
+            "domain": "asset"
+          }
+        }
+      ],
+      "implementation_requirements": [
+        {
+          "requirement_id": "asset.daily_ui.guild_check_in_button",
+          "domain": "asset",
+          "summary": "Guild check-in still requires a curated guild check-in button asset, not just placeholder scaffolding.",
+          "satisfied": false,
+          "blocking": true,
+          "details": "asset_status=placeholder source_path=assets/templates/daily_ui/manifest.json#daily_ui.guild_check_in_button",
+          "metadata": {
+            "domain": "asset"
+          }
+        }
+      ],
+      "warning_requirements": [
+        {
+          "requirement_id": "warning.daily_ui.guild_check_in:golden:guild_hub",
+          "domain": "asset",
+          "summary": "Golden screenshots are still planned and not curated yet.",
+          "satisfied": false,
+          "blocking": false,
+          "details": "asset_status=planned source_path=daily_ui/daily_ui_guild_check_in/guild_hub/daily_ui_guild_check_in__guild_hub__baseline__v1.png",
+          "metadata": {}
+        }
+      ],
+      "metadata": {
+        "implementation_state": "spec_only"
+      }
+    },
+    {
+      "task_id": "odin.preset_entry",
+      "pack_id": "odin",
+      "builder_readiness_state": "ready",
+      "implementation_readiness_state": "blocked_by_calibration",
+      "builder_requirements": [],
+      "implementation_requirements": [
+        {
+          "requirement_id": "calibration.odin.idle_state_profile",
+          "domain": "calibration",
+          "summary": "Odin preset entry requires an idle-state calibration profile before runtime binding is safe.",
+          "satisfied": false,
+          "blocking": true,
+          "details": "Requirement is not yet satisfied by current task foundations.",
+          "metadata": {
+            "domain": "calibration"
+          }
+        }
+      ],
+      "warning_requirements": [
+        {
+          "requirement_id": "warning.odin.preset_entry:template:odin.start_button",
+          "domain": "asset",
+          "summary": "Template asset is still placeholder scaffolding.",
+          "satisfied": false,
+          "blocking": false,
+          "details": "asset_status=placeholder source_path=assets/templates/odin/manifest.json#odin.start_button",
+          "metadata": {}
+        },
+        {
+          "requirement_id": "warning.odin.preset_entry:golden:odin_setup_panel",
+          "domain": "asset",
+          "summary": "Golden screenshots are still planned and not curated yet.",
+          "satisfied": false,
+          "blocking": false,
+          "details": "asset_status=planned source_path=odin/odin_preset_entry/odin_setup_panel/odin_preset_entry__odin_setup_panel__baseline__v1.png",
+          "metadata": {}
+        },
+        {
+          "requirement_id": "warning.odin.preset_entry:golden:odin_idle_state",
+          "domain": "asset",
+          "summary": "Golden screenshots are still planned and not curated yet.",
+          "satisfied": false,
+          "blocking": false,
+          "details": "asset_status=planned source_path=odin/odin_preset_entry/odin_idle_state/odin_preset_entry__odin_idle_state__baseline__v1.png",
+          "metadata": {}
+        }
+      ],
+      "metadata": {
+        "implementation_state": "spec_only"
+      }
+    }
+  ],
+  "metadata": {
+    "source": "task_foundations"
+  }
+}

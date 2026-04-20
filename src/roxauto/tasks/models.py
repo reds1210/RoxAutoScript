@@ -32,6 +32,21 @@ class TaskAssetStatus(str, Enum):
     PLANNED = "planned"
 
 
+class TaskGapDomain(str, Enum):
+    ASSET = "asset"
+    RUNTIME = "runtime"
+    CALIBRATION = "calibration"
+    FOUNDATION = "foundation"
+
+
+class TaskReadinessState(str, Enum):
+    READY = "ready"
+    BLOCKED_BY_ASSET = "blocked_by_asset"
+    BLOCKED_BY_RUNTIME = "blocked_by_runtime"
+    BLOCKED_BY_CALIBRATION = "blocked_by_calibration"
+    BLOCKED_BY_FOUNDATION = "blocked_by_foundation"
+
+
 @dataclass(slots=True)
 class GoldenScreenshotCase:
     screen_slug: str
@@ -298,6 +313,10 @@ class TaskInventoryRecord:
     fixture_profile_paths: list[str] = field(default_factory=list)
     golden_root: str = ""
     required_anchors: list[str] = field(default_factory=list)
+    asset_requirement_ids: list[str] = field(default_factory=list)
+    runtime_requirement_ids: list[str] = field(default_factory=list)
+    calibration_requirement_ids: list[str] = field(default_factory=list)
+    foundation_requirement_ids: list[str] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -309,6 +328,10 @@ class TaskInventoryRecord:
             "fixture_profile_paths": list(self.fixture_profile_paths),
             "golden_root": self.golden_root,
             "required_anchors": list(self.required_anchors),
+            "asset_requirement_ids": list(self.asset_requirement_ids),
+            "runtime_requirement_ids": list(self.runtime_requirement_ids),
+            "calibration_requirement_ids": list(self.calibration_requirement_ids),
+            "foundation_requirement_ids": list(self.foundation_requirement_ids),
             "metadata": to_primitive(self.metadata),
         }
 
@@ -327,6 +350,10 @@ class TaskInventoryRecord:
             fixture_profile_paths=[str(item) for item in data.get("fixture_profile_paths", [])],
             golden_root=str(data.get("golden_root", "")),
             required_anchors=[str(item) for item in data.get("required_anchors", [])],
+            asset_requirement_ids=[str(item) for item in data.get("asset_requirement_ids", [])],
+            runtime_requirement_ids=[str(item) for item in data.get("runtime_requirement_ids", [])],
+            calibration_requirement_ids=[str(item) for item in data.get("calibration_requirement_ids", [])],
+            foundation_requirement_ids=[str(item) for item in data.get("foundation_requirement_ids", [])],
             metadata=dict(data.get("metadata", {})),
         )
 
@@ -429,3 +456,167 @@ class TaskAssetInventory:
     @classmethod
     def from_json(cls, payload: str) -> Self:
         return cls.from_dict(loads(payload))
+
+
+@dataclass(slots=True)
+class TaskReadinessRequirement:
+    requirement_id: str
+    domain: TaskGapDomain
+    summary: str
+    satisfied: bool = True
+    blocking: bool = False
+    details: str = ""
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "requirement_id": self.requirement_id,
+            "domain": self.domain.value,
+            "summary": self.summary,
+            "satisfied": self.satisfied,
+            "blocking": self.blocking,
+            "details": self.details,
+            "metadata": to_primitive(self.metadata),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        raw_domain = data.get("domain", TaskGapDomain.FOUNDATION.value)
+        return cls(
+            requirement_id=str(data.get("requirement_id", "")),
+            domain=raw_domain if isinstance(raw_domain, TaskGapDomain) else TaskGapDomain(str(raw_domain)),
+            summary=str(data.get("summary", "")),
+            satisfied=bool(data.get("satisfied", True)),
+            blocking=bool(data.get("blocking", False)),
+            details=str(data.get("details", "")),
+            metadata=dict(data.get("metadata", {})),
+        )
+
+
+@dataclass(slots=True)
+class TaskReadinessReport:
+    task_id: str
+    pack_id: str
+    builder_readiness_state: TaskReadinessState
+    implementation_readiness_state: TaskReadinessState
+    builder_requirements: list[TaskReadinessRequirement] = field(default_factory=list)
+    implementation_requirements: list[TaskReadinessRequirement] = field(default_factory=list)
+    warning_requirements: list[TaskReadinessRequirement] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "task_id": self.task_id,
+            "pack_id": self.pack_id,
+            "builder_readiness_state": self.builder_readiness_state.value,
+            "implementation_readiness_state": self.implementation_readiness_state.value,
+            "builder_requirements": [item.to_dict() for item in self.builder_requirements],
+            "implementation_requirements": [item.to_dict() for item in self.implementation_requirements],
+            "warning_requirements": [item.to_dict() for item in self.warning_requirements],
+            "metadata": to_primitive(self.metadata),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        raw_builder_state = data.get("builder_readiness_state", TaskReadinessState.READY.value)
+        raw_implementation_state = data.get("implementation_readiness_state", TaskReadinessState.READY.value)
+        return cls(
+            task_id=str(data.get("task_id", "")),
+            pack_id=str(data.get("pack_id", "")),
+            builder_readiness_state=(
+                raw_builder_state
+                if isinstance(raw_builder_state, TaskReadinessState)
+                else TaskReadinessState(str(raw_builder_state))
+            ),
+            implementation_readiness_state=(
+                raw_implementation_state
+                if isinstance(raw_implementation_state, TaskReadinessState)
+                else TaskReadinessState(str(raw_implementation_state))
+            ),
+            builder_requirements=[
+                TaskReadinessRequirement.from_dict(item) for item in data.get("builder_requirements", [])
+            ],
+            implementation_requirements=[
+                TaskReadinessRequirement.from_dict(item)
+                for item in data.get("implementation_requirements", [])
+            ],
+            warning_requirements=[
+                TaskReadinessRequirement.from_dict(item) for item in data.get("warning_requirements", [])
+            ],
+            metadata=dict(data.get("metadata", {})),
+        )
+
+
+@dataclass(slots=True)
+class TaskReadinessCollection:
+    report_id: str
+    version: str
+    reports: list[TaskReadinessReport] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "report_id": self.report_id,
+            "version": self.version,
+            "reports": [report.to_dict() for report in self.reports],
+            "metadata": to_primitive(self.metadata),
+        }
+
+    def to_json(self) -> str:
+        return dumps(self.to_dict(), indent=2, sort_keys=True)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        return cls(
+            report_id=str(data.get("report_id", "")),
+            version=str(data.get("version", "0.1.0")),
+            reports=[TaskReadinessReport.from_dict(item) for item in data.get("reports", [])],
+            metadata=dict(data.get("metadata", {})),
+        )
+
+    @classmethod
+    def from_json(cls, payload: str) -> Self:
+        return cls.from_dict(loads(payload))
+
+
+@dataclass(slots=True)
+class TaskRuntimeBuilderInput:
+    task_id: str
+    pack_id: str
+    manifest_path: str
+    fixture_profile_paths: list[str] = field(default_factory=list)
+    required_anchors: list[str] = field(default_factory=list)
+    asset_requirement_ids: list[str] = field(default_factory=list)
+    runtime_requirement_ids: list[str] = field(default_factory=list)
+    calibration_requirement_ids: list[str] = field(default_factory=list)
+    foundation_requirement_ids: list[str] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "task_id": self.task_id,
+            "pack_id": self.pack_id,
+            "manifest_path": self.manifest_path,
+            "fixture_profile_paths": list(self.fixture_profile_paths),
+            "required_anchors": list(self.required_anchors),
+            "asset_requirement_ids": list(self.asset_requirement_ids),
+            "runtime_requirement_ids": list(self.runtime_requirement_ids),
+            "calibration_requirement_ids": list(self.calibration_requirement_ids),
+            "foundation_requirement_ids": list(self.foundation_requirement_ids),
+            "metadata": to_primitive(self.metadata),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        return cls(
+            task_id=str(data.get("task_id", "")),
+            pack_id=str(data.get("pack_id", "")),
+            manifest_path=str(data.get("manifest_path", "")),
+            fixture_profile_paths=[str(item) for item in data.get("fixture_profile_paths", [])],
+            required_anchors=[str(item) for item in data.get("required_anchors", [])],
+            asset_requirement_ids=[str(item) for item in data.get("asset_requirement_ids", [])],
+            runtime_requirement_ids=[str(item) for item in data.get("runtime_requirement_ids", [])],
+            calibration_requirement_ids=[str(item) for item in data.get("calibration_requirement_ids", [])],
+            foundation_requirement_ids=[str(item) for item in data.get("foundation_requirement_ids", [])],
+            metadata=dict(data.get("metadata", {})),
+        )
