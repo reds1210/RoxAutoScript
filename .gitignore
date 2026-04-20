@@ -9,12 +9,13 @@ __pycache__/
 .ruff_cache/
 dist/
 build/
+*.egg-info/
 node_modules/
 .idea/
 .vscode/
 *.log
 *.tmp
 *.bak
+runtime_logs/
 Thumbs.db
 Desktop.ini
-

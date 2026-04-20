@@ -7,4 +7,30 @@ Current status:
 - planning and architecture definition
 - git repo initialized for future `worktree`-based parallel development
 - MVP scope documented in `docs/rox-mvp-plan.md`
+- installable Python foundation with runnable CLI commands
+- shared runtime, registry, profile store, audit sink, and emulator discovery skeleton
 
+Docs to read before starting work:
+
+1. `docs/rox-mvp-plan.md`
+2. `docs/worktree-playbook.md`
+3. `docs/architecture-contracts.md`
+4. `docs/tracks/README.md`
+
+Parallel development docs:
+
+- `docs/worktree-playbook.md`: branch, worktree, ownership, merge, and handoff rules
+- `docs/architecture-contracts.md`: shared interfaces and dependency boundaries
+- `docs/tracks/`: concrete briefs for each worktree track
+- `docs/templates/worktree-handoff-template.md`: handoff format for commits and PRs
+
+Foundation commands:
+
+- `python -m roxauto doctor`
+- `python -m roxauto demo-runtime`
+- `python -m roxauto gui`
+
+Helper scripts:
+
+- `scripts/bootstrap-dev.ps1`
+- `scripts/new-worktree.ps1`
