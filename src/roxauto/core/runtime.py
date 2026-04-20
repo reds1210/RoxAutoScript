@@ -127,6 +127,18 @@ class QueueRunResult:
     finished_at: object | None = None
 
 
+@dataclass(slots=True)
+class RuntimeInspectionResult:
+    instance_id: str
+    status: InstanceStatus
+    health_check_ok: bool | None
+    health_check_message: str = ""
+    preview_frame: PreviewFrame | None = None
+    failure_snapshot: FailureSnapshotMetadata | None = None
+    inspected_at: object = field(default_factory=utc_now)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
 class TaskRunner:
     def __init__(self, event_bus: EventBus | None = None, audit_sink: AuditSink | None = None) -> None:
         self._event_bus = event_bus or EventBus()
@@ -404,6 +416,47 @@ class RuntimeCoordinator:
             for instance in self._registry.list_instances()
         ]
 
+    def inspect_instance(
+        self,
+        instance_id: str,
+        *,
+        run_health_check: bool = True,
+        capture_preview: bool = True,
+        command_id: str | None = None,
+    ) -> RuntimeInspectionResult:
+        instance = self._require_instance(instance_id)
+        context = self._require_context(instance_id)
+        return self._inspect_runtime_instance(
+            instance,
+            context,
+            run_health_check=run_health_check,
+            capture_preview=capture_preview,
+            command_id=command_id,
+        )
+
+    def inspect_instances(
+        self,
+        instance_ids: list[str] | None = None,
+        *,
+        run_health_check: bool = True,
+        capture_preview: bool = True,
+        command_id: str | None = None,
+    ) -> list[RuntimeInspectionResult]:
+        if instance_ids is None:
+            targets = self._registry.list_instances()
+        else:
+            targets = [self._require_instance(instance_id) for instance_id in instance_ids]
+        return [
+            self._inspect_runtime_instance(
+                instance,
+                self._require_context(instance.instance_id),
+                run_health_check=run_health_check,
+                capture_preview=capture_preview,
+                command_id=command_id,
+            )
+            for instance in targets
+        ]
+
     def bind_profile(self, instance_id: str, binding: ProfileBinding) -> InstanceRuntimeContext:
         context = self._require_context(instance_id)
         context.profile_binding = binding
@@ -571,20 +624,14 @@ class RuntimeCoordinator:
         return run
 
     def _refresh_instance(self, instance: InstanceState, command: InstanceCommand) -> dict[str, Any]:
+        inspection = self.inspect_instance(
+            instance.instance_id,
+            run_health_check=True,
+            capture_preview=True,
+            command_id=command.command_id,
+        )
         context = self._require_context(instance.instance_id)
-        health_result = self._check_instance_health(instance, None, command_id=command.command_id)
-        self._update_health_context(
-            context,
-            health_result,
-            command_id=command.command_id,
-        )
-        preview_frame = self._capture_preview_frame(instance, None, command_id=command.command_id)
-        self._update_preview_context(
-            context,
-            preview_frame,
-            command_id=command.command_id,
-        )
-        next_status = InstanceStatus.READY if health_result["healthy"] else InstanceStatus.ERROR
+        next_status = InstanceStatus.READY if inspection.health_check_ok else InstanceStatus.ERROR
         self._registry.transition_status(
             instance.instance_id,
             next_status,
@@ -592,20 +639,110 @@ class RuntimeCoordinator:
             force=True,
         )
         context.status = next_status
-        if health_result["healthy"]:
-            self._clear_runtime_health_failure_snapshot(context)
-        else:
-            self._record_runtime_health_failure_snapshot(
-                instance,
-                context,
-                message=health_result["message"] or "health check failed",
-                command_id=command.command_id,
-            )
         return {
             "instance_id": instance.instance_id,
-            "healthy": health_result["healthy"],
-            "preview_frame": preview_frame,
+            "healthy": inspection.health_check_ok,
+            "preview_frame": inspection.preview_frame,
+            "failure_snapshot": inspection.failure_snapshot,
         }
+
+    def _inspect_runtime_instance(
+        self,
+        instance: InstanceState,
+        context: InstanceRuntimeContext,
+        *,
+        run_health_check: bool,
+        capture_preview: bool,
+        command_id: str | None = None,
+    ) -> RuntimeInspectionResult:
+        if instance.status == InstanceStatus.DISCONNECTED:
+            synced_context = self._sync_context_for_instance(instance)
+            return RuntimeInspectionResult(
+                instance_id=instance.instance_id,
+                status=synced_context.status,
+                health_check_ok=synced_context.health_check_ok,
+                health_check_message=str(synced_context.metadata.get("last_health_check_message", "")),
+                preview_frame=synced_context.preview_frame,
+                failure_snapshot=synced_context.failure_snapshot,
+                metadata={
+                    "command_id": command_id,
+                    "capture_preview": capture_preview,
+                    "run_health_check": run_health_check,
+                    "skipped": "disconnected",
+                },
+            )
+
+        if run_health_check:
+            health_result = self._check_instance_health(instance, None, command_id=command_id)
+            self._update_health_context(
+                context,
+                health_result,
+                command_id=command_id,
+            )
+        else:
+            health_result = {
+                "healthy": context.health_check_ok,
+                "message": context.metadata.get("last_health_check_message", ""),
+                "checked_at": context.metadata.get("last_health_check_at"),
+            }
+
+        if capture_preview:
+            preview_frame = self._capture_preview_frame(instance, None, command_id=command_id)
+            self._update_preview_context(
+                context,
+                preview_frame,
+                command_id=command_id,
+            )
+        preview_frame = context.preview_frame
+        if run_health_check:
+            if health_result["healthy"]:
+                self._clear_runtime_health_failure_snapshot(context)
+            else:
+                self._record_runtime_health_failure_snapshot(
+                    instance,
+                    context,
+                    message=str(health_result["message"] or "health check failed"),
+                    command_id=command_id,
+                )
+
+        next_status = self._derive_inspection_status(instance, context, health_result["healthy"])
+        if instance.status != next_status:
+            self._registry.transition_status(instance.instance_id, next_status, force=True)
+            instance = self._require_instance(instance.instance_id)
+        context.status = next_status
+        return RuntimeInspectionResult(
+            instance_id=instance.instance_id,
+            status=next_status,
+            health_check_ok=context.health_check_ok,
+            health_check_message=str(context.metadata.get("last_health_check_message", "")),
+            preview_frame=preview_frame,
+            failure_snapshot=context.failure_snapshot,
+            metadata={
+                "command_id": command_id,
+                "capture_preview": capture_preview,
+                "run_health_check": run_health_check,
+            },
+        )
+
+    def _derive_inspection_status(
+        self,
+        instance: InstanceState,
+        context: InstanceRuntimeContext,
+        health_check_ok: bool | None,
+    ) -> InstanceStatus:
+        if instance.status == InstanceStatus.DISCONNECTED:
+            return InstanceStatus.DISCONNECTED
+        if health_check_ok is False:
+            return InstanceStatus.ERROR
+        if instance.status == InstanceStatus.CONNECTING:
+            return InstanceStatus.CONNECTING
+        if context.stop_requested or instance.status == InstanceStatus.PAUSED:
+            return InstanceStatus.PAUSED
+        if context.active_task_id or context.active_run_id or instance.status == InstanceStatus.BUSY:
+            return InstanceStatus.BUSY
+        if health_check_ok is None and instance.status == InstanceStatus.ERROR:
+            return InstanceStatus.ERROR
+        return InstanceStatus.READY
 
     def _handle_control_or_interaction(self, instance: InstanceState, command: InstanceCommand) -> Any:
         context = self._require_context(instance.instance_id)
@@ -821,42 +958,68 @@ class RuntimeCoordinator:
         message: str,
         command_id: str | None = None,
     ) -> FailureSnapshotMetadata:
-        snapshot = FailureSnapshotMetadata(
-            snapshot_id=str(uuid4()),
-            instance_id=instance.instance_id,
-            task_id="runtime.health_check",
-            run_id=command_id or str(uuid4()),
-            reason=FailureSnapshotReason.HEALTH_CHECK_FAILED,
-            screenshot_path=context.preview_frame.image_path if context.preview_frame is not None else None,
-            preview_frame=context.preview_frame,
-            metadata={
-                "message": message,
-                "command_id": command_id,
-                "instance_label": instance.label,
-            },
-        )
+        existing = context.failure_snapshot
+        preview_image_path = context.preview_frame.image_path if context.preview_frame is not None else None
+        if existing is not None and existing.task_id == "runtime.health_check":
+            snapshot = existing
+            changed = (
+                snapshot.metadata.get("message") != message
+                or (
+                    command_id is not None
+                    and snapshot.metadata.get("command_id") != command_id
+                )
+            )
+            snapshot.run_id = command_id or snapshot.run_id
+            snapshot.reason = FailureSnapshotReason.HEALTH_CHECK_FAILED
+            snapshot.screenshot_path = preview_image_path
+            snapshot.preview_frame = context.preview_frame
+            snapshot.captured_at = utc_now()
+            snapshot.metadata.update(
+                {
+                    "message": message,
+                    "command_id": command_id,
+                    "instance_label": instance.label,
+                }
+            )
+        else:
+            snapshot = FailureSnapshotMetadata(
+                snapshot_id=str(uuid4()),
+                instance_id=instance.instance_id,
+                task_id="runtime.health_check",
+                run_id=command_id or str(uuid4()),
+                reason=FailureSnapshotReason.HEALTH_CHECK_FAILED,
+                screenshot_path=preview_image_path,
+                preview_frame=context.preview_frame,
+                metadata={
+                    "message": message,
+                    "command_id": command_id,
+                    "instance_label": instance.label,
+                },
+            )
+            changed = True
         context.failure_snapshot = snapshot
         context.metadata["last_failure_snapshot_id"] = snapshot.snapshot_id
         context.metadata["last_failure_reason"] = snapshot.reason.value
-        self._event_bus.publish(
-            EVENT_TASK_FAILURE_SNAPSHOT_RECORDED,
-            {
-                "run_id": snapshot.run_id,
-                "task_id": snapshot.task_id,
-                "instance_id": snapshot.instance_id,
-                "snapshot_id": snapshot.snapshot_id,
-                "reason": snapshot.reason.value,
-            },
-        )
-        self._write_audit(
-            "task.failure_snapshot",
-            {
-                "run_id": snapshot.run_id,
-                "task_id": snapshot.task_id,
-                "instance_id": snapshot.instance_id,
-                "snapshot": snapshot,
-            },
-        )
+        if changed:
+            self._event_bus.publish(
+                EVENT_TASK_FAILURE_SNAPSHOT_RECORDED,
+                {
+                    "run_id": snapshot.run_id,
+                    "task_id": snapshot.task_id,
+                    "instance_id": snapshot.instance_id,
+                    "snapshot_id": snapshot.snapshot_id,
+                    "reason": snapshot.reason.value,
+                },
+            )
+            self._write_audit(
+                "task.failure_snapshot",
+                {
+                    "run_id": snapshot.run_id,
+                    "task_id": snapshot.task_id,
+                    "instance_id": snapshot.instance_id,
+                    "snapshot": snapshot,
+                },
+            )
         return snapshot
 
     def _clear_runtime_health_failure_snapshot(self, context: InstanceRuntimeContext) -> None:

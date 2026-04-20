@@ -270,6 +270,66 @@ class RuntimeCoordinatorTests(unittest.TestCase):
         self.assertEqual(context.metadata["last_preview_command_id"], dispatch.command_id)
         self.assertEqual(coordinator.registry.get("mumu-0").status, InstanceStatus.READY)
 
+    def test_inspect_instance_preserves_busy_status_for_active_runtime(self) -> None:
+        coordinator = RuntimeCoordinator(
+            task_runner=TaskRunner(),
+            health_checker=FakeHealthChecker(healthy=True),
+            preview_capture=FakePreviewCapture(),
+        )
+        coordinator.sync_instances([self.instance])
+        coordinator.registry.transition_status("mumu-0", InstanceStatus.BUSY, force=True)
+        context = coordinator.get_runtime_context("mumu-0")
+        context.active_task_id = "task.success"
+
+        inspection = coordinator.inspect_instance("mumu-0")
+
+        self.assertEqual(inspection.status, InstanceStatus.BUSY)
+        self.assertTrue(inspection.health_check_ok)
+        self.assertIsNotNone(inspection.preview_frame)
+        self.assertEqual(coordinator.registry.get("mumu-0").status, InstanceStatus.BUSY)
+
+    def test_inspect_instance_skips_device_calls_for_disconnected_instances(self) -> None:
+        checker = FakeHealthChecker(healthy=True)
+        preview_capture = FakePreviewCapture()
+        coordinator = RuntimeCoordinator(
+            task_runner=TaskRunner(),
+            health_checker=checker,
+            preview_capture=preview_capture,
+        )
+        coordinator.sync_instances([self.instance])
+        coordinator.sync_instances([])
+
+        inspection = coordinator.inspect_instance("mumu-0")
+
+        self.assertEqual(inspection.status, InstanceStatus.DISCONNECTED)
+        self.assertEqual(checker.calls, 0)
+        self.assertEqual(preview_capture.calls, 0)
+        self.assertEqual(inspection.metadata["skipped"], "disconnected")
+
+    def test_inspect_instance_reuses_runtime_health_failure_snapshot_during_polling(self) -> None:
+        sink = RecordingAuditSink()
+        coordinator = RuntimeCoordinator(
+            task_runner=TaskRunner(),
+            health_checker=FakeHealthChecker(healthy=False),
+            preview_capture=FakePreviewCapture(),
+            audit_sink=sink,
+        )
+        coordinator.sync_instances([self.instance])
+
+        first = coordinator.inspect_instance("mumu-0")
+        second = coordinator.inspect_instance("mumu-0")
+
+        self.assertFalse(first.health_check_ok)
+        self.assertFalse(second.health_check_ok)
+        self.assertIsNotNone(first.failure_snapshot)
+        self.assertIsNotNone(second.failure_snapshot)
+        self.assertEqual(first.failure_snapshot.snapshot_id, second.failure_snapshot.snapshot_id)
+        self.assertEqual(
+            sum(1 for name, _ in sink.records if name == "task.failure_snapshot"),
+            1,
+        )
+        self.assertEqual(second.failure_snapshot.preview_frame.frame_id, "frame-2")
+
     def test_dispatch_stop_and_emergency_stop_pause_instances(self) -> None:
         second = InstanceState(
             instance_id="mumu-1",

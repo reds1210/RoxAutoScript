@@ -39,6 +39,9 @@ class FakeAdapter:
     def input_text(self, instance: InstanceState, text: str) -> None:
         self.text_inputs.append(text)
 
+    def launch_app(self, instance: InstanceState, package_name: str) -> None:
+        return None
+
     def health_check(self, instance: InstanceState) -> bool:
         self.health_checks += 1
         return self.healthy
@@ -95,6 +98,7 @@ class LiveRuntimeSessionTests(unittest.TestCase):
 
         dispatch = session.refresh("mumu-0")
         context = session.get_runtime_context("mumu-0")
+        snapshot = session.snapshot()
 
         self.assertEqual(dispatch.instance_ids, ["mumu-0"])
         self.assertFalse(context.health_check_ok)
@@ -102,6 +106,7 @@ class LiveRuntimeSessionTests(unittest.TestCase):
         self.assertIsNotNone(context.failure_snapshot)
         self.assertEqual(context.failure_snapshot.task_id, "runtime.health_check")
         self.assertIs(session.last_command_result, dispatch)
+        self.assertEqual([item.instance_id for item in snapshot.last_inspection_results], ["mumu-0"])
 
     def test_sync_instances_captures_profile_resolver_error_without_stopping_runtime(self) -> None:
         adapter = FakeAdapter(healthy=True)
@@ -130,14 +135,49 @@ class LiveRuntimeSessionTests(unittest.TestCase):
 
         session = LiveRuntimeSession(adapter, discovery=discovery)
 
-        first_snapshot = session.poll()
-        second_snapshot = session.poll()
+        first_snapshot = session.poll(refresh_runtime=True)
+        second_snapshot = session.poll(refresh_runtime=True)
 
         self.assertEqual(first_snapshot.instances[0].instance_id, "mumu-0")
         self.assertEqual(second_snapshot.instances[0].instance_id, "mumu-0")
         self.assertEqual(session.last_sync_error, "adb discovery unavailable")
+        self.assertFalse(second_snapshot.last_sync_ok)
         self.assertIsNotNone(second_snapshot.last_sync_at)
+        self.assertEqual(adapter.health_checks, 1)
+        self.assertEqual(adapter.screenshot_requests, 1)
         self.assertGreater(second_snapshot.revision, first_snapshot.revision)
+
+    def test_poll_refreshes_runtime_contexts_and_tracks_last_inspection_results(self) -> None:
+        adapter = FakeAdapter(healthy=True)
+        session = LiveRuntimeSession(adapter, discovery=lambda: [self.instance])
+
+        snapshot = session.poll(refresh_runtime=True)
+
+        self.assertTrue(snapshot.last_sync_ok)
+        self.assertEqual(adapter.health_checks, 1)
+        self.assertEqual(adapter.screenshot_requests, 1)
+        self.assertEqual(len(snapshot.last_inspection_results), 1)
+        self.assertEqual(snapshot.last_inspection_results[0].instance_id, "mumu-0")
+        self.assertTrue(snapshot.last_inspection_results[0].health_check_ok)
+        self.assertEqual(Path(snapshot.get_instance_snapshot("mumu-0").preview_frame.image_path), Path("captures") / "mumu-0.png")
+
+    def test_refresh_runtime_contexts_supports_per_instance_filtering(self) -> None:
+        second = InstanceState(
+            instance_id="mumu-1",
+            label="MuMu 1",
+            adb_serial="127.0.0.1:16448",
+            status=InstanceStatus.READY,
+        )
+        adapter = FakeAdapter(healthy=True)
+        session = LiveRuntimeSession(adapter, discovery=lambda: [self.instance, second])
+        session.sync_instances()
+
+        results = session.refresh_runtime_contexts(instance_id="mumu-1")
+        filtered = session.snapshot(instance_id="mumu-1")
+
+        self.assertEqual([result.instance_id for result in results], ["mumu-1"])
+        self.assertEqual([result.instance_id for result in filtered.last_inspection_results], ["mumu-1"])
+        self.assertEqual([item.instance_id for item in filtered.instance_snapshots], ["mumu-1"])
 
     def test_snapshot_filters_per_instance_and_tracks_recent_events(self) -> None:
         second = InstanceState(

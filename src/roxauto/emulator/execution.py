@@ -22,6 +22,7 @@ from roxauto.core.events import (
 from roxauto.core.models import InstanceState, PreviewFrame
 from roxauto.core.runtime import AuditSink
 from roxauto.core.time import utc_now
+from roxauto.emulator.adapter import EmulatorAdapter
 from roxauto.logs.audit import write_preview_audit
 
 
@@ -45,8 +46,8 @@ class InteractionAdapter(Protocol):
 
 
 @runtime_checkable
-class EmulatorActionAdapter(ScreenshotProvider, InteractionAdapter, Protocol):
-    """Stable execution-side adapter contract."""
+class EmulatorActionAdapter(EmulatorAdapter, ScreenshotProvider, InteractionAdapter, Protocol):
+    """Stable execution-side adapter contract for production and fallback adapters."""
 
 
 class CommandExecutionStatus(str, Enum):

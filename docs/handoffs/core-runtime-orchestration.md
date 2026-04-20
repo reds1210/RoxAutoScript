@@ -2,98 +2,131 @@
 
 ## Scope
 
-- Hardened Engine A runtime state synchronization and queue lifecycle behavior on top of the existing runtime coordinator branch.
-- Added an emulator-side live runtime wrapper so downstream code can consume discovery, health check, preview capture, queue orchestration, and command dispatch through one Engine A entrypoint.
-- Moved `LiveRuntimeSession` toward a production-ready long-lived session with safe polling, revisioned snapshots, recent-event buffering, and app-facing per-instance runtime views.
-- Kept changes inside Engine A ownership only; no shared contract or GUI/task/vision files were changed in this follow-up.
+- Engine A kept changes inside `core/`, `emulator/`, and owned tests only.
+- The runtime side now exposes a clearer production execution path for real ADB-backed actions and a clearer session-driving API for GUI polling.
+- No GUI, vision, or task-pack code was changed in this round.
 
 ## Changed Files
 
-- `src/roxauto/core/instance_registry.py`
-- `src/roxauto/core/events.py`
+- `src/roxauto/core/__init__.py`
 - `src/roxauto/core/runtime.py`
 - `src/roxauto/emulator/__init__.py`
+- `src/roxauto/emulator/adapter.py`
 - `src/roxauto/emulator/execution.py`
 - `src/roxauto/emulator/live_runtime.py`
-- `src/roxauto/profiles/store.py`
-- `tests/core/test_instance_registry.py`
 - `tests/core/test_runtime.py`
+- `tests/emulator/test_adapter.py`
+- `tests/emulator/test_execution.py`
 - `tests/emulator/test_live_runtime.py`
-- `tests/profiles/test_store.py`
 
 ## Public APIs Added Or Changed
 
-- Added `RuntimeCoordinator.event_bus` so downstream consumers can subscribe to live runtime events without reaching into private internals.
-- Added `RuntimeCoordinator.list_runtime_contexts()` for ordered runtime-context inspection across all known instances.
-- `RuntimeCoordinator.dispatch_command()` now returns a rejected `CommandDispatchResult` for unknown instance ids instead of raising, and correctly reports partial rejection when per-instance execution results reject only some targets.
-- `InstanceRegistry.sync()` now preserves existing runtime metadata on rediscovery and marks missing instances as `disconnected`.
-- Added `LiveRuntimeSession` and `LiveRuntimeSnapshot` under `roxauto.emulator` as the stable Engine A composition layer for discovery + coordinator + integrated health/preview/command services.
-- Added `LiveRuntimeSession.poll()`, `revision`, `last_snapshot`, `last_sync_error`, `last_command_result`, `last_queue_result`, and `get_instance_snapshot()` as stable long-lived session surfaces for the app layer.
-- Added `LiveRuntimeEventRecord` and `LiveRuntimeInstanceSnapshot`, and extended `LiveRuntimeSnapshot` with `instance_snapshots`, `recent_events`, `last_sync_at`, `last_discovery_at`, and last-operation fields.
-- Added `EVENT_COMMAND_EXECUTED` in `roxauto.core.events` and aligned emulator execution publishing with the shared constant.
-- Added `JsonProfileStore.list_matching_profiles()` and `JsonProfileStore.resolve_binding_for_instance()` for conservative per-instance profile auto-resolution.
+- `roxauto.emulator.adapter.EmulatorAdapter` remains the stable emulator contract; `roxauto.emulator.execution.EmulatorActionAdapter` now explicitly extends the same contract instead of drifting into a parallel subset.
+- `roxauto.emulator.adapter.AdbEmulatorAdapter` is the production-facing implementation for:
+  - `capture_screenshot()`
+  - `tap()`
+  - `swipe()`
+  - `input_text()`
+  - `launch_app()`
+  - `health_check()`
+- `roxauto.emulator.adapter.AdbTransport`, `SubprocessAdbTransport`, `AdbCommandResult`, and `AdbCommandError` are now exported from `roxauto.emulator` so the app line can inject real or test transports without reaching into private internals.
+- Added `RuntimeInspectionResult` in `roxauto.core.runtime`.
+- Added `RuntimeCoordinator.inspect_instance()` and `inspect_instances()` for poll-driven health/preview/failure updates without forcing GUI code through ad hoc refresh-command stitching.
+- `LiveRuntimeSession` now exposes:
+  - `refresh_runtime_contexts(instance_id=None, run_health_check=True, capture_preview=True)`
+  - `poll(instance_id=None, refresh_runtime=False, run_health_check=True, capture_preview=True)`
+  - `last_sync_ok`
+  - `last_inspection_results`
+- `LiveRuntimeSnapshot` now includes:
+  - `last_sync_ok`
+  - `last_inspection_results`
+- `dispatch_command(refresh)` now backfills `last_inspection_results` from the refreshed runtime contexts, so old app code and new polling code see one consistent inspection surface.
 
 ## What Shipped
 
-- Instance rediscovery no longer overwrites runtime-bound metadata such as profile-binding markers already attached to registry state.
-- Missing instances are now marked `disconnected` during sync, and runtime contexts mirror that state so downstream consumers stop rendering stale `ready` or `busy` entries.
-- Queue execution now clears stale `active_task_id`, `active_run_id`, and transient `queue_id` markers after completion while preserving `last_run_id` and `last_run_status` for inspection.
-- Refresh/pause paths keep runtime-context status aligned with registry transitions instead of waiting for a later context read to reconcile state.
-- Refresh/health-failure paths now populate runtime-context health metadata and emit a synthetic `runtime.health_check` failure snapshot when manual refresh detects an unhealthy instance.
-- Queue-side health failures now record `FailureSnapshotReason.HEALTH_CHECK_FAILED` instead of the generic stop-condition reason, so downstream failure panes can distinguish runtime health issues from manual stops.
-- `LiveRuntimeSession.sync_instances()` can auto-bind a unique per-instance profile via an injected resolver callback, but deliberately skips ambiguous matches instead of silently binding the wrong profile.
-- `LiveRuntimeSession` now gives downstream code one headless entrypoint for discovery, context queries, queue queries, refresh, queue start, and generic command dispatch without importing GUI code.
-- `LiveRuntimeSession.poll()` now survives transient discovery failures, preserves the last known runtime state, and exposes the failure through `last_sync_error` instead of forcing the app to catch transport exceptions on every refresh loop.
-- `LiveRuntimeSession` now tracks a monotonic `revision`, caches the most recent full snapshot, and records recent runtime events so the app can refresh only when session state actually moved.
-- `LiveRuntimeSnapshot.instance_snapshots` now pre-joins `InstanceState`, `InstanceRuntimeContext`, and queued items per instance, so the GUI no longer needs to stitch together sample feeds or perform repeated joins client-side.
-- Session-level `last_command_result` and `last_queue_result` now provide stable outputs for command/refresh/start-queue actions, and filtered snapshots can be queried per instance without rebuilding app-side selectors.
+- The real-device execution path is now explicit and test-covered: screenshot, tap, swipe, text input, app launch, and health check all route through the same ADB transport contract.
+- `AdbEmulatorAdapter.health_check()` now follows a concrete runtime path:
+  - `adb get-state`
+  - then a cheap shell probe `echo health_check`
+  - returns `False` on transport failure, bad device state, or probe mismatch.
+- `RuntimeCoordinator.inspect_instance()` now gives Engine B a stable runtime-facing read/update operation that refreshes:
+  - per-instance health state
+  - preview frame
+  - runtime health failure snapshot
+  - derived runtime status
+- Inspection preserves long-lived runtime semantics better than the old refresh-only path:
+  - disconnected instances skip device calls
+  - busy instances stay `busy` when polled healthy
+  - paused instances stay `paused`
+  - healthy `error` instances can recover to `ready`
+- Runtime health failure snapshots are now updated in place instead of being recreated on every poll loop; the snapshot payload can refresh, but repeated polling no longer needs to emit a new failure event unless the failure state meaningfully changed.
+- `LiveRuntimeSession` now supports two stable GUI patterns:
+  - compatibility mode: `poll()` only syncs discovery, matching current fallback bridge expectations
+  - production polling mode: `poll(refresh_runtime=True)` syncs discovery and refreshes runtime contexts in one call
+- `refresh_runtime_contexts()` gives the GUI an explicit timer-driven API for preview/health/failure refresh without dispatching synthetic commands.
+- `last_inspection_results` and `LiveRuntimeSnapshot.last_inspection_results` provide a stable output surface for app state reducers, even when the caller still uses the existing refresh command path.
 
-## Runtime-Facing API
+## Production-Facing Runtime API
 
-- Poll/update loop:
-  - `LiveRuntimeSession.poll()`
+- Emulator execution contract:
+  - `EmulatorAdapter`
+  - `EmulatorActionAdapter`
+  - `AdbEmulatorAdapter`
+  - `AdbTransport`
+  - `SubprocessAdbTransport`
+- Session driving:
   - `LiveRuntimeSession.sync_instances()`
+  - `LiveRuntimeSession.refresh_runtime_contexts()`
+  - `LiveRuntimeSession.poll(refresh_runtime=True)`
   - `LiveRuntimeSession.revision`
-  - `LiveRuntimeSession.last_snapshot`
+  - `LiveRuntimeSession.last_sync_ok`
   - `LiveRuntimeSession.last_sync_error`
-- Read models for rendering:
-  - `LiveRuntimeSession.snapshot()`
+- Runtime reads for GUI:
+  - `LiveRuntimeSession.last_snapshot`
+  - `LiveRuntimeSession.snapshot(instance_id=None)`
   - `LiveRuntimeSession.get_instance_snapshot(instance_id)`
   - `LiveRuntimeSession.get_runtime_context(instance_id)`
-  - `LiveRuntimeSession.list_queue_items(instance_id=None)`
   - `LiveRuntimeSnapshot.instance_snapshots`
+  - `LiveRuntimeSnapshot.last_inspection_results`
   - `LiveRuntimeSnapshot.recent_events`
-- Operator actions:
-  - `LiveRuntimeSession.refresh(instance_id=None)`
-  - `LiveRuntimeSession.dispatch_command(command)`
-  - `LiveRuntimeSession.start_queue(instance_id)`
-  - `LiveRuntimeSession.enqueue(item)` / `enqueue_many(items)`
-- Stable operation outputs:
+- Stable operator outputs:
   - `LiveRuntimeSession.last_command_result`
   - `LiveRuntimeSession.last_queue_result`
-  - `LiveRuntimeSnapshot.last_command_result`
-  - `LiveRuntimeSnapshot.last_queue_result`
+  - `LiveRuntimeSession.last_inspection_results`
+
+## App Integration Notes
+
+- Current fallback bridge can keep working as-is because `poll()` still defaults to discovery-only sync.
+- Engine B should move toward:
+  - `session.poll(refresh_runtime=True)` on GUI refresh cadence
+  - or `session.sync_instances()` + `session.refresh_runtime_contexts()` if the UI wants tighter control
+- After that switch, the app can drop the current per-instance `refresh()` loop and consume:
+  - `snapshot.instance_snapshots`
+  - `snapshot.last_inspection_results`
+  - `snapshot.last_command_result`
+  - `snapshot.last_queue_result`
+  - `snapshot.recent_events`
 
 ## Assumptions
 
-- Discovery sync is the authoritative signal for whether an emulator instance is still present.
-- Downstream GUI code can replace sample log/queue feeds by subscribing to `RuntimeCoordinator.event_bus` or `LiveRuntimeSession.event_bus`, then querying `revision`, `last_snapshot`, `snapshot()`, `get_instance_snapshot()`, and `list_queue_items()`.
-- The app refresh loop can safely call `LiveRuntimeSession.poll()` on a timer, treat `last_sync_error` as displayable runtime health state, and continue rendering the last good snapshot during transient discovery failures.
-- Per-instance auto-binding should only happen when one resolver result is unambiguous; explicit profile selection remains the safer path when multiple candidates exist.
+- ADB remains the only real-device transport on this branch.
+- GUI polling is still single-threaded; queue execution remains synchronous.
+- Because there is still no async worker, `active_run_id` is only observable during the immediate queue execution call stack, not as a long-lived background task.
 
 ## Verification
 
 - `python -m unittest discover -s tests/core -t .`
 - `python -m unittest discover -s tests/emulator -t .`
 - `python -m unittest discover -s tests/profiles -t .`
+- `python -m unittest discover -s tests/app -t .`
 - `python -m unittest discover -s tests -t .`
-- Result: `91` tests passed
+- Result: `98` tests passed
 
 ## Blockers
 
-- The app branch still needs to replace sample queue/log/preview data sources with `LiveRuntimeSession` or an equivalent adapter wired to the runtime event bus.
-- Runtime orchestration remains synchronous; `active_run_id` is only meaningful inside the immediate queue execution path unless a later branch introduces async execution.
+- Engine B still needs to replace the current compatibility refresh loop with `poll(refresh_runtime=True)` or `refresh_runtime_contexts()`.
+- Queue orchestration is still synchronous; true long-lived `active_run_id` observation still requires a later async/background worker design.
 
 ## Recommended Next Step
 
-- In Engine B, instantiate `LiveRuntimeSession` with the concrete emulator adapter and a profile-resolver callback, poll it on the GUI refresh cadence, and swap the sample feeds for `last_snapshot.instance_snapshots`, `recent_events`, `last_command_result`, and `last_queue_result`.
+- In the GUI line, instantiate `LiveRuntimeSession` with `AdbEmulatorAdapter` plus the profile resolver, then replace the fallback refresh stitching with a timer-driven call to `poll(refresh_runtime=True)`.

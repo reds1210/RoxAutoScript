@@ -51,6 +51,9 @@ class FakeAdapter:
     def input_text(self, instance: InstanceState, text: str) -> None:
         self.text_inputs.append(text)
 
+    def launch_app(self, instance: InstanceState, package_name: str) -> None:
+        return None
+
     def health_check(self, instance: InstanceState) -> bool:
         self.health_checks += 1
         return self.healthy

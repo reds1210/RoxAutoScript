@@ -30,7 +30,14 @@ from roxauto.core.models import (
     VisionMatch,
 )
 from roxauto.core.queue import QueuedTask, TaskQueue
-from roxauto.core.runtime import QueueRunResult, RuntimeCoordinator, TaskExecutionContext, TaskRunner, TaskStep
+from roxauto.core.runtime import (
+    QueueRunResult,
+    RuntimeCoordinator,
+    RuntimeInspectionResult,
+    TaskExecutionContext,
+    TaskRunner,
+    TaskStep,
+)
 
 __all__ = [
     "InstanceCommand",
@@ -52,6 +59,7 @@ __all__ = [
     "ProfileBinding",
     "QueueRunResult",
     "RuntimeCoordinator",
+    "RuntimeInspectionResult",
     "StepStatus",
     "StopCondition",
     "StopConditionKind",
