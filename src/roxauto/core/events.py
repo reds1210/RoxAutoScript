@@ -8,9 +8,13 @@ from roxauto.core.time import utc_now
 
 EVENT_INSTANCE_UPDATED = "instance.updated"
 EVENT_INSTANCE_ERROR = "instance.error"
+EVENT_INSTANCE_HEALTH_CHECKED = "instance.health_checked"
+EVENT_PREVIEW_CAPTURED = "preview.captured"
 EVENT_TASK_QUEUED = "task.queued"
 EVENT_TASK_STARTED = "task.started"
 EVENT_TASK_PROGRESS = "task.progress"
+EVENT_TASK_FAILURE_SNAPSHOT_RECORDED = "task.failure_snapshot"
+EVENT_FAILURE_SNAPSHOT_RECORDED = EVENT_TASK_FAILURE_SNAPSHOT_RECORDED
 EVENT_TASK_FINISHED = "task.finished"
 EVENT_ALERT_RAISED = "alert.raised"
 

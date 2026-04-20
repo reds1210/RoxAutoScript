@@ -1,11 +1,24 @@
 """Core runtime package."""
 
-from roxauto.core.commands import InstanceCommand, InstanceCommandType
+from roxauto.core.commands import (
+    CommandRoute,
+    CommandRouteKind,
+    CommandRouter,
+    CommandRoutingError,
+    InstanceCommand,
+    InstanceCommandType,
+)
 from roxauto.core.instance_registry import InstanceRegistry
 from roxauto.core.models import (
+    FailureSnapshotMetadata,
+    FailureSnapshotReason,
     InstanceState,
     InstanceStatus,
+    PreviewFrame,
     StepStatus,
+    StopCondition,
+    StopConditionKind,
+    TaskManifest,
     TaskRun,
     TaskRunStatus,
     TaskSpec,
@@ -21,9 +34,19 @@ __all__ = [
     "InstanceRegistry",
     "InstanceState",
     "InstanceStatus",
+    "CommandRoute",
+    "CommandRouteKind",
+    "CommandRouter",
+    "CommandRoutingError",
+    "FailureSnapshotMetadata",
+    "FailureSnapshotReason",
     "QueuedTask",
+    "PreviewFrame",
     "StepStatus",
+    "StopCondition",
+    "StopConditionKind",
     "TaskExecutionContext",
+    "TaskManifest",
     "TaskQueue",
     "TaskRun",
     "TaskRunStatus",
