@@ -21,8 +21,10 @@ from roxauto.vision.models import (
 from roxauto.vision.repository import AnchorRepository
 from roxauto.vision.services import build_replay_view
 from roxauto.vision.validation import (
+    VisionWorkspaceReadinessReport,
     TemplateRepositoryValidationReport,
     TemplateValidationIssue,
+    build_vision_workspace_readiness_report,
     validate_template_repository,
     validate_template_workspace,
 )
@@ -72,6 +74,12 @@ class TemplateWorkspaceCatalog:
     repositories: list[TemplateRepositoryCatalogEntry] = field(default_factory=list)
     selected_repository_id: str = ""
     selected_repository: TemplateRepositoryCatalogEntry | None = None
+    repository_count: int = 0
+    total_error_count: int = 0
+    total_warning_count: int = 0
+    valid_repository_ids: list[str] = field(default_factory=list)
+    invalid_repository_ids: list[str] = field(default_factory=list)
+    readiness: VisionWorkspaceReadinessReport | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -85,6 +93,8 @@ class CaptureArtifactView:
     image_path: str
     source_image: str = ""
     crop_region: CropRegion | None = None
+    file_exists: bool = False
+    is_selected: bool = False
     created_at: object = field(default_factory=utc_now)
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -103,6 +113,9 @@ class CaptureInspectorState:
     selected_artifact_id: str = ""
     selected_artifact: CaptureArtifactView | None = None
     artifacts: list[CaptureArtifactView] = field(default_factory=list)
+    available_artifact_ids: list[str] = field(default_factory=list)
+    artifact_kind_counts: dict[str, int] = field(default_factory=dict)
+    selected_artifact_summary: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -132,9 +145,12 @@ class MatchInspectorState:
     status: MatchStatus = MatchStatus.MISSED
     threshold: float = 0.85
     message: str = ""
+    candidate_count: int = 0
     matched_candidate: MatchCandidateView | None = None
     best_candidate: MatchCandidateView | None = None
     candidates: list[MatchCandidateView] = field(default_factory=list)
+    matched_candidate_summary: str = ""
+    best_candidate_summary: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -150,6 +166,8 @@ class AnchorInspectorState:
     selected_anchor_id: str = ""
     selected_anchor: AnchorInspectionRow | None = None
     anchors: list[AnchorInspectionRow] = field(default_factory=list)
+    available_anchor_ids: list[str] = field(default_factory=list)
+    selected_anchor_summary: str = ""
     issues: list[TemplateValidationIssue] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -172,6 +190,10 @@ class CalibrationInspectorState:
     anchors: list[AnchorInspectionRow] = field(default_factory=list)
     capture_session_id: str = ""
     artifact_count: int = 0
+    scale_summary: str = ""
+    offset_summary: str = ""
+    crop_summary: str = ""
+    override_count: int = 0
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -190,6 +212,8 @@ class FailureInspectorState:
     selected_anchor: AnchorInspectionRow | None = None
     best_candidate: MatchCandidateView | None = None
     candidates: list[MatchCandidateView] = field(default_factory=list)
+    candidate_count: int = 0
+    best_candidate_summary: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -199,6 +223,7 @@ class FailureInspectorState:
 @dataclass(slots=True)
 class VisionToolingState:
     workspace: TemplateWorkspaceCatalog
+    readiness: VisionWorkspaceReadinessReport | None
     match: MatchInspectorState
     anchors: AnchorInspectorState
     calibration: CalibrationInspectorState
@@ -215,8 +240,14 @@ def build_template_workspace_catalog(
     templates_root: Path | str,
     *,
     selected_repository_id: str = "",
+    asset_inventory_path: Path | str | None = None,
 ) -> TemplateWorkspaceCatalog:
     validation = validate_template_workspace(templates_root)
+    readiness = (
+        build_vision_workspace_readiness_report(templates_root, asset_inventory_path)
+        if asset_inventory_path is not None
+        else None
+    )
     repositories_by_id = {
         repository.repository_id: repository
         for repository in AnchorRepository.discover(templates_root)
@@ -250,6 +281,12 @@ def build_template_workspace_catalog(
         repositories=entries,
         selected_repository_id=selected_entry.repository_id if selected_entry is not None else "",
         selected_repository=selected_entry,
+        repository_count=len(entries),
+        total_error_count=validation.error_count,
+        total_warning_count=validation.warning_count,
+        valid_repository_ids=list(validation.valid_repository_ids),
+        invalid_repository_ids=list(validation.invalid_repository_ids),
+        readiness=readiness,
         metadata=dict(validation.metadata),
     )
 
@@ -293,6 +330,8 @@ def build_anchor_inspector(
         selected_anchor_id=selected_row.anchor_id if selected_row is not None else "",
         selected_anchor=selected_row,
         anchors=rows,
+        available_anchor_ids=[row.anchor_id for row in rows],
+        selected_anchor_summary=_anchor_summary(selected_row),
         issues=list(validation_report.issues),
         metadata={
             "anchor_count": len(rows),
@@ -332,6 +371,10 @@ def build_calibration_inspector(
         anchors=anchor_state.anchors,
         capture_session_id=capture_session.session_id if capture_session is not None else "",
         artifact_count=len(capture_session.artifacts) if capture_session is not None else 0,
+        scale_summary=f"{resolved_profile.scale_x:.2f} x {resolved_profile.scale_y:.2f}",
+        offset_summary=f"{resolved_profile.offset_x}, {resolved_profile.offset_y}",
+        crop_summary=_format_region(CropRegion.from_value(resolved_profile.crop_region)),
+        override_count=len(resolved_profile.anchor_overrides),
         metadata=dict(resolved_profile.metadata),
     )
 
@@ -346,6 +389,14 @@ def build_capture_inspector(
 
     artifact_views = [_build_capture_artifact_view(artifact) for artifact in session.artifacts]
     selected_artifact = _select_artifact_view(artifact_views, selected_artifact_id)
+    if selected_artifact is not None:
+        artifact_views = [
+            _mark_artifact_selection(artifact, selected_artifact.artifact_id)
+            for artifact in artifact_views
+        ]
+        selected_artifact = next(
+            artifact for artifact in artifact_views if artifact.artifact_id == selected_artifact.artifact_id
+        )
 
     return CaptureInspectorState(
         session_id=session.session_id,
@@ -357,6 +408,9 @@ def build_capture_inspector(
         selected_artifact_id=selected_artifact.artifact_id if selected_artifact is not None else "",
         selected_artifact=selected_artifact,
         artifacts=artifact_views,
+        available_artifact_ids=[artifact.artifact_id for artifact in artifact_views],
+        artifact_kind_counts=_artifact_kind_counts(artifact_views),
+        selected_artifact_summary=_capture_artifact_summary(selected_artifact),
         metadata=dict(session.metadata),
     )
 
@@ -400,9 +454,12 @@ def build_match_inspector(
         status=match_result.status,
         threshold=match_result.threshold,
         message=match_result.message or message,
+        candidate_count=len(candidates),
         matched_candidate=_find_candidate_view(candidates, matched_candidate),
         best_candidate=_find_candidate_view(candidates, best_candidate),
         candidates=candidates,
+        matched_candidate_summary=_candidate_summary(_find_candidate_view(candidates, matched_candidate)),
+        best_candidate_summary=_candidate_summary(_find_candidate_view(candidates, best_candidate)),
         metadata=dict(match_result.metadata),
     )
 
@@ -448,6 +505,8 @@ def build_failure_inspector(
         selected_anchor=anchor_state.selected_anchor,
         best_candidate=match_state.best_candidate,
         candidates=match_state.candidates,
+        candidate_count=len(match_state.candidates),
+        best_candidate_summary=match_state.best_candidate_summary,
         metadata=dict(failure_record.metadata),
     )
 
@@ -462,6 +521,7 @@ def build_vision_tooling_state(
     match_result: TemplateMatchResult | None = None,
     failure_record: FailureInspectionRecord | None = None,
     validation_report: TemplateRepositoryValidationReport | None = None,
+    asset_inventory_path: Path | str | None = None,
     selected_repository_id: str = "",
     selected_anchor_id: str = "",
     selected_action_id: str = "",
@@ -473,6 +533,7 @@ def build_vision_tooling_state(
         templates_root=templates_root,
         repository=repository,
         selected_repository_id=selected_repository_id,
+        asset_inventory_path=asset_inventory_path,
     )
     repository = _resolve_repository_for_state(
         templates_root=templates_root,
@@ -531,6 +592,7 @@ def build_vision_tooling_state(
 
     return VisionToolingState(
         workspace=workspace,
+        readiness=workspace.readiness,
         match=match_state,
         anchors=anchors,
         calibration=calibration,
@@ -541,6 +603,7 @@ def build_vision_tooling_state(
             "repository_id": repository.repository_id if repository is not None else "",
             "selected_action_id": replay.selected_action_id,
             "selected_artifact_id": capture.selected_artifact_id,
+            "workspace_ready_blocking_count": workspace.readiness.blocking_count if workspace.readiness is not None else 0,
         },
     )
 
@@ -594,6 +657,7 @@ def _build_capture_artifact_view(artifact: CaptureArtifact) -> CaptureArtifactVi
         image_path=artifact.image_path,
         source_image=artifact.source_image,
         crop_region=artifact.crop_region,
+        file_exists=_path_exists(artifact.image_path),
         created_at=artifact.created_at,
         metadata=dict(artifact.metadata),
     )
@@ -604,15 +668,26 @@ def _build_workspace_for_state(
     templates_root: Path | str | None,
     repository: AnchorRepository | None,
     selected_repository_id: str,
+    asset_inventory_path: Path | str | None,
 ) -> TemplateWorkspaceCatalog:
     if templates_root is not None:
         return build_template_workspace_catalog(
             templates_root,
             selected_repository_id=selected_repository_id or (repository.repository_id if repository is not None else ""),
+            asset_inventory_path=asset_inventory_path,
         )
 
     if repository is None:
-        return TemplateWorkspaceCatalog(templates_root="", repositories=[], selected_repository_id="")
+        return TemplateWorkspaceCatalog(
+            templates_root="",
+            repositories=[],
+            selected_repository_id="",
+            repository_count=0,
+            total_error_count=0,
+            total_warning_count=0,
+            valid_repository_ids=[],
+            invalid_repository_ids=[],
+        )
 
     entry = TemplateRepositoryCatalogEntry(
         repository_id=repository.repository_id,
@@ -628,6 +703,11 @@ def _build_workspace_for_state(
         repositories=[entry],
         selected_repository_id=repository.repository_id,
         selected_repository=entry,
+        repository_count=1,
+        total_error_count=0,
+        total_warning_count=0,
+        valid_repository_ids=[repository.repository_id],
+        invalid_repository_ids=[],
     )
 
 
@@ -650,6 +730,79 @@ def _resolve_repository_for_state(
         if candidate.repository_id == selected_entry.repository_id:
             return candidate
     return None
+
+
+def _format_region(region: CropRegion | tuple[int, int, int, int] | None) -> str:
+    resolved_region = CropRegion.from_value(region)
+    if resolved_region is None:
+        return "n/a"
+    x, y, width, height = resolved_region.to_tuple()
+    return f"{x},{y},{width},{height}"
+
+
+def _anchor_summary(anchor: AnchorInspectionRow | None) -> str:
+    if anchor is None:
+        return ""
+    return (
+        f"{anchor.label or anchor.anchor_id} | template={anchor.template_path} | "
+        f"threshold={anchor.effective_confidence_threshold:.2f} | "
+        f"region={_format_region(anchor.effective_match_region)} | "
+        f"issues={','.join(anchor.issue_codes) or 'none'}"
+    )
+
+
+def _artifact_kind_counts(
+    artifacts: list[CaptureArtifactView],
+) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for artifact in artifacts:
+        key = artifact.kind.value
+        counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
+def _capture_artifact_summary(artifact: CaptureArtifactView | None) -> str:
+    if artifact is None:
+        return ""
+    return (
+        f"{artifact.kind.value} | path={artifact.image_path} | "
+        f"crop={_format_region(artifact.crop_region)} | "
+        f"exists={'yes' if artifact.file_exists else 'no'}"
+    )
+
+
+def _mark_artifact_selection(
+    artifact: CaptureArtifactView,
+    selected_artifact_id: str,
+) -> CaptureArtifactView:
+    return CaptureArtifactView(
+        artifact_id=artifact.artifact_id,
+        kind=artifact.kind,
+        image_path=artifact.image_path,
+        source_image=artifact.source_image,
+        crop_region=artifact.crop_region,
+        file_exists=artifact.file_exists,
+        is_selected=artifact.artifact_id == selected_artifact_id,
+        created_at=artifact.created_at,
+        metadata=dict(artifact.metadata),
+    )
+
+
+def _candidate_summary(candidate: MatchCandidateView | None) -> str:
+    if candidate is None:
+        return "no candidate"
+    return (
+        f"{candidate.anchor_id} | confidence={candidate.confidence:.3f} | "
+        f"bbox={candidate.bbox} | source={candidate.source_image}"
+    )
+
+
+def _path_exists(value: str) -> bool:
+    if not value:
+        return False
+    if "://" in value:
+        return False
+    return Path(value).exists()
 
 
 def _effective_confidence_threshold(

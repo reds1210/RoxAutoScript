@@ -13,6 +13,7 @@ This branch owns the developer-facing observability layer for anchors, calibrati
 - `TemplateMatchResult`: the UI-facing result wrapper around one or more `VisionMatch` candidates.
 - `FailureInspectionRecord`: a serializable snapshot of a failed match/check, including screenshot references and the best available match context.
 - `TemplateWorkspaceCatalog`, `AnchorInspectorState`, `CalibrationInspectorState`, `CaptureInspectorState`, `MatchInspectorState`, and `FailureInspectorState`: viewer-safe tooling contracts that GUI panes can consume directly.
+- `VisionWorkspaceReadinessReport`: a workspace-level report that compares loaded template repositories against task-foundation template dependencies.
 
 ## Repository Layout
 
@@ -65,6 +66,7 @@ Rules:
 - `match_region` is optional and uses `x, y, width, height`.
 - asset names stay lowercase and use underscores.
 - the repo loader treats the manifest as the source of truth.
+- placeholder template anchors may set `metadata.placeholder=true` so readiness tooling can distinguish scaffold assets from fully-ready captures.
 
 ## Template Validation
 
@@ -72,8 +74,10 @@ Vision-side tooling can now validate template packs before GUI or task code cons
 
 - `validate_template_repository()` checks one loaded `AnchorRepository`.
 - `validate_template_workspace()` scans `assets/templates/` and returns one report per repository folder.
+- `build_vision_workspace_readiness_report()` compares template availability against `src/roxauto/tasks/foundations/asset_inventory.json`.
 - `TemplateRepositoryValidationReport` summarizes error count, warning count, anchor count, and issue details.
 - `TemplateValidationIssue` carries a stable `code`, severity, affected anchor id, and path for operator-facing inspection.
+- `TemplateDependencyReadiness` carries task/pack/anchor-level readiness, placeholder state, and inventory-mismatch information.
 
 Validation only enforces rules that are already part of the documented contracts:
 
@@ -85,6 +89,12 @@ Validation only enforces rules that are already part of the documented contracts
 - template file names should stay lowercase and use underscores.
 
 The validator intentionally returns warnings for naming/grouping drift and errors for load-breaking conditions.
+
+The readiness report is intentionally stricter than raw filesystem validation:
+
+- it can distinguish `ready`, `placeholder`, `missing`, and `invalid` template dependencies
+- it can flag stale task inventory records when an anchor now exists but the inventory still marks it missing
+- it keeps task-foundation dependency checking in the vision layer without importing task runtime code
 
 ## Repository Helpers
 
@@ -113,14 +123,22 @@ These panes should only consume the vision contracts. They should not implement 
 The vision package now exposes service-layer builders so the GUI can stop inventing its own pane payload shapes:
 
 - `build_template_workspace_catalog()` returns repository-level selection and validation state for `assets/templates/`.
+- `build_template_workspace_catalog(..., asset_inventory_path=...)` can also attach the readiness report so GUI panes get validation and dependency status in one payload.
 - `build_anchor_inspector()` returns anchor rows with resolved asset paths, validation issue codes, and effective calibration overrides.
 - `build_calibration_inspector()` returns one calibration-focused state object with profile values, selected anchor context, and capture-session linkage.
 - `build_capture_inspector()` returns selected artifact state and derived artifact metadata for capture/crop tooling.
 - `build_match_inspector()` converts `TemplateMatchResult` into a viewer-safe candidate list with best/matched flags.
 - `build_failure_inspector()` merges `FailureInspectionRecord`, match context, and selected anchor context into one inspector-safe payload.
-- `build_vision_tooling_state()` stitches the workspace catalog, match/anchor/calibration/capture/replay/failure states into one aggregate contract.
+- `build_vision_tooling_state()` stitches the workspace catalog, readiness report, match/anchor/calibration/capture/replay/failure states into one aggregate contract.
 
 These builders stay inside the vision layer and do not depend on `app`, `core` runtime orchestration details, or emulator transport implementations.
+
+Current sample coverage:
+
+- `daily_ui.claim_reward` placeholder template exists
+- `daily_ui.guild_check_in_button` placeholder template now exists under `assets/templates/daily_ui/`
+- `odin.start_button` placeholder template exists
+- task asset inventory still marks `daily_ui.guild_check_in_button` as missing, so readiness tooling reports that as an inventory mismatch until Engine D refreshes the inventory file
 
 ## Capture/Crop Workflow Skeleton
 
