@@ -12,6 +12,7 @@ This branch owns the developer-facing observability layer for anchors, calibrati
 - `ReplayActionView` and `ReplayViewerState`: replay-viewer models derived from `ReplayScript` without requiring GUI widgets.
 - `TemplateMatchResult`: the UI-facing result wrapper around one or more `VisionMatch` candidates.
 - `FailureInspectionRecord`: a serializable snapshot of a failed match/check, including screenshot references and the best available match context.
+- `TemplateWorkspaceCatalog`, `AnchorInspectorState`, `CalibrationInspectorState`, `CaptureInspectorState`, `MatchInspectorState`, and `FailureInspectorState`: viewer-safe tooling contracts that GUI panes can consume directly.
 
 ## Repository Layout
 
@@ -65,6 +66,36 @@ Rules:
 - asset names stay lowercase and use underscores.
 - the repo loader treats the manifest as the source of truth.
 
+## Template Validation
+
+Vision-side tooling can now validate template packs before GUI or task code consumes them:
+
+- `validate_template_repository()` checks one loaded `AnchorRepository`.
+- `validate_template_workspace()` scans `assets/templates/` and returns one report per repository folder.
+- `TemplateRepositoryValidationReport` summarizes error count, warning count, anchor count, and issue details.
+- `TemplateValidationIssue` carries a stable `code`, severity, affected anchor id, and path for operator-facing inspection.
+
+Validation only enforces rules that are already part of the documented contracts:
+
+- `repository_id`, `display_name`, and `version` must exist.
+- `anchor_id` must be unique inside one repository.
+- `confidence_threshold` must stay within `(0.0, 1.0]`.
+- `match_region` width and height must be positive when present.
+- `template_path` must stay relative to the repository root and resolve to an existing file.
+- template file names should stay lowercase and use underscores.
+
+The validator intentionally returns warnings for naming/grouping drift and errors for load-breaking conditions.
+
+## Repository Helpers
+
+`AnchorRepository` now provides a slightly richer loading/search boundary:
+
+- `discover()` returns an empty list when the templates root is missing instead of failing.
+- `manifest_path` and `version` expose stable metadata for tooling and diagnostics.
+- `list_anchor_ids()` and `has_anchor()` support selection UIs.
+- `find_anchors(query=..., tag=..., limit=...)` gives GUI/operator tooling a simple search/filter primitive.
+- `resolve_template_path()` and `resolve_asset_path()` keep asset-path handling anchored at the repository root.
+
 ## GUI Panels
 
 The app skeleton renders five vision panes:
@@ -76,6 +107,20 @@ The app skeleton renders five vision panes:
 - Failures: best candidate, failure message, and candidate list.
 
 These panes should only consume the vision contracts. They should not implement capture, routing, or task logic directly.
+
+## Tooling State Builders
+
+The vision package now exposes service-layer builders so the GUI can stop inventing its own pane payload shapes:
+
+- `build_template_workspace_catalog()` returns repository-level selection and validation state for `assets/templates/`.
+- `build_anchor_inspector()` returns anchor rows with resolved asset paths, validation issue codes, and effective calibration overrides.
+- `build_calibration_inspector()` returns one calibration-focused state object with profile values, selected anchor context, and capture-session linkage.
+- `build_capture_inspector()` returns selected artifact state and derived artifact metadata for capture/crop tooling.
+- `build_match_inspector()` converts `TemplateMatchResult` into a viewer-safe candidate list with best/matched flags.
+- `build_failure_inspector()` merges `FailureInspectionRecord`, match context, and selected anchor context into one inspector-safe payload.
+- `build_vision_tooling_state()` stitches the workspace catalog, match/anchor/calibration/capture/replay/failure states into one aggregate contract.
+
+These builders stay inside the vision layer and do not depend on `app`, `core` runtime orchestration details, or emulator transport implementations.
 
 ## Capture/Crop Workflow Skeleton
 

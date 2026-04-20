@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 import tests._bootstrap  # noqa: F401
 from roxauto.vision import AnchorRepository
@@ -26,4 +27,33 @@ class AnchorRepositoryTests(unittest.TestCase):
         repository_ids = {repository.repository_id for repository in repositories}
 
         self.assertEqual(repository_ids, {"common", "daily_ui", "odin"})
+
+    def test_repository_exposes_manifest_and_search_helpers(self) -> None:
+        repository = AnchorRepository.load(self.templates_root / "common")
+
+        self.assertEqual(repository.manifest_path.name, "manifest.json")
+        self.assertEqual(repository.version, "0.1.0")
+        self.assertEqual(repository.list_anchor_ids(), ["common.close_button", "common.confirm_button"])
+        self.assertTrue(repository.has_anchor("common.close_button"))
+        self.assertFalse(repository.has_anchor("common.missing"))
+        self.assertEqual(
+            [anchor.anchor_id for anchor in repository.find_anchors(query="confirm")],
+            ["common.confirm_button"],
+        )
+        self.assertEqual(
+            [anchor.anchor_id for anchor in repository.find_anchors(tag="dialog", limit=1)],
+            ["common.close_button"],
+        )
+        self.assertEqual(
+            repository.resolve_template_path("anchors/common_close_button.svg"),
+            repository.root / "anchors" / "common_close_button.svg",
+        )
+
+    def test_discover_returns_empty_list_for_missing_root(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            missing_root = Path(temp_dir) / "missing"
+
+            repositories = AnchorRepository.discover(missing_root)
+
+        self.assertEqual(repositories, [])
 
