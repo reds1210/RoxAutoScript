@@ -1,0 +1,24 @@
+{
+  "repository_id": "odin",
+  "display_name": "Odin Templates",
+  "version": "0.1.0",
+  "metadata": {
+    "owner": "vision-lab",
+    "purpose": "anchors for Odin entry and status panels"
+  },
+  "anchors": [
+    {
+      "anchor_id": "odin.start_button",
+      "label": "Start Button",
+      "template_path": "anchors/odin_start_button.svg",
+      "confidence_threshold": 0.89,
+      "match_region": [0, 0, 1920, 1080],
+      "description": "Start or enter Odin flow.",
+      "tags": ["odin", "start"],
+      "metadata": {
+        "workflow": "odin"
+      }
+    }
+  ]
+}
+
