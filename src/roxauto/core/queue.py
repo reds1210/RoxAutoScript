@@ -69,5 +69,17 @@ class TaskQueue:
             return list(self._items)
         return [item for item in self._items if item.instance_id == instance_id]
 
+    def clear(self, instance_id: str | None = None) -> list[QueuedTask]:
+        if instance_id is None:
+            cleared = list(self._items)
+            self._items.clear()
+            return cleared
+        cleared = [item for item in self._items if item.instance_id == instance_id]
+        self._items = [item for item in self._items if item.instance_id != instance_id]
+        return cleared
+
+    def size(self, instance_id: str | None = None) -> int:
+        return len(self.list_items(instance_id=instance_id))
+
     def __len__(self) -> int:
         return len(self._items)

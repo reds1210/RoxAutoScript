@@ -6,7 +6,10 @@ import tests._bootstrap  # noqa: F401
 from roxauto.core.models import (
     FailureSnapshotMetadata,
     FailureSnapshotReason,
+    InstanceRuntimeContext,
+    InstanceStatus,
     PreviewFrame,
+    ProfileBinding,
     StopCondition,
     StopConditionKind,
     TaskManifest,
@@ -65,3 +68,31 @@ class CoreModelSerializationTests(unittest.TestCase):
         self.assertEqual(primitive["task_id"], "task.daily")
         self.assertEqual(primitive["stop_conditions"][0]["kind"], "timeout")
         self.assertEqual(primitive["requires"], ["anchor.daily"])
+
+    def test_profile_binding_and_runtime_context_serialize(self) -> None:
+        binding = ProfileBinding(
+            profile_id="main-account",
+            display_name="Main Account",
+            server_name="TW-1",
+            character_name="Knight",
+            allowed_tasks=["daily.claim"],
+            calibration_id="calib-main",
+            capture_offset=(4, 8),
+            capture_scale=1.1,
+            settings={"language": "zh-TW"},
+            notes="bound to primary emulator",
+        )
+        context = InstanceRuntimeContext(
+            instance_id="mumu-0",
+            status=InstanceStatus.READY,
+            queue_depth=2,
+            profile_binding=binding,
+            health_check_ok=True,
+            metadata={"profile_id": "main-account"},
+        )
+
+        primitive = to_primitive(context)
+
+        self.assertEqual(primitive["profile_binding"]["profile_id"], "main-account")
+        self.assertEqual(primitive["profile_binding"]["capture_offset"], [4, 8])
+        self.assertTrue(primitive["health_check_ok"])

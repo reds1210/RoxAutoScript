@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 
 import tests._bootstrap  # noqa: F401
-from roxauto.core.instance_registry import InstanceRegistry
+from roxauto.core.instance_registry import InstanceRegistry, InstanceStateTransitionError
 from roxauto.core.models import InstanceState, InstanceStatus
 
 
@@ -23,3 +23,17 @@ class InstanceRegistryTests(unittest.TestCase):
 
         self.assertIsNotNone(updated)
         self.assertEqual(updated.status, InstanceStatus.BUSY)
+
+    def test_rejects_invalid_transition_without_force(self) -> None:
+        registry = InstanceRegistry()
+        state = InstanceState(
+            instance_id="mumu-0",
+            label="MuMu 0",
+            adb_serial="127.0.0.1:16384",
+            status=InstanceStatus.DISCONNECTED,
+        )
+
+        registry.sync([state])
+
+        with self.assertRaises(InstanceStateTransitionError):
+            registry.transition_status("mumu-0", InstanceStatus.BUSY)

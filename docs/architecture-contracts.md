@@ -107,6 +107,7 @@ Responsibilities:
 - per-instance settings
 - calibration profiles
 - per-instance overrides for capture or anchor behavior
+- resolved profile bindings for runtime consumption
 
 ### `logs`
 
@@ -299,6 +300,38 @@ Minimum fields:
 - `notes`
 - `metadata`
 
+### `ProfileBinding`
+
+Minimum fields:
+
+- `profile_id`
+- `display_name`
+- `server_name`
+- `character_name`
+- `allowed_tasks`
+- `calibration_id` optional
+- `capture_offset`
+- `capture_scale`
+- `settings`
+- `notes`
+- `metadata`
+
+### `InstanceRuntimeContext`
+
+Minimum fields:
+
+- `instance_id`
+- `status`
+- `queue_depth`
+- `active_task_id` optional
+- `active_run_id` optional
+- `stop_requested`
+- `health_check_ok` optional
+- `profile_binding` optional
+- `preview_frame` optional
+- `failure_snapshot` optional
+- `metadata`
+
 ### `InstanceCommand`
 
 Minimum fields:
@@ -338,6 +371,17 @@ Recommended route kinds:
 - `global_control`
 - `interaction`
 
+### `CommandDispatchResult`
+
+Minimum fields:
+
+- `command_id`
+- `command_type`
+- `instance_ids`
+- `status`
+- `results`
+- `message`
+
 ### `EmulatorAdapter`
 
 Minimum methods:
@@ -348,6 +392,17 @@ Minimum methods:
 - `input_text(instance, text)`
 - `launch_app(instance, package_name)`
 - `health_check(instance)`
+
+### `RuntimeCoordinator`
+
+Responsibilities:
+
+- synchronize discovered instances into runtime contexts
+- bind one `ProfileBinding` per instance
+- dispatch operator commands to execution services
+- orchestrate per-instance queues
+- inject baseline stop conditions for manual stop and health failure
+- keep preview frame and failure snapshot references on the runtime context
 
 ## 5. Event Names
 
