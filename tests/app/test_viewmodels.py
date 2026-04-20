@@ -6,7 +6,10 @@ from pathlib import Path
 
 import tests._bootstrap  # noqa: F401
 from roxauto.app.viewmodels import (
+    build_console_summary,
     build_console_snapshot,
+    build_console_snapshot_from_runtime,
+    build_instance_list_rows,
     build_log_pane,
     build_manual_control_command,
     build_operator_console_state,
@@ -14,7 +17,18 @@ from roxauto.app.viewmodels import (
 )
 from roxauto.core.commands import CommandRouter, InstanceCommandType
 from roxauto.core.events import AppEvent
-from roxauto.core.models import StopCondition, StopConditionKind, TaskManifest, TaskSpec, VisionMatch
+from roxauto.core.models import (
+    InstanceRuntimeContext,
+    InstanceState,
+    InstanceStatus,
+    PreviewFrame,
+    ProfileBinding,
+    StopCondition,
+    StopConditionKind,
+    TaskManifest,
+    TaskSpec,
+    VisionMatch,
+)
 from roxauto.core.queue import QueuedTask
 from roxauto.core.runtime import TaskStep, step_success
 from roxauto.vision import (
@@ -107,8 +121,145 @@ class ConsoleSnapshotTests(unittest.TestCase):
         self.assertEqual(state.queue.items[0].task_id, "guild.donate")
         self.assertEqual(state.logs.filtered_count, 1)
         self.assertEqual(state.logs.failure_count, 1)
-        self.assertFalse(state.manual_controls.enabled)
+        self.assertTrue(
+            any(
+                button.action_key == "start_queue" and button.enabled
+                for button in state.manual_controls.available_actions
+            )
+        )
+        self.assertFalse(
+            any(button.action_key == "tap" and button.enabled for button in state.manual_controls.available_actions)
+        )
         self.assertIn("Emergency stop requested", state.detail.warning)
+
+    def test_runtime_snapshot_and_detail_include_runtime_context(self) -> None:
+        instance = InstanceState(
+            instance_id="mumu-9",
+            label="MuMu 9",
+            adb_serial="127.0.0.1:16768",
+            status=InstanceStatus.READY,
+            metadata={"server": "TW-9"},
+        )
+        runtime_context = InstanceRuntimeContext(
+            instance_id="mumu-9",
+            status=InstanceStatus.READY,
+            queue_depth=2,
+            active_task_id="sample.mumu-9.0",
+            active_run_id="run-9",
+            stop_requested=False,
+            health_check_ok=True,
+            profile_binding=ProfileBinding(
+                profile_id="profile.mumu-9",
+                display_name="MuMu 9 Profile",
+                server_name="TW-9",
+                character_name="Knight",
+            ),
+            preview_frame=PreviewFrame(
+                frame_id="frame-9",
+                instance_id="mumu-9",
+                image_path="runtime_logs/previews/mumu-9-1.png",
+            ),
+        )
+        snapshot = build_console_snapshot_from_runtime(
+            [instance],
+            adb_path="C:/platform-tools/adb.exe",
+            packages={"PySide6": True},
+            runtime_contexts={"mumu-9": runtime_context},
+        )
+
+        state = build_operator_console_state(
+            snapshot,
+            _build_vision_snapshot(),
+            selected_instance_id="mumu-9",
+            runtime_contexts={"mumu-9": runtime_context},
+        )
+
+        self.assertEqual(snapshot.instances[0].metadata["queue_depth"], 2)
+        self.assertEqual(snapshot.instances[0].metadata["profile_id"], "profile.mumu-9")
+        self.assertEqual(state.detail.queue_depth, 2)
+        self.assertIn("active_task_id: sample.mumu-9.0", state.detail.metadata_lines)
+        self.assertIn("preview_frame: runtime_logs/previews/mumu-9-1.png", state.detail.metadata_lines)
+        self.assertEqual(state.summary.selected_queue_depth, 2)
+        self.assertEqual(state.instance_rows[0].profile_summary, "MuMu 9 Profile")
+
+    def test_console_summary_and_instance_rows_reflect_runtime_projection(self) -> None:
+        snapshot = build_console_snapshot(
+            {
+                "packages": {"PySide6": True},
+                "adb": {"path": "C:/platform-tools/adb.exe", "instances_found": 2},
+                "instances": [
+                    {
+                        "instance_id": "mumu-1",
+                        "label": "MuMu 1",
+                        "adb_serial": "127.0.0.1:16448",
+                        "status": "busy",
+                        "last_seen_at": "2026-04-21T10:00:00+08:00",
+                        "metadata": {},
+                    },
+                    {
+                        "instance_id": "mumu-2",
+                        "label": "MuMu 2",
+                        "adb_serial": "127.0.0.1:16449",
+                        "status": "error",
+                        "last_seen_at": "2026-04-21T10:05:00+08:00",
+                        "metadata": {},
+                    },
+                ],
+            }
+        )
+        runtime_contexts = {
+            "mumu-1": InstanceRuntimeContext(
+                instance_id="mumu-1",
+                status=InstanceStatus.BUSY,
+                queue_depth=3,
+                active_task_id="task.preview",
+                stop_requested=False,
+                health_check_ok=True,
+            ),
+            "mumu-2": InstanceRuntimeContext(
+                instance_id="mumu-2",
+                status=InstanceStatus.ERROR,
+                queue_depth=0,
+                stop_requested=True,
+                health_check_ok=False,
+            ),
+        }
+        queue = [_queued_task("mumu-1", "task.preview", "Preview", 100)]
+        logs = build_log_pane(
+            [
+                AppEvent(
+                    name="operator.command.dispatched",
+                    payload={"instance_id": "mumu-2", "message": "stop routed", "status": "completed"},
+                ),
+                AppEvent(
+                    name="task.failure_snapshot",
+                    payload={"instance_id": "mumu-2", "message": "Vision miss", "status": "failed"},
+                ),
+            ],
+            selected_instance_id="mumu-2",
+        )
+
+        summary = build_console_summary(
+            snapshot,
+            selected_instance_id="mumu-2",
+            queue=build_operator_console_state(
+                snapshot,
+                _build_vision_snapshot(),
+                queue_items=queue,
+                runtime_contexts=runtime_contexts,
+                selected_instance_id="mumu-2",
+            ).queue,
+            logs=logs,
+            runtime_contexts=runtime_contexts,
+            global_emergency_stop_active=True,
+        )
+        rows = build_instance_list_rows(snapshot, runtime_contexts=runtime_contexts)
+
+        self.assertEqual(summary.busy_count, 1)
+        self.assertEqual(summary.error_count, 1)
+        self.assertEqual(summary.failure_count, 1)
+        self.assertEqual(rows[0].active_task_id, "task.preview")
+        self.assertEqual(rows[1].warning, "stop requested")
 
     def test_manual_control_commands_route_through_shared_router(self) -> None:
         router = CommandRouter()
@@ -148,6 +299,41 @@ class ConsoleSnapshotTests(unittest.TestCase):
 
         self.assertEqual(logs.failure_count, 1)
         self.assertEqual(logs.entries[0].level, "error")
+
+    def test_manual_controls_capture_latest_operator_feedback(self) -> None:
+        state = build_operator_console_state(
+            build_console_snapshot(
+                {
+                    "packages": {"PySide6": True},
+                    "adb": {"path": "C:/platform-tools/adb.exe", "instances_found": 1},
+                    "instances": [
+                        {
+                            "instance_id": "mumu-0",
+                            "label": "MuMu 0",
+                            "adb_serial": "127.0.0.1:16384",
+                            "status": "ready",
+                            "last_seen_at": "2026-04-21T10:00:00+08:00",
+                            "metadata": {},
+                        }
+                    ],
+                }
+            ),
+            _build_vision_snapshot(),
+            selected_instance_id="mumu-0",
+            events=[
+                AppEvent(
+                    name="operator.command.dispatched",
+                    payload={
+                        "instance_id": "mumu-0",
+                        "message": "start_queue dispatched to 1 instance(s)",
+                        "status": "completed",
+                    },
+                )
+            ],
+        )
+
+        self.assertEqual(state.manual_controls.last_command_status, "completed")
+        self.assertIn("start_queue", state.manual_controls.last_command_summary)
 
     def test_vision_workspace_snapshot_uses_repository_and_scripts(self) -> None:
         snapshot = _build_vision_snapshot()
