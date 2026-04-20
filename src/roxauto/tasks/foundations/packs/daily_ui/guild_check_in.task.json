@@ -15,6 +15,22 @@
     }
   ],
   "implementation_state": "spec_only",
+  "steps": [
+    {
+      "step_id": "open_guild_hub",
+      "action": "deterministic_navigation",
+      "success_condition": "Guild hub is visible and stable enough for fixed-UI verification.",
+      "failure_condition": "Guild hub cannot be reached in a deterministic way.",
+      "notes": "Still foundations only; this does not encode a runtime handler."
+    },
+    {
+      "step_id": "verify_check_in_affordance",
+      "action": "vision_verify",
+      "success_condition": "Check-in ready or checked-in state can be classified from the same hub.",
+      "failure_condition": "Guild check-in control remains missing or ambiguous.",
+      "notes": "Future task line should fail fast if this anchor remains missing."
+    }
+  ],
   "metadata": {
     "phase": "pre_gate_3",
     "task_pack_owner": "engine_d"

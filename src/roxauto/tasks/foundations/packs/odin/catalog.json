@@ -1,0 +1,25 @@
+{
+  "pack_id": "odin",
+  "version": "0.1.0",
+  "entries": [
+    {
+      "task_id": "odin.preset_entry",
+      "blueprint_path": "packs/odin/odin_preset_entry.task.json",
+      "display_name": "Odin Preset Entry",
+      "fixture_profile_paths": [
+        "fixture_profiles/default_tw_odin.fixture.json"
+      ],
+      "required_anchors": [
+        "common.close_button",
+        "odin.start_button"
+      ],
+      "metadata": {
+        "phase": "pre_gate_3"
+      }
+    }
+  ],
+  "metadata": {
+    "owner": "engine_d",
+    "purpose": "odin_foundations"
+  }
+}

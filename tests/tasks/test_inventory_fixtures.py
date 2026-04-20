@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 import tests._bootstrap  # noqa: F401
-from roxauto.tasks import GoldenScreenshotConvention, TaskFoundationRepository
+from roxauto.tasks import GoldenScreenshotConvention, TaskAssetStatus, TaskFoundationRepository
 
 
 class TaskFixtureExamplesTests(unittest.TestCase):
@@ -28,3 +28,17 @@ class TaskFixtureExamplesTests(unittest.TestCase):
         for blueprint in repository.discover_blueprints():
             self.assertTrue(blueprint.fixture_profile_paths)
             self.assertTrue(set(blueprint.fixture_profile_paths).issubset(known_profiles))
+
+    def test_curated_asset_inventory_matches_expected_gaps(self) -> None:
+        repository = TaskFoundationRepository.load_default()
+        inventory = repository.load_asset_inventory()
+        statuses = {record.asset_id: record.status for record in inventory.records}
+
+        self.assertEqual(
+            statuses["daily_ui.guild_check_in:template:daily_ui.guild_check_in_button"],
+            TaskAssetStatus.MISSING,
+        )
+        self.assertEqual(
+            statuses["daily_ui.claim_rewards:template:daily_ui.claim_reward"],
+            TaskAssetStatus.PLACEHOLDER,
+        )

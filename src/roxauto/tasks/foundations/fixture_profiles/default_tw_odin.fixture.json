@@ -5,7 +5,9 @@
   "locale": "zh-TW",
   "metadata": {
     "account_tier": "sample",
-    "purpose": "odin"
+    "client_build": "tma.sample",
+    "purpose": "odin",
+    "region": "tw"
   },
   "notes": "Reference fixture for Odin screen inventory and validation fixtures only.",
   "resolution": [

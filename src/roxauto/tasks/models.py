@@ -19,6 +19,19 @@ class TaskImplementationState(str, Enum):
     READY_FOR_IMPLEMENTATION = "ready_for_implementation"
 
 
+class TaskAssetKind(str, Enum):
+    TEMPLATE = "template"
+    GOLDEN_SCREENSHOT = "golden_screenshot"
+    FIXTURE_PROFILE = "fixture_profile"
+
+
+class TaskAssetStatus(str, Enum):
+    PRESENT = "present"
+    PLACEHOLDER = "placeholder"
+    MISSING = "missing"
+    PLANNED = "planned"
+
+
 @dataclass(slots=True)
 class GoldenScreenshotCase:
     screen_slug: str
@@ -73,9 +86,10 @@ class GoldenScreenshotConvention:
         variant: str,
         revision: int = 1,
     ) -> PurePosixPath:
-        directory = self.directory_template.format(pack_id=pack_id, task_id=task_id, screen_slug=screen_slug)
+        task_slug = task_id.replace(".", "_").replace("-", "_")
+        directory = self.directory_template.format(pack_id=pack_id, task_id=task_slug, screen_slug=screen_slug)
         filename = self.filename_template.format(
-            task_id=task_id,
+            task_id=task_slug,
             screen_slug=screen_slug,
             variant=variant,
             revision=revision,
@@ -122,6 +136,30 @@ class TaskFixtureProfile:
         return cls.from_dict(loads(payload))
 
 
+@dataclass(slots=True)
+class TaskStepBlueprint:
+    step_id: str
+    action: str
+    success_condition: str
+    failure_condition: str = ""
+    notes: str = ""
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return to_primitive(asdict(self))
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        return cls(
+            step_id=str(data.get("step_id", "")),
+            action=str(data.get("action", "")),
+            success_condition=str(data.get("success_condition", "")),
+            failure_condition=str(data.get("failure_condition", "")),
+            notes=str(data.get("notes", "")),
+            metadata=dict(data.get("metadata", {})),
+        )
+
+
 def _stop_condition_from_dict(data: dict[str, Any]) -> StopCondition:
     raw_kind = data.get("kind", StopConditionKind.MANUAL.value)
     if isinstance(raw_kind, StopConditionKind):
@@ -158,6 +196,7 @@ class TaskBlueprint:
     pack_id: str
     manifest: TaskManifest
     implementation_state: TaskImplementationState = TaskImplementationState.SPEC_ONLY
+    steps: list[TaskStepBlueprint] = field(default_factory=list)
     required_anchors: list[str] = field(default_factory=list)
     fixture_profile_paths: list[str] = field(default_factory=list)
     golden_cases: list[GoldenScreenshotCase] = field(default_factory=list)
@@ -173,6 +212,7 @@ class TaskBlueprint:
             "pack_id": self.pack_id,
             "task_manifest": to_primitive(asdict(self.manifest)),
             "implementation_state": self.implementation_state.value,
+            "steps": [step.to_dict() for step in self.steps],
             "required_anchors": list(self.required_anchors),
             "fixture_profile_paths": list(self.fixture_profile_paths),
             "golden_cases": [case.to_dict() for case in self.golden_cases],
@@ -191,10 +231,60 @@ class TaskBlueprint:
             pack_id=str(data.get("pack_id", "")),
             manifest=_task_manifest_from_dict(dict(data.get("task_manifest", {}))),
             implementation_state=state,
+            steps=[TaskStepBlueprint.from_dict(item) for item in data.get("steps", [])],
             required_anchors=[str(item) for item in data.get("required_anchors", [])],
             fixture_profile_paths=[str(item) for item in data.get("fixture_profile_paths", [])],
             golden_cases=[GoldenScreenshotCase.from_dict(item) for item in data.get("golden_cases", [])],
             notes=str(data.get("notes", "")),
+            metadata=dict(data.get("metadata", {})),
+        )
+
+
+@dataclass(slots=True)
+class TaskPackCatalogEntry:
+    task_id: str
+    blueprint_path: str
+    display_name: str = ""
+    fixture_profile_paths: list[str] = field(default_factory=list)
+    required_anchors: list[str] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return to_primitive(asdict(self))
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        return cls(
+            task_id=str(data.get("task_id", "")),
+            blueprint_path=str(data.get("blueprint_path", "")),
+            display_name=str(data.get("display_name", "")),
+            fixture_profile_paths=[str(item) for item in data.get("fixture_profile_paths", [])],
+            required_anchors=[str(item) for item in data.get("required_anchors", [])],
+            metadata=dict(data.get("metadata", {})),
+        )
+
+
+@dataclass(slots=True)
+class TaskPackCatalog:
+    pack_id: str
+    version: str
+    entries: list[TaskPackCatalogEntry] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "pack_id": self.pack_id,
+            "version": self.version,
+            "entries": [entry.to_dict() for entry in self.entries],
+            "metadata": to_primitive(self.metadata),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        return cls(
+            pack_id=str(data.get("pack_id", "")),
+            version=str(data.get("version", "0.1.0")),
+            entries=[TaskPackCatalogEntry.from_dict(item) for item in data.get("entries", [])],
             metadata=dict(data.get("metadata", {})),
         )
 
@@ -265,6 +355,74 @@ class TaskInventory:
             inventory_id=str(data.get("inventory_id", "")),
             version=str(data.get("version", "0.1.0")),
             records=[TaskInventoryRecord.from_dict(item) for item in data.get("records", [])],
+            metadata=dict(data.get("metadata", {})),
+        )
+
+    @classmethod
+    def from_json(cls, payload: str) -> Self:
+        return cls.from_dict(loads(payload))
+
+
+@dataclass(slots=True)
+class TaskAssetRecord:
+    asset_id: str
+    pack_id: str
+    task_id: str
+    asset_kind: TaskAssetKind
+    status: TaskAssetStatus
+    source_path: str
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "asset_id": self.asset_id,
+            "pack_id": self.pack_id,
+            "task_id": self.task_id,
+            "asset_kind": self.asset_kind.value,
+            "status": self.status.value,
+            "source_path": self.source_path,
+            "metadata": to_primitive(self.metadata),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        raw_kind = data.get("asset_kind", TaskAssetKind.TEMPLATE.value)
+        raw_status = data.get("status", TaskAssetStatus.PLANNED.value)
+        return cls(
+            asset_id=str(data.get("asset_id", "")),
+            pack_id=str(data.get("pack_id", "")),
+            task_id=str(data.get("task_id", "")),
+            asset_kind=raw_kind if isinstance(raw_kind, TaskAssetKind) else TaskAssetKind(str(raw_kind)),
+            status=raw_status if isinstance(raw_status, TaskAssetStatus) else TaskAssetStatus(str(raw_status)),
+            source_path=str(data.get("source_path", "")),
+            metadata=dict(data.get("metadata", {})),
+        )
+
+
+@dataclass(slots=True)
+class TaskAssetInventory:
+    inventory_id: str
+    version: str
+    records: list[TaskAssetRecord] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "inventory_id": self.inventory_id,
+            "version": self.version,
+            "records": [record.to_dict() for record in self.records],
+            "metadata": to_primitive(self.metadata),
+        }
+
+    def to_json(self) -> str:
+        return dumps(self.to_dict(), indent=2, sort_keys=True)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        return cls(
+            inventory_id=str(data.get("inventory_id", "")),
+            version=str(data.get("version", "0.1.0")),
+            records=[TaskAssetRecord.from_dict(item) for item in data.get("records", [])],
             metadata=dict(data.get("metadata", {})),
         )
 

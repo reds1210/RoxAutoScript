@@ -24,6 +24,22 @@
     }
   ],
   "implementation_state": "spec_only",
+  "steps": [
+    {
+      "step_id": "open_reward_panel",
+      "action": "deterministic_navigation",
+      "success_condition": "The reward panel is visible with a stable claim affordance.",
+      "failure_condition": "Reward panel could not be confirmed after deterministic navigation.",
+      "notes": "Navigation contract only. No tap coordinates or automation logic are encoded here."
+    },
+    {
+      "step_id": "verify_claim_affordance",
+      "action": "vision_verify",
+      "success_condition": "A claimable or already-claimed reward state can be distinguished.",
+      "failure_condition": "Claim button state remains ambiguous.",
+      "notes": "Depends on future fixed UI templates and goldens."
+    }
+  ],
   "metadata": {
     "phase": "pre_gate_3",
     "task_pack_owner": "engine_d"
@@ -32,7 +48,7 @@
   "pack_id": "daily_ui",
   "required_anchors": [
     "common.close_button",
-    "daily_ui.claim_button"
+    "daily_ui.claim_reward"
   ],
   "task_manifest": {
     "entry_condition": "Home HUD is visible and the fixed reward panel can be opened through deterministic UI navigation.",
@@ -45,7 +61,7 @@
     "recovery_policy": "abort",
     "requires": [
       "common.close_button",
-      "daily_ui.claim_button"
+      "daily_ui.claim_reward"
     ],
     "stop_conditions": [
       {

@@ -1,0 +1,79 @@
+{
+  "inventory_id": "pre_gate_3_task_asset_inventory",
+  "version": "0.1.0",
+  "records": [
+    {
+      "asset_id": "daily_ui.claim_rewards:template:daily_ui.claim_reward",
+      "pack_id": "daily_ui",
+      "task_id": "daily_ui.claim_rewards",
+      "asset_kind": "template",
+      "status": "placeholder",
+      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.claim_reward",
+      "metadata": {
+        "anchor_id": "daily_ui.claim_reward",
+        "source": "template_manifest"
+      }
+    },
+    {
+      "asset_id": "daily_ui.guild_check_in:template:daily_ui.guild_check_in_button",
+      "pack_id": "daily_ui",
+      "task_id": "daily_ui.guild_check_in",
+      "asset_kind": "template",
+      "status": "missing",
+      "source_path": "",
+      "metadata": {
+        "anchor_id": "daily_ui.guild_check_in_button",
+        "source": "template_manifest"
+      }
+    },
+    {
+      "asset_id": "odin.preset_entry:template:odin.start_button",
+      "pack_id": "odin",
+      "task_id": "odin.preset_entry",
+      "asset_kind": "template",
+      "status": "placeholder",
+      "source_path": "assets/templates/odin/manifest.json#odin.start_button",
+      "metadata": {
+        "anchor_id": "odin.start_button",
+        "source": "template_manifest"
+      }
+    },
+    {
+      "asset_id": "daily_ui.claim_rewards:golden:reward_panel",
+      "pack_id": "daily_ui",
+      "task_id": "daily_ui.claim_rewards",
+      "asset_kind": "golden_screenshot",
+      "status": "planned",
+      "source_path": "daily_ui/daily_ui_claim_rewards/reward_panel/daily_ui_claim_rewards__reward_panel__baseline__v1.png",
+      "metadata": {
+        "source": "golden_convention"
+      }
+    },
+    {
+      "asset_id": "daily_ui.guild_check_in:golden:guild_hub",
+      "pack_id": "daily_ui",
+      "task_id": "daily_ui.guild_check_in",
+      "asset_kind": "golden_screenshot",
+      "status": "planned",
+      "source_path": "daily_ui/daily_ui_guild_check_in/guild_hub/daily_ui_guild_check_in__guild_hub__baseline__v1.png",
+      "metadata": {
+        "source": "golden_convention"
+      }
+    },
+    {
+      "asset_id": "odin.preset_entry:golden:odin_idle_state",
+      "pack_id": "odin",
+      "task_id": "odin.preset_entry",
+      "asset_kind": "golden_screenshot",
+      "status": "planned",
+      "source_path": "odin/odin_preset_entry/odin_idle_state/odin_preset_entry__odin_idle_state__baseline__v1.png",
+      "metadata": {
+        "source": "golden_convention"
+      }
+    }
+  ],
+  "metadata": {
+    "owner": "engine_d",
+    "purpose": "task_asset_inventory"
+  }
+}
