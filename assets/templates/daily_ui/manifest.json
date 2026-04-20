@@ -16,7 +16,22 @@
       "description": "Daily reward claim action.",
       "tags": ["daily", "reward"],
       "metadata": {
-        "workflow": "daily-ui"
+        "workflow": "daily-ui",
+        "placeholder": true
+      }
+    },
+    {
+      "anchor_id": "daily_ui.guild_check_in_button",
+      "label": "Guild Check-In Button",
+      "template_path": "anchors/daily_guild_check_in_button.svg",
+      "confidence_threshold": 0.9,
+      "match_region": [0, 0, 1920, 1080],
+      "description": "Guild attendance or check-in action in the guild hub.",
+      "tags": ["daily", "guild", "check_in"],
+      "metadata": {
+        "workflow": "daily-ui",
+        "source": "vision-placeholder",
+        "placeholder": true
       }
     }
   ]
