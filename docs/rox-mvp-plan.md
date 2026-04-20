@@ -318,41 +318,47 @@ This phase only starts after MVP is stable.
 
 Once the repo has the first code skeleton, the work can be split into separate git worktrees.
 
-Recommended split:
+Recommended 4-engine split:
 
-1. `codex/core-runtime`
+1. `Engine A`
+   Standard branch:
+   `codex/core-runtime-orchestration`
    Ownership:
    task runtime, emulator adapter, logging, profile store
 
-2. `codex/gui-console`
+2. `Engine B`
+   Standard branch:
+   `codex/gui-console-operator`
    Ownership:
    PySide6 control center, instance grid, preview panel, operator controls
 
-3. `codex/vision-lab`
+3. `Engine C`
+   Standard branch:
+   `codex/vision-lab-calibration-tools`
    Ownership:
    template matching, screenshot utilities, anchor calibration, OCR experiments
 
-4. `codex/task-daily-ui`
+4. `Engine D`
+   Standard branch:
+   `codex/task-daily-ui`
    Ownership:
-   startup/login cleanup, reward collection, guild fixed chores
-
-5. `codex/task-odin`
-   Ownership:
-   Odin farm preset flow, state verification, stop conditions
+   task packs, task assets, and later plugin/event runtime
+   Note:
+   stays on standby until platform Gate 3 is complete
 
 Parallelization rule:
 
 - each worktree owns a disjoint write area
 - shared contracts must be defined first
 - task packs cannot directly couple themselves to GUI widgets
+- delegated engine work should use `gpt-5.4` by default
 
 Suggested merge order:
 
-1. core runtime contracts
-2. GUI shell
-3. vision utilities
-4. daily-ui packs
-5. odin pack
+1. Engine A runtime branches
+2. Engine B GUI branches
+3. Engine C vision branches
+4. Engine D task/plugin branches
 
 ## 11. File/Module Layout Recommendation
 

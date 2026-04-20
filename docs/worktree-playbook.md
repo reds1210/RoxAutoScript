@@ -17,21 +17,21 @@ Every worker must read these files before editing code:
 
 1. `README.md`
 2. `docs/rox-mvp-plan.md`
-3. `docs/worktree-playbook.md`
-4. `docs/architecture-contracts.md`
-5. the track brief under `docs/tracks/`
+3. `docs/engine-roster.md`
+4. `docs/worktree-playbook.md`
+5. `docs/architecture-contracts.md`
+6. the track brief under `docs/tracks/`
 
-## 3. Worktree Model
+## 3. Engine Model
 
 Rule: one worktree maps to one delivery track.
 
-Current delivery tracks:
+The standard roster is now 4 fixed engines:
 
-- `codex/core-runtime`
-- `codex/gui-console`
-- `codex/vision-lab`
-- `codex/task-daily-ui`
-- `codex/task-odin`
+- `Engine A`: runtime and emulator execution
+- `Engine B`: GUI and operator console
+- `Engine C`: vision, calibration, and template tooling
+- `Engine D`: task packs and plugin/event runtime
 
 Each track should produce:
 
@@ -41,17 +41,33 @@ Each track should produce:
 
 Do not use one worktree for unrelated tasks.
 
-## 4. Naming Rules
+Model policy:
+
+- delegated engine work uses `gpt-5.4`
+- do not use mini variants by default
+
+## 4. Standard Engine Branches
+
+Use these as the default active lineup:
+
+- `codex/core-runtime-orchestration`
+- `codex/gui-console-operator`
+- `codex/vision-lab-calibration-tools`
+- `codex/task-daily-ui`
+
+## 5. Naming Rules
 
 ### Branch names
 
-Use:
+Use the standard engine branches above first.
 
-- `codex/core-runtime`
-- `codex/gui-console`
-- `codex/vision-lab`
-- `codex/task-daily-ui`
-- `codex/task-odin`
+Later branch families:
+
+- `codex/core-runtime-*`
+- `codex/gui-console-*`
+- `codex/vision-lab-*`
+- `codex/task-*`
+- `codex/plugin-event-framework`
 
 If a track needs multiple phases, extend the name:
 
@@ -64,9 +80,10 @@ Recommended sibling layout:
 
 ```text
 C:\code\RoxAutoScript
-C:\code\RoxAutoScript-wt-core-runtime
-C:\code\RoxAutoScript-wt-gui-console
-C:\code\RoxAutoScript-wt-vision-lab
+C:\code\RoxAutoScript-wt-engine-a-runtime
+C:\code\RoxAutoScript-wt-engine-b-gui
+C:\code\RoxAutoScript-wt-engine-c-vision
+C:\code\RoxAutoScript-wt-engine-d-tasks
 ```
 
 Rule:
@@ -75,27 +92,25 @@ Rule:
 - match the branch name closely
 - avoid spaces
 
-## 5. Ownership Rules
+## 6. Ownership Rules
 
 Each track owns a disjoint write area.
 
-### Track ownership map
+### Engine ownership map
 
-- `codex/core-runtime`
+- `Engine A`
   - owns: `src/roxauto/core/`, `src/roxauto/emulator/`, `src/roxauto/logs/`, `src/roxauto/profiles/`
   - may edit: `docs/architecture-contracts.md`
 
-- `codex/gui-console`
+- `Engine B`
   - owns: `src/roxauto/app/`, `assets/ui/`
 
-- `codex/vision-lab`
+- `Engine C`
   - owns: `src/roxauto/vision/`, `assets/templates/`, `docs/vision/`
 
-- `codex/task-daily-ui`
-  - owns: `src/roxauto/tasks/daily_ui/`, `assets/templates/daily_ui/`
-
-- `codex/task-odin`
-  - owns: `src/roxauto/tasks/odin/`, `assets/templates/odin/`
+- `Engine D`
+  - owns: `src/roxauto/tasks/`, `tests/tasks/`, task-specific assets under `assets/templates/`
+  - gate: remains standby until platform Gate 3 is complete
 
 ### Shared files
 
@@ -111,7 +126,7 @@ Rule:
 - do not edit shared files unless the change is required for your track
 - if you change a shared file, explain why in the handoff
 
-## 6. Dependency Rules
+## 7. Dependency Rules
 
 The dependency direction is fixed:
 
@@ -137,21 +152,20 @@ Reason:
 - task packs must stay headless
 - runtime logic must stay reusable in tests
 
-## 7. Merge Order
+## 8. Merge Order
 
 Merge in this order unless there is a strong reason not to:
 
-1. `codex/core-runtime`
-2. `codex/gui-console`
-3. `codex/vision-lab`
-4. `codex/task-daily-ui`
-5. `codex/task-odin`
+1. `Engine A` runtime branches
+2. `Engine B` GUI branches
+3. `Engine C` vision branches
+4. `Engine D` task/plugin branches
 
 Reason:
 
 - later tracks depend on contracts from earlier tracks
 
-## 8. How To Start A Track
+## 9. How To Start A Track
 
 Recommended flow:
 
@@ -167,10 +181,10 @@ Example:
 ```powershell
 git switch main
 git pull
-git worktree add ..\RoxAutoScript-wt-core-runtime -b codex/core-runtime
+powershell -ExecutionPolicy Bypass -File .\scripts\bootstrap-four-engines.ps1
 ```
 
-## 9. Handoff Rules
+## 10. Handoff Rules
 
 Every handoff must include:
 
@@ -186,17 +200,17 @@ Use the template in:
 
 - `docs/templates/worktree-handoff-template.md`
 
-## 10. Conflict Rules
+## 11. Conflict Rules
 
 If two tracks need the same file:
 
 1. prefer moving the shared logic into the owner track
-2. if that is not possible, the earlier merge-order track edits it
+2. if that is not possible, the earlier merge-order engine edits it
 3. the later track rebases after merge
 
 Do not solve cross-track conflicts by silently rewriting another track's intent.
 
-## 11. Definition Of Done For A Track
+## 12. Definition Of Done For A Track
 
 A track is ready to merge when:
 
@@ -206,9 +220,10 @@ A track is ready to merge when:
 - its public contract changes are documented
 - the next track can continue without asking what changed
 
-## 12. Non-Negotiable Rules
+## 13. Non-Negotiable Rules
 
 - One worktree, one scope.
+- One engine, one active worktree.
 - Do not couple tasks directly to GUI widgets.
 - Do not hide contract changes inside unrelated commits.
 - Do not edit another track's owned area unless explicitly taking over that track.
