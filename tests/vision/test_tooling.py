@@ -1,0 +1,239 @@
+from __future__ import annotations
+
+import json
+import unittest
+from datetime import datetime, timezone
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+import tests._bootstrap  # noqa: F401
+from roxauto.core.models import VisionMatch
+from roxauto.vision import (
+    AnchorRepository,
+    CalibrationProfile,
+    CaptureArtifactKind,
+    MatchStatus,
+    RecordingAction,
+    RecordingActionType,
+    ReplayScript,
+    build_anchor_inspector,
+    build_capture_inspector,
+    build_failure_inspection,
+    build_failure_inspector,
+    build_match_result,
+    build_template_workspace_catalog,
+    build_vision_tooling_state,
+    create_capture_artifact,
+    create_capture_session,
+    validate_template_repository,
+)
+
+
+class VisionToolingTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.templates_root = Path(__file__).resolve().parents[2] / "assets" / "templates"
+
+    def test_build_template_workspace_catalog_prefers_selected_valid_repository(self) -> None:
+        workspace = build_template_workspace_catalog(
+            self.templates_root,
+            selected_repository_id="daily_ui",
+        )
+
+        self.assertEqual(workspace.selected_repository_id, "daily_ui")
+        self.assertEqual(workspace.selected_repository.version, "0.1.0")
+        self.assertEqual(len(workspace.repositories), 3)
+        self.assertTrue(all(entry.is_valid for entry in workspace.repositories))
+
+    def test_build_anchor_inspector_applies_calibration_override_and_validation_issues(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            repository_root = Path(temp_dir) / "broken_pack"
+            repository_root.mkdir()
+            (repository_root / "manifest.json").write_text(
+                json.dumps(
+                    {
+                        "repository_id": "broken_pack",
+                        "display_name": "Broken Pack",
+                        "version": "0.1.0",
+                        "anchors": [
+                            {
+                                "anchor_id": "broken_pack.close_button",
+                                "label": "Close",
+                                "template_path": "anchors/missing.svg",
+                                "confidence_threshold": 0.82,
+                                "match_region": [0, 0, 10, 10],
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            repository = AnchorRepository.load(repository_root)
+            validation = validate_template_repository(repository)
+            profile = CalibrationProfile(
+                profile_id="profile-1",
+                anchor_overrides={
+                    "broken_pack.close_button": {
+                        "confidence_threshold": 0.96,
+                        "match_region": [5, 6, 7, 8],
+                    }
+                },
+            )
+
+            inspector = build_anchor_inspector(
+                repository,
+                validation_report=validation,
+                calibration_profile=profile,
+            )
+
+        self.assertEqual(inspector.selected_anchor_id, "broken_pack.close_button")
+        self.assertEqual(inspector.selected_anchor.effective_confidence_threshold, 0.96)
+        self.assertEqual(inspector.selected_anchor.effective_match_region, (5, 6, 7, 8))
+        self.assertIn("missing_template_asset", inspector.selected_anchor.issue_codes)
+        self.assertFalse(inspector.selected_anchor.asset_exists)
+
+    def test_capture_and_failure_inspectors_expose_selected_items(self) -> None:
+        session = create_capture_session(
+            session_id="capture-1",
+            instance_id="mumu-1",
+            source_image="captures/source.png",
+            selected_anchor_id="common.close_button",
+            crop_region=(10, 20, 30, 40),
+        )
+        session.append_artifact(
+            create_capture_artifact(
+                artifact_id="artifact-1",
+                image_path="captures/source.png",
+                source_image=session.source_image,
+                kind=CaptureArtifactKind.SCREENSHOT,
+            )
+        )
+        session.append_artifact(
+            create_capture_artifact(
+                artifact_id="artifact-2",
+                image_path="captures/crop.png",
+                source_image=session.source_image,
+                kind=CaptureArtifactKind.CROP,
+                crop_region=(10, 20, 30, 40),
+            )
+        )
+
+        capture = build_capture_inspector(session, selected_artifact_id="artifact-2")
+        repository = AnchorRepository.load(self.templates_root / "common")
+        anchor = repository.get_anchor("common.close_button")
+        match_result = build_match_result(
+            source_image="captures/failure.png",
+            candidates=[
+                VisionMatch(
+                    anchor_id=anchor.anchor_id,
+                    confidence=0.91,
+                    bbox=(10, 20, 30, 40),
+                    source_image="captures/failure.png",
+                )
+            ],
+            expected_anchor=anchor,
+            message="Matched close button",
+        )
+        failure_record = build_failure_inspection(
+            failure_id="failure-1",
+            instance_id="mumu-1",
+            screenshot_path="captures/failure.png",
+            preview_image_path="captures/failure-preview.png",
+            match_result=match_result,
+        )
+
+        failure = build_failure_inspector(failure_record, repository=repository)
+
+        self.assertEqual(capture.selected_artifact_id, "artifact-2")
+        self.assertEqual(capture.selected_artifact.kind, CaptureArtifactKind.CROP)
+        self.assertEqual(capture.selected_artifact.crop_region.to_tuple(), (10, 20, 30, 40))
+        self.assertEqual(failure.status, MatchStatus.MATCHED)
+        self.assertEqual(failure.selected_anchor.anchor_id, "common.close_button")
+        self.assertEqual(failure.best_candidate.anchor_id, "common.close_button")
+
+    def test_build_vision_tooling_state_stitches_workspace_capture_replay_and_failure(self) -> None:
+        repository = AnchorRepository.load(self.templates_root / "common")
+        anchor = repository.get_anchor("common.close_button")
+        profile = CalibrationProfile(
+            profile_id="profile.common",
+            instance_id="mumu-0",
+            crop_region=(1, 2, 3, 4),
+            anchor_overrides={"common.close_button": {"confidence_threshold": 0.95}},
+        )
+        session = create_capture_session(
+            session_id="capture-1",
+            instance_id="mumu-0",
+            source_image="preview://sample",
+            selected_anchor_id="common.close_button",
+            crop_region=(1, 2, 3, 4),
+        )
+        session.append_artifact(
+            create_capture_artifact(
+                artifact_id="artifact-1",
+                image_path="captures/source.png",
+                source_image="preview://sample",
+                kind=CaptureArtifactKind.SCREENSHOT,
+            )
+        )
+        script = ReplayScript(
+            script_id="script-1",
+            name="Replay Script",
+            actions=[
+                RecordingAction(
+                    action_id="action-1",
+                    action_type=RecordingActionType.CAPTURE,
+                    target="preview",
+                    payload={"note": "capture"},
+                    occurred_at=datetime(2026, 4, 21, 10, 0, tzinfo=timezone.utc),
+                ),
+                RecordingAction(
+                    action_id="action-2",
+                    action_type=RecordingActionType.ANNOTATE,
+                    target="common.close_button",
+                    payload={"note": "select"},
+                    occurred_at=datetime(2026, 4, 21, 10, 1, tzinfo=timezone.utc),
+                ),
+            ],
+        )
+        match_result = build_match_result(
+            source_image="preview://sample",
+            candidates=[
+                VisionMatch(
+                    anchor_id=anchor.anchor_id,
+                    confidence=0.96,
+                    bbox=(10, 20, 30, 40),
+                    source_image="preview://sample",
+                )
+            ],
+            expected_anchor=anchor,
+            message="Matched close button",
+        )
+        failure_record = build_failure_inspection(
+            failure_id="failure-1",
+            instance_id="mumu-0",
+            screenshot_path="captures/failure.png",
+            match_result=match_result,
+            message="matched",
+        )
+
+        tooling = build_vision_tooling_state(
+            templates_root=self.templates_root,
+            repository=repository,
+            calibration_profile=profile,
+            capture_session=session,
+            replay_script=script,
+            match_result=match_result,
+            failure_record=failure_record,
+            selected_repository_id="common",
+            selected_action_id="action-2",
+            source_image="preview://sample",
+        )
+
+        self.assertEqual(tooling.workspace.selected_repository_id, "common")
+        self.assertEqual(tooling.anchors.selected_anchor.anchor_id, "common.close_button")
+        self.assertEqual(tooling.calibration.selected_anchor.effective_confidence_threshold, 0.95)
+        self.assertEqual(tooling.capture.selected_artifact.artifact_id, "artifact-1")
+        self.assertEqual(tooling.replay.selected_action_id, "action-2")
+        self.assertEqual(tooling.match.matched_candidate.anchor_id, "common.close_button")
+        self.assertEqual(tooling.failure.best_candidate.anchor_id, "common.close_button")
+        self.assertEqual(tooling.to_dict()["workspace"]["selected_repository_id"], "common")
