@@ -7,19 +7,27 @@ from typing import Any
 from roxauto.core.serde import to_primitive
 from roxauto.core.time import utc_now
 from roxauto.vision.models import (
+    CalibrationOverrideResolution,
     CalibrationProfile,
     CaptureArtifact,
     CaptureArtifactKind,
     CaptureSession,
     CropRegion,
     FailureInspectionRecord,
+    ImageInspectionState,
+    InspectionOverlay,
+    InspectionOverlayKind,
     MatchStatus,
     ReplayScript,
     ReplayViewerState,
     TemplateMatchResult,
 )
 from roxauto.vision.repository import AnchorRepository
-from roxauto.vision.services import build_replay_view
+from roxauto.vision.services import (
+    build_image_inspection_state,
+    build_replay_view,
+    resolve_calibration_override,
+)
 from roxauto.vision.validation import (
     VisionWorkspaceReadinessReport,
     TemplateRepositoryValidationReport,
@@ -45,6 +53,8 @@ class AnchorInspectionRow:
     tags: list[str] = field(default_factory=list)
     override: dict[str, Any] = field(default_factory=dict)
     issue_codes: list[str] = field(default_factory=list)
+    calibration_resolution: CalibrationOverrideResolution | None = None
+    overlay: InspectionOverlay | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -95,6 +105,7 @@ class CaptureArtifactView:
     crop_region: CropRegion | None = None
     file_exists: bool = False
     is_selected: bool = False
+    inspection: ImageInspectionState | None = None
     created_at: object = field(default_factory=utc_now)
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -116,6 +127,8 @@ class CaptureInspectorState:
     available_artifact_ids: list[str] = field(default_factory=list)
     artifact_kind_counts: dict[str, int] = field(default_factory=dict)
     selected_artifact_summary: str = ""
+    source_inspection: ImageInspectionState | None = None
+    selected_artifact_inspection: ImageInspectionState | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -151,6 +164,8 @@ class MatchInspectorState:
     candidates: list[MatchCandidateView] = field(default_factory=list)
     matched_candidate_summary: str = ""
     best_candidate_summary: str = ""
+    calibration_resolution: CalibrationOverrideResolution | None = None
+    inspection: ImageInspectionState | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -168,6 +183,7 @@ class AnchorInspectorState:
     anchors: list[AnchorInspectionRow] = field(default_factory=list)
     available_anchor_ids: list[str] = field(default_factory=list)
     selected_anchor_summary: str = ""
+    selected_overlay: InspectionOverlay | None = None
     issues: list[TemplateValidationIssue] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -194,6 +210,8 @@ class CalibrationInspectorState:
     offset_summary: str = ""
     crop_summary: str = ""
     override_count: int = 0
+    selected_resolution: CalibrationOverrideResolution | None = None
+    resolutions: list[CalibrationOverrideResolution] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -214,6 +232,8 @@ class FailureInspectorState:
     candidates: list[MatchCandidateView] = field(default_factory=list)
     candidate_count: int = 0
     best_candidate_summary: str = ""
+    calibration_resolution: CalibrationOverrideResolution | None = None
+    inspection: ImageInspectionState | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -224,6 +244,7 @@ class FailureInspectorState:
 class VisionToolingState:
     workspace: TemplateWorkspaceCatalog
     readiness: VisionWorkspaceReadinessReport | None
+    preview: ImageInspectionState | None
     match: MatchInspectorState
     anchors: AnchorInspectorState
     calibration: CalibrationInspectorState
@@ -332,6 +353,7 @@ def build_anchor_inspector(
         anchors=rows,
         available_anchor_ids=[row.anchor_id for row in rows],
         selected_anchor_summary=_anchor_summary(selected_row),
+        selected_overlay=selected_row.overlay if selected_row is not None else None,
         issues=list(validation_report.issues),
         metadata={
             "anchor_count": len(rows),
@@ -375,6 +397,12 @@ def build_calibration_inspector(
         offset_summary=f"{resolved_profile.offset_x}, {resolved_profile.offset_y}",
         crop_summary=_format_region(CropRegion.from_value(resolved_profile.crop_region)),
         override_count=len(resolved_profile.anchor_overrides),
+        selected_resolution=selected_row.calibration_resolution if (selected_row := anchor_state.selected_anchor) is not None else None,
+        resolutions=[
+            row.calibration_resolution
+            for row in anchor_state.anchors
+            if row.calibration_resolution is not None
+        ],
         metadata=dict(resolved_profile.metadata),
     )
 
@@ -411,6 +439,17 @@ def build_capture_inspector(
         available_artifact_ids=[artifact.artifact_id for artifact in artifact_views],
         artifact_kind_counts=_artifact_kind_counts(artifact_views),
         selected_artifact_summary=_capture_artifact_summary(selected_artifact),
+        source_inspection=build_image_inspection_state(
+            inspection_id=f"{session.session_id}:source",
+            image_path=session.source_image,
+            source_image=session.source_image,
+            capture_session=session,
+            selected_overlay_id=f"{session.session_id}:crop",
+            metadata={"session_id": session.session_id, "kind": "capture_source"},
+        ),
+        selected_artifact_inspection=(
+            selected_artifact.inspection if selected_artifact is not None else None
+        ),
         metadata=dict(session.metadata),
     )
 
@@ -419,15 +458,29 @@ def build_match_inspector(
     *,
     repository: AnchorRepository | None = None,
     match_result: TemplateMatchResult | None = None,
+    calibration_profile: CalibrationProfile | None = None,
     source_image: str = "",
     message: str = "",
 ) -> MatchInspectorState:
+    calibration_resolution = _resolve_selected_calibration(
+        repository=repository,
+        calibration_profile=calibration_profile,
+        expected_anchor_id=match_result.expected_anchor_id if match_result is not None else "",
+    )
     if match_result is None:
         return MatchInspectorState(
             repository_id=repository.repository_id if repository is not None else "",
             source_image=source_image,
             status=MatchStatus.MISSED,
             message=message or "Preview pipeline not connected yet.",
+            calibration_resolution=calibration_resolution,
+            inspection=build_image_inspection_state(
+                inspection_id="preview:empty",
+                image_path=source_image,
+                source_image=source_image,
+                calibration=calibration_resolution,
+                metadata={"kind": "preview"},
+            ),
         )
 
     best_candidate = match_result.best_candidate()
@@ -460,6 +513,15 @@ def build_match_inspector(
         candidates=candidates,
         matched_candidate_summary=_candidate_summary(_find_candidate_view(candidates, matched_candidate)),
         best_candidate_summary=_candidate_summary(_find_candidate_view(candidates, best_candidate)),
+        calibration_resolution=calibration_resolution,
+        inspection=build_image_inspection_state(
+            inspection_id=f"match:{match_result.expected_anchor_id or 'preview'}",
+            image_path=match_result.source_image or source_image,
+            source_image=source_image or match_result.source_image,
+            match_result=match_result,
+            calibration=calibration_resolution,
+            metadata={"kind": "match_preview"},
+        ),
         metadata=dict(match_result.metadata),
     )
 
@@ -484,6 +546,7 @@ def build_failure_inspector(
     match_state = build_match_inspector(
         repository=repository,
         match_result=failure_record.match_result,
+        calibration_profile=calibration_profile,
         source_image=failure_record.screenshot_path,
         message=failure_record.message or message,
     )
@@ -492,6 +555,11 @@ def build_failure_inspector(
         validation_report=validation_report,
         calibration_profile=calibration_profile,
         selected_anchor_id=failure_record.anchor_id,
+    )
+    calibration_resolution = match_state.calibration_resolution or _resolve_selected_calibration(
+        repository=repository,
+        calibration_profile=calibration_profile,
+        expected_anchor_id=failure_record.anchor_id,
     )
 
     return FailureInspectorState(
@@ -507,6 +575,15 @@ def build_failure_inspector(
         candidates=match_state.candidates,
         candidate_count=len(match_state.candidates),
         best_candidate_summary=match_state.best_candidate_summary,
+        calibration_resolution=calibration_resolution,
+        inspection=build_image_inspection_state(
+            inspection_id=f"failure:{failure_record.failure_id}",
+            image_path=failure_record.preview_image_path or failure_record.screenshot_path,
+            source_image=failure_record.screenshot_path,
+            match_result=failure_record.match_result,
+            calibration=calibration_resolution,
+            metadata={"kind": "failure_inspection", "failure_id": failure_record.failure_id},
+        ),
         metadata=dict(failure_record.metadata),
     )
 
@@ -560,6 +637,7 @@ def build_vision_tooling_state(
     match_state = build_match_inspector(
         repository=repository,
         match_result=match_result,
+        calibration_profile=calibration_profile,
         source_image=source_image,
         message=failure_message,
     )
@@ -593,6 +671,7 @@ def build_vision_tooling_state(
     return VisionToolingState(
         workspace=workspace,
         readiness=workspace.readiness,
+        preview=match_state.inspection,
         match=match_state,
         anchors=anchors,
         calibration=calibration,
@@ -616,10 +695,15 @@ def _build_anchor_row(
     issue_codes: list[str] | None = None,
 ) -> AnchorInspectionRow:
     anchor = repository.get_anchor(anchor_id)
-    override = _anchor_override(calibration_profile, anchor_id)
-    effective_threshold = _effective_confidence_threshold(anchor.confidence_threshold, override)
-    effective_match_region = _effective_match_region(anchor.match_region, override)
+    calibration_resolution = resolve_calibration_override(
+        anchor=anchor,
+        calibration_profile=calibration_profile,
+    )
+    override = dict(calibration_resolution.override)
+    effective_threshold = calibration_resolution.effective_confidence_threshold
+    effective_match_region = calibration_resolution.effective_match_region
     resolved_path = repository.resolve_asset_path(anchor_id)
+    overlay = _overlay_for_anchor_row(anchor, calibration_resolution)
 
     return AnchorInspectionRow(
         anchor_id=anchor.anchor_id,
@@ -635,6 +719,8 @@ def _build_anchor_row(
         tags=list(anchor.tags),
         override=override,
         issue_codes=list(issue_codes or []),
+        calibration_resolution=calibration_resolution,
+        overlay=overlay,
         metadata=dict(anchor.metadata),
     )
 
@@ -658,6 +744,28 @@ def _build_capture_artifact_view(artifact: CaptureArtifact) -> CaptureArtifactVi
         source_image=artifact.source_image,
         crop_region=artifact.crop_region,
         file_exists=_path_exists(artifact.image_path),
+        inspection=build_image_inspection_state(
+            inspection_id=f"artifact:{artifact.artifact_id}",
+            image_path=artifact.image_path,
+            source_image=artifact.source_image or artifact.image_path,
+            selected_overlay_id=f"{artifact.artifact_id}:artifact",
+            metadata={"artifact_id": artifact.artifact_id, "kind": artifact.kind.value},
+        )
+        if artifact.crop_region is None
+        else build_image_inspection_state(
+            inspection_id=f"artifact:{artifact.artifact_id}",
+            image_path=artifact.image_path,
+            source_image=artifact.source_image or artifact.image_path,
+            capture_session=CaptureSession(
+                session_id=f"artifact-session:{artifact.artifact_id}",
+                instance_id="",
+                source_image=artifact.image_path,
+                crop_region=artifact.crop_region,
+                metadata={"artifact_id": artifact.artifact_id},
+            ),
+            selected_overlay_id=f"artifact-session:{artifact.artifact_id}:crop",
+            metadata={"artifact_id": artifact.artifact_id, "kind": artifact.kind.value},
+        ),
         created_at=artifact.created_at,
         metadata=dict(artifact.metadata),
     )
@@ -783,6 +891,7 @@ def _mark_artifact_selection(
         crop_region=artifact.crop_region,
         file_exists=artifact.file_exists,
         is_selected=artifact.artifact_id == selected_artifact_id,
+        inspection=artifact.inspection,
         created_at=artifact.created_at,
         metadata=dict(artifact.metadata),
     )
@@ -803,6 +912,59 @@ def _path_exists(value: str) -> bool:
     if "://" in value:
         return False
     return Path(value).exists()
+
+
+def _resolve_selected_calibration(
+    *,
+    repository: AnchorRepository | None,
+    calibration_profile: CalibrationProfile | None,
+    expected_anchor_id: str,
+) -> CalibrationOverrideResolution | None:
+    if calibration_profile is None and not expected_anchor_id:
+        return None
+
+    anchor = None
+    if repository is not None and expected_anchor_id and repository.has_anchor(expected_anchor_id):
+        anchor = repository.get_anchor(expected_anchor_id)
+
+    resolution = resolve_calibration_override(
+        anchor=anchor,
+        anchor_id=expected_anchor_id,
+        calibration_profile=calibration_profile,
+    )
+    if (
+        not resolution.anchor_id
+        and not resolution.profile_id
+        and resolution.capture_crop_region is None
+        and not resolution.override
+    ):
+        return None
+    return resolution
+
+
+def _overlay_for_anchor_row(
+    anchor: Any,
+    calibration_resolution: CalibrationOverrideResolution,
+) -> InspectionOverlay | None:
+    region = CropRegion.from_value(
+        calibration_resolution.effective_match_region or anchor.match_region
+    )
+    if region is None:
+        return None
+    return InspectionOverlay(
+        overlay_id=f"{anchor.anchor_id}:anchor",
+        kind=InspectionOverlayKind.EXPECTED_ANCHOR,
+        label=f"anchor:{anchor.anchor_id}",
+        region=region,
+        stroke_color="#ffb02e",
+        stroke_style="dashed" if calibration_resolution.override else "solid",
+        is_expected=True,
+        metadata={
+            "anchor_id": anchor.anchor_id,
+            "profile_id": calibration_resolution.profile_id,
+            "override_applied": bool(calibration_resolution.override),
+        },
+    )
 
 
 def _effective_confidence_threshold(
