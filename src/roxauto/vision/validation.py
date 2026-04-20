@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from enum import Enum
-from json import JSONDecodeError
+from json import JSONDecodeError, loads
 from pathlib import Path
 from re import compile
 from typing import Any, Self
@@ -16,6 +16,13 @@ _ASSET_NAME_PATTERN = compile(r"^[a-z0-9_]+$")
 class TemplateValidationSeverity(str, Enum):
     ERROR = "error"
     WARNING = "warning"
+
+
+class TemplateReadinessStatus(str, Enum):
+    READY = "ready"
+    PLACEHOLDER = "placeholder"
+    MISSING = "missing"
+    INVALID = "invalid"
 
 
 @dataclass(slots=True)
@@ -128,6 +135,139 @@ class TemplateWorkspaceValidationReport:
                 TemplateRepositoryValidationReport.from_dict(entry)
                 for entry in data.get("reports", [])
             ],
+            metadata=dict(data.get("metadata", {})),
+        )
+
+
+@dataclass(slots=True)
+class TemplateDependencyReadiness:
+    asset_id: str
+    task_id: str
+    pack_id: str
+    anchor_id: str
+    inventory_status: str
+    readiness_status: TemplateReadinessStatus
+    repository_present: bool = False
+    anchor_present: bool = False
+    asset_exists: bool = False
+    source_path: str = ""
+    resolved_template_path: str = ""
+    inventory_mismatch: bool = False
+    issue_codes: list[str] = field(default_factory=list)
+    message: str = ""
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return to_primitive(asdict(self))
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        raw_status = data.get("readiness_status", TemplateReadinessStatus.MISSING.value)
+        if isinstance(raw_status, TemplateReadinessStatus):
+            readiness_status = raw_status
+        else:
+            readiness_status = TemplateReadinessStatus(str(raw_status))
+        return cls(
+            asset_id=str(data.get("asset_id", "")),
+            task_id=str(data.get("task_id", "")),
+            pack_id=str(data.get("pack_id", "")),
+            anchor_id=str(data.get("anchor_id", "")),
+            inventory_status=str(data.get("inventory_status", "")),
+            readiness_status=readiness_status,
+            repository_present=bool(data.get("repository_present", False)),
+            anchor_present=bool(data.get("anchor_present", False)),
+            asset_exists=bool(data.get("asset_exists", False)),
+            source_path=str(data.get("source_path", "")),
+            resolved_template_path=str(data.get("resolved_template_path", "")),
+            inventory_mismatch=bool(data.get("inventory_mismatch", False)),
+            issue_codes=[str(code) for code in data.get("issue_codes", [])],
+            message=str(data.get("message", "")),
+            metadata=dict(data.get("metadata", {})),
+        )
+
+
+@dataclass(slots=True)
+class VisionWorkspaceReadinessReport:
+    templates_root: str
+    asset_inventory_path: str = ""
+    validation_report: TemplateWorkspaceValidationReport | None = None
+    template_dependencies: list[TemplateDependencyReadiness] = field(default_factory=list)
+    non_template_record_count: int = 0
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def template_dependency_count(self) -> int:
+        return len(self.template_dependencies)
+
+    @property
+    def ready_count(self) -> int:
+        return sum(
+            1
+            for dependency in self.template_dependencies
+            if dependency.readiness_status == TemplateReadinessStatus.READY
+        )
+
+    @property
+    def placeholder_count(self) -> int:
+        return sum(
+            1
+            for dependency in self.template_dependencies
+            if dependency.readiness_status == TemplateReadinessStatus.PLACEHOLDER
+        )
+
+    @property
+    def missing_count(self) -> int:
+        return sum(
+            1
+            for dependency in self.template_dependencies
+            if dependency.readiness_status == TemplateReadinessStatus.MISSING
+        )
+
+    @property
+    def invalid_count(self) -> int:
+        return sum(
+            1
+            for dependency in self.template_dependencies
+            if dependency.readiness_status == TemplateReadinessStatus.INVALID
+        )
+
+    @property
+    def inventory_mismatch_count(self) -> int:
+        return sum(1 for dependency in self.template_dependencies if dependency.inventory_mismatch)
+
+    @property
+    def blocking_count(self) -> int:
+        return self.missing_count + self.invalid_count
+
+    @property
+    def missing_anchor_ids(self) -> list[str]:
+        return [
+            dependency.anchor_id
+            for dependency in self.template_dependencies
+            if dependency.readiness_status == TemplateReadinessStatus.MISSING
+        ]
+
+    def to_dict(self) -> dict[str, Any]:
+        return to_primitive(asdict(self))
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        raw_validation_report = data.get("validation_report")
+        if isinstance(raw_validation_report, TemplateWorkspaceValidationReport):
+            validation_report = raw_validation_report
+        elif isinstance(raw_validation_report, dict):
+            validation_report = TemplateWorkspaceValidationReport.from_dict(raw_validation_report)
+        else:
+            validation_report = None
+        return cls(
+            templates_root=str(data.get("templates_root", "")),
+            asset_inventory_path=str(data.get("asset_inventory_path", "")),
+            validation_report=validation_report,
+            template_dependencies=[
+                TemplateDependencyReadiness.from_dict(entry)
+                for entry in data.get("template_dependencies", [])
+            ],
+            non_template_record_count=int(data.get("non_template_record_count", 0)),
             metadata=dict(data.get("metadata", {})),
         )
 
@@ -344,6 +484,120 @@ def validate_template_workspace(
     )
 
 
+def build_vision_workspace_readiness_report(
+    templates_root: Path | str,
+    asset_inventory_path: Path | str,
+) -> VisionWorkspaceReadinessReport:
+    templates_root_path = Path(templates_root)
+    inventory_path = Path(asset_inventory_path)
+    validation_report = validate_template_workspace(templates_root_path)
+    repositories_by_id = {
+        repository.repository_id: repository
+        for repository in AnchorRepository.discover(templates_root_path)
+    }
+    validation_by_id = {
+        report.repository_id or Path(report.repository_root).name: report
+        for report in validation_report.reports
+    }
+    anchor_issue_codes = _build_anchor_issue_code_map(validation_report)
+
+    if not inventory_path.exists() or not inventory_path.is_file():
+        return VisionWorkspaceReadinessReport(
+            templates_root=str(templates_root_path),
+            asset_inventory_path=str(inventory_path),
+            validation_report=validation_report,
+            metadata={
+                "asset_inventory_exists": inventory_path.exists(),
+                "asset_inventory_is_file": inventory_path.is_file(),
+            },
+        )
+
+    document = loads(inventory_path.read_text(encoding="utf-8"))
+    template_dependencies: list[TemplateDependencyReadiness] = []
+    non_template_record_count = 0
+
+    for record in document.get("records", []):
+        asset_kind = str(record.get("asset_kind", ""))
+        if asset_kind != "template":
+            non_template_record_count += 1
+            continue
+
+        pack_id = str(record.get("pack_id", ""))
+        task_id = str(record.get("task_id", ""))
+        asset_id = str(record.get("asset_id", ""))
+        inventory_status = str(record.get("status", ""))
+        source_path = str(record.get("source_path", ""))
+        metadata = dict(record.get("metadata", {}))
+        anchor_id = str(metadata.get("anchor_id", ""))
+        repository = repositories_by_id.get(pack_id)
+        validation_entry = validation_by_id.get(pack_id)
+
+        repository_present = repository is not None or validation_entry is not None
+        anchor_present = bool(repository is not None and anchor_id and repository.has_anchor(anchor_id))
+        issue_codes = list(anchor_issue_codes.get(anchor_id, []))
+        resolved_template_path = ""
+        asset_exists = False
+
+        if repository is not None and anchor_present:
+            anchor = repository.get_anchor(anchor_id)
+            resolved_template_path = str(repository.resolve_asset_path(anchor_id))
+            asset_exists = Path(resolved_template_path).exists()
+            metadata.setdefault("placeholder", bool(anchor.metadata.get("placeholder", False)))
+
+        readiness_status, message = _resolve_template_readiness_status(
+            repository_present=repository_present,
+            anchor_present=anchor_present,
+            asset_exists=asset_exists,
+            inventory_status=inventory_status,
+            issue_codes=issue_codes,
+            placeholder=bool(metadata.get("placeholder", False)),
+        )
+
+        expected_source_path = ""
+        if anchor_id and repository_present:
+            expected_source_path = f"assets/templates/{pack_id}/manifest.json#{anchor_id}"
+        inventory_mismatch = bool(expected_source_path and source_path != expected_source_path)
+        if inventory_status == "missing" and anchor_present and asset_exists:
+            inventory_mismatch = True
+
+        template_dependencies.append(
+            TemplateDependencyReadiness(
+                asset_id=asset_id,
+                task_id=task_id,
+                pack_id=pack_id,
+                anchor_id=anchor_id,
+                inventory_status=inventory_status,
+                readiness_status=readiness_status,
+                repository_present=repository_present,
+                anchor_present=anchor_present,
+                asset_exists=asset_exists,
+                source_path=source_path,
+                resolved_template_path=resolved_template_path,
+                inventory_mismatch=inventory_mismatch,
+                issue_codes=issue_codes,
+                message=message,
+                metadata={
+                    **metadata,
+                    "expected_source_path": expected_source_path,
+                },
+            )
+        )
+
+    return VisionWorkspaceReadinessReport(
+        templates_root=str(templates_root_path),
+        asset_inventory_path=str(inventory_path),
+        validation_report=validation_report,
+        template_dependencies=template_dependencies,
+        non_template_record_count=non_template_record_count,
+        metadata={
+            "asset_inventory_exists": inventory_path.exists(),
+            "asset_inventory_is_file": inventory_path.is_file(),
+            "inventory_id": str(document.get("inventory_id", "")),
+            "inventory_version": str(document.get("version", "")),
+        },
+    )
+
+
 def _validate_template_path(
     repository_root: Path,
     anchor_id: str,
@@ -445,3 +699,55 @@ def _validate_template_path(
         )
 
     return issues
+
+
+def _build_anchor_issue_code_map(
+    validation_report: TemplateWorkspaceValidationReport,
+) -> dict[str, list[str]]:
+    result: dict[str, list[str]] = {}
+    for repository_report in validation_report.reports:
+        for issue in repository_report.issues:
+            if not issue.anchor_id or issue.severity != TemplateValidationSeverity.ERROR:
+                continue
+            result.setdefault(issue.anchor_id, []).append(issue.code)
+    return result
+
+
+def _resolve_template_readiness_status(
+    *,
+    repository_present: bool,
+    anchor_present: bool,
+    asset_exists: bool,
+    inventory_status: str,
+    issue_codes: list[str],
+    placeholder: bool,
+) -> tuple[TemplateReadinessStatus, str]:
+    if not repository_present:
+        return (
+            TemplateReadinessStatus.MISSING,
+            "Required template repository is missing from assets/templates.",
+        )
+    if not anchor_present:
+        return (
+            TemplateReadinessStatus.MISSING,
+            "Required anchor is missing from the template manifest.",
+        )
+    if not asset_exists:
+        return (
+            TemplateReadinessStatus.MISSING,
+            "Anchor exists in the manifest but the template asset file is missing.",
+        )
+    if issue_codes:
+        return (
+            TemplateReadinessStatus.INVALID,
+            "Anchor is present but has validation issues that should be resolved before consumption.",
+        )
+    if placeholder or inventory_status == "placeholder":
+        return (
+            TemplateReadinessStatus.PLACEHOLDER,
+            "Template dependency is present as a placeholder scaffold.",
+        )
+    return (
+        TemplateReadinessStatus.READY,
+        "Template dependency is present and resolves without validation errors.",
+    )

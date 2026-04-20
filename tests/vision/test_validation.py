@@ -8,7 +8,10 @@ from tempfile import TemporaryDirectory
 import tests._bootstrap  # noqa: F401
 from roxauto.vision import (
     AnchorRepository,
+    TemplateReadinessStatus,
     TemplateWorkspaceValidationReport,
+    VisionWorkspaceReadinessReport,
+    build_vision_workspace_readiness_report,
     validate_template_repository,
     validate_template_workspace,
 )
@@ -17,6 +20,14 @@ from roxauto.vision import (
 class TemplateValidationTests(unittest.TestCase):
     def setUp(self) -> None:
         self.templates_root = Path(__file__).resolve().parents[2] / "assets" / "templates"
+        self.asset_inventory_path = (
+            Path(__file__).resolve().parents[2]
+            / "src"
+            / "roxauto"
+            / "tasks"
+            / "foundations"
+            / "asset_inventory.json"
+        )
 
     def test_validate_template_repository_accepts_sample_common_pack(self) -> None:
         repository = AnchorRepository.load(self.templates_root / "common")
@@ -129,3 +140,26 @@ class TemplateValidationTests(unittest.TestCase):
         self.assertEqual(report.error_count, 0)
         self.assertFalse(report.metadata["templates_root_exists"])
         self.assertFalse(report.metadata["templates_root_is_dir"])
+
+    def test_build_vision_workspace_readiness_report_tracks_inventory_mismatch(self) -> None:
+        report = build_vision_workspace_readiness_report(
+            self.templates_root,
+            self.asset_inventory_path,
+        )
+
+        dependency_by_anchor = {
+            dependency.anchor_id: dependency for dependency in report.template_dependencies
+        }
+        guild_dependency = dependency_by_anchor["daily_ui.guild_check_in_button"]
+
+        self.assertEqual(report.template_dependency_count, 3)
+        self.assertEqual(report.placeholder_count, 3)
+        self.assertEqual(report.missing_count, 0)
+        self.assertEqual(report.inventory_mismatch_count, 1)
+        self.assertEqual(guild_dependency.readiness_status, TemplateReadinessStatus.PLACEHOLDER)
+        self.assertTrue(guild_dependency.anchor_present)
+        self.assertTrue(guild_dependency.asset_exists)
+        self.assertTrue(guild_dependency.inventory_mismatch)
+
+        restored = VisionWorkspaceReadinessReport.from_dict(report.to_dict())
+        self.assertEqual(restored.inventory_mismatch_count, report.inventory_mismatch_count)

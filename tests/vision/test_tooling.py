@@ -32,17 +32,28 @@ from roxauto.vision import (
 class VisionToolingTests(unittest.TestCase):
     def setUp(self) -> None:
         self.templates_root = Path(__file__).resolve().parents[2] / "assets" / "templates"
+        self.asset_inventory_path = (
+            Path(__file__).resolve().parents[2]
+            / "src"
+            / "roxauto"
+            / "tasks"
+            / "foundations"
+            / "asset_inventory.json"
+        )
 
     def test_build_template_workspace_catalog_prefers_selected_valid_repository(self) -> None:
         workspace = build_template_workspace_catalog(
             self.templates_root,
             selected_repository_id="daily_ui",
+            asset_inventory_path=self.asset_inventory_path,
         )
 
         self.assertEqual(workspace.selected_repository_id, "daily_ui")
         self.assertEqual(workspace.selected_repository.version, "0.1.0")
         self.assertEqual(len(workspace.repositories), 3)
         self.assertTrue(all(entry.is_valid for entry in workspace.repositories))
+        self.assertEqual(workspace.repository_count, 3)
+        self.assertEqual(workspace.readiness.inventory_mismatch_count, 1)
 
     def test_build_anchor_inspector_applies_calibration_override_and_validation_issues(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -91,6 +102,7 @@ class VisionToolingTests(unittest.TestCase):
         self.assertEqual(inspector.selected_anchor.effective_match_region, (5, 6, 7, 8))
         self.assertIn("missing_template_asset", inspector.selected_anchor.issue_codes)
         self.assertFalse(inspector.selected_anchor.asset_exists)
+        self.assertIn("threshold=0.96", inspector.selected_anchor_summary)
 
     def test_capture_and_failure_inspectors_expose_selected_items(self) -> None:
         session = create_capture_session(
@@ -147,9 +159,14 @@ class VisionToolingTests(unittest.TestCase):
         self.assertEqual(capture.selected_artifact_id, "artifact-2")
         self.assertEqual(capture.selected_artifact.kind, CaptureArtifactKind.CROP)
         self.assertEqual(capture.selected_artifact.crop_region.to_tuple(), (10, 20, 30, 40))
+        self.assertEqual(capture.artifact_kind_counts["screenshot"], 1)
+        self.assertEqual(capture.artifact_kind_counts["crop"], 1)
+        self.assertIn("crop", capture.selected_artifact_summary)
         self.assertEqual(failure.status, MatchStatus.MATCHED)
         self.assertEqual(failure.selected_anchor.anchor_id, "common.close_button")
         self.assertEqual(failure.best_candidate.anchor_id, "common.close_button")
+        self.assertEqual(failure.candidate_count, 1)
+        self.assertIn("confidence=0.910", failure.best_candidate_summary)
 
     def test_build_vision_tooling_state_stitches_workspace_capture_replay_and_failure(self) -> None:
         repository = AnchorRepository.load(self.templates_root / "common")
@@ -224,16 +241,24 @@ class VisionToolingTests(unittest.TestCase):
             replay_script=script,
             match_result=match_result,
             failure_record=failure_record,
+            asset_inventory_path=self.asset_inventory_path,
             selected_repository_id="common",
             selected_action_id="action-2",
             source_image="preview://sample",
         )
 
         self.assertEqual(tooling.workspace.selected_repository_id, "common")
+        self.assertEqual(tooling.readiness.inventory_mismatch_count, 1)
         self.assertEqual(tooling.anchors.selected_anchor.anchor_id, "common.close_button")
+        self.assertIn("threshold=0.95", tooling.anchors.selected_anchor_summary)
         self.assertEqual(tooling.calibration.selected_anchor.effective_confidence_threshold, 0.95)
+        self.assertEqual(tooling.calibration.scale_summary, "1.00 x 1.00")
+        self.assertEqual(tooling.calibration.crop_summary, "1,2,3,4")
         self.assertEqual(tooling.capture.selected_artifact.artifact_id, "artifact-1")
+        self.assertTrue(tooling.capture.selected_artifact.is_selected)
         self.assertEqual(tooling.replay.selected_action_id, "action-2")
         self.assertEqual(tooling.match.matched_candidate.anchor_id, "common.close_button")
+        self.assertEqual(tooling.match.candidate_count, 1)
+        self.assertIn("confidence=0.960", tooling.match.matched_candidate_summary)
         self.assertEqual(tooling.failure.best_candidate.anchor_id, "common.close_button")
         self.assertEqual(tooling.to_dict()["workspace"]["selected_repository_id"], "common")

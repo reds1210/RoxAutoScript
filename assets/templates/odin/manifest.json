@@ -16,7 +16,8 @@
       "description": "Start or enter Odin flow.",
       "tags": ["odin", "start"],
       "metadata": {
-        "workflow": "odin"
+        "workflow": "odin",
+        "placeholder": true
       }
     }
   ]

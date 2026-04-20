@@ -28,6 +28,12 @@ class AnchorRepositoryTests(unittest.TestCase):
 
         self.assertEqual(repository_ids, {"common", "daily_ui", "odin"})
 
+    def test_daily_ui_repository_includes_guild_check_in_anchor(self) -> None:
+        repository = AnchorRepository.load(self.templates_root / "daily_ui")
+
+        self.assertTrue(repository.has_anchor("daily_ui.guild_check_in_button"))
+        self.assertTrue(repository.resolve_asset_path("daily_ui.guild_check_in_button").exists())
+
     def test_repository_exposes_manifest_and_search_helpers(self) -> None:
         repository = AnchorRepository.load(self.templates_root / "common")
 
