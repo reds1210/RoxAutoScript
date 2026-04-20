@@ -9,7 +9,7 @@ from roxauto.core.events import (
     EVENT_INSTANCE_ERROR,
     EVENT_TASK_FAILURE_SNAPSHOT_RECORDED,
 )
-from roxauto.core.models import VisionMatch
+from roxauto.core.models import InstanceRuntimeContext, InstanceState, VisionMatch
 from roxauto.core.queue import QueuedTask
 from roxauto.vision import (
     AnchorRepository,
@@ -40,6 +40,36 @@ class ConsoleSnapshot:
     @property
     def available_runtime_features(self) -> list[str]:
         return [package_name for package_name, installed in self.packages.items() if installed]
+
+
+@dataclass(slots=True)
+class ConsoleSummaryView:
+    total_instances: int
+    ready_count: int
+    busy_count: int
+    paused_count: int
+    error_count: int
+    disconnected_count: int
+    queued_count: int
+    failure_count: int
+    selected_instance_label: str = ""
+    selected_instance_status: str = ""
+    selected_queue_depth: int = 0
+    global_status_message: str = ""
+
+
+@dataclass(slots=True)
+class InstanceListEntryView:
+    instance_id: str
+    label: str
+    status: str
+    subtitle: str
+    queue_depth: int = 0
+    active_task_id: str = ""
+    profile_summary: str = ""
+    health_summary: str = ""
+    preview_summary: str = ""
+    warning: str = ""
 
 
 @dataclass(slots=True)
@@ -89,6 +119,7 @@ class LogPaneView:
     failure_count: int
     entries: list[LogEntryView] = field(default_factory=list)
     empty_message: str = "No operator activity yet."
+    latest_summary: str = ""
 
 
 @dataclass(slots=True)
@@ -108,6 +139,8 @@ class ManualControlsView:
     available_actions: list[ManualControlButtonView] = field(default_factory=list)
     enabled: bool = False
     banner: str = ""
+    last_command_summary: str = ""
+    last_command_status: str = "idle"
 
 
 @dataclass(slots=True)
@@ -130,6 +163,7 @@ class PreviewPaneView:
     match_status: str
     confidence: float
     message: str
+    context_lines: list[str] = field(default_factory=list)
     candidate_summaries: list[str] = field(default_factory=list)
 
 
@@ -194,6 +228,8 @@ class VisionWorkspaceSnapshot:
 @dataclass(slots=True)
 class OperatorConsoleState:
     snapshot: ConsoleSnapshot
+    summary: ConsoleSummaryView
+    instance_rows: list[InstanceListEntryView]
     selected_instance_id: str
     detail: InstanceDetailView
     queue: QueuePaneView
@@ -272,6 +308,10 @@ _ACTION_SPECS: dict[str, ManualActionSpec] = {
 }
 
 
+def _status_value(value: Any) -> str:
+    return value.value if hasattr(value, "value") else str(value)
+
+
 def _format_region(region: tuple[int, int, int, int] | None) -> str:
     if not region:
         return "n/a"
@@ -335,6 +375,18 @@ def _instance_lookup(snapshot: ConsoleSnapshot) -> dict[str, InstanceCardView]:
     return {instance.instance_id: instance for instance in snapshot.instances}
 
 
+def _runtime_context_lookup(
+    runtime_contexts: dict[str, InstanceRuntimeContext | None] | None,
+) -> dict[str, InstanceRuntimeContext]:
+    if not runtime_contexts:
+        return {}
+    return {
+        instance_id: context
+        for instance_id, context in runtime_contexts.items()
+        if context is not None
+    }
+
+
 def build_console_snapshot(report: dict[str, Any]) -> ConsoleSnapshot:
     adb = report.get("adb", {})
     packages = dict(report.get("packages", {}))
@@ -343,7 +395,7 @@ def build_console_snapshot(report: dict[str, Any]) -> ConsoleSnapshot:
             instance_id=str(instance.get("instance_id", "")),
             label=str(instance.get("label", "")),
             adb_serial=str(instance.get("adb_serial", "")),
-            status=str(instance.get("status", "")),
+            status=_status_value(instance.get("status", "")),
             last_seen_at=str(instance.get("last_seen_at", "")),
             metadata=dict(instance.get("metadata", {})),
         )
@@ -354,6 +406,47 @@ def build_console_snapshot(report: dict[str, Any]) -> ConsoleSnapshot:
         instance_count=int(adb.get("instances_found") or len(instances)),
         packages=packages,
         instances=instances,
+    )
+
+
+def build_console_snapshot_from_runtime(
+    instances: Iterable[InstanceState],
+    *,
+    adb_path: str,
+    packages: dict[str, bool] | None = None,
+    runtime_contexts: dict[str, InstanceRuntimeContext | None] | None = None,
+) -> ConsoleSnapshot:
+    contexts = runtime_contexts or {}
+    cards: list[InstanceCardView] = []
+    for instance in instances:
+        metadata = dict(instance.metadata)
+        context = contexts.get(instance.instance_id)
+        if context is not None:
+            metadata["queue_depth"] = context.queue_depth
+            metadata["stop_requested"] = context.stop_requested
+            if context.health_check_ok is not None:
+                metadata["health_check_ok"] = context.health_check_ok
+            if context.profile_binding is not None:
+                metadata["profile_id"] = context.profile_binding.profile_id
+            if context.preview_frame is not None:
+                metadata["preview_frame"] = context.preview_frame.image_path
+            if context.failure_snapshot is not None:
+                metadata["failure_snapshot"] = context.failure_snapshot.snapshot_id
+        cards.append(
+            InstanceCardView(
+                instance_id=instance.instance_id,
+                label=instance.label,
+                adb_serial=instance.adb_serial,
+                status=_status_value(instance.status),
+                last_seen_at=str(instance.last_seen_at),
+                metadata=metadata,
+            )
+        )
+    return ConsoleSnapshot(
+        adb_path=adb_path,
+        instance_count=len(cards),
+        packages=dict(packages or {}),
+        instances=cards,
     )
 
 
@@ -418,6 +511,7 @@ def build_log_pane(
         failure_count=failure_count,
         entries=entries,
         empty_message=empty_message,
+        latest_summary=entries[0].summary if entries else empty_message,
     )
 
 
@@ -450,6 +544,7 @@ def build_instance_detail(
     *,
     selected_instance_id: str = "",
     queue: QueuePaneView | None = None,
+    runtime_context: InstanceRuntimeContext | None = None,
     global_emergency_stop_active: bool = False,
 ) -> InstanceDetailView:
     instance = _instance_lookup(snapshot).get(selected_instance_id)
@@ -466,14 +561,44 @@ def build_instance_detail(
         )
 
     metadata_lines = [f"{key}: {value}" for key, value in sorted(instance.metadata.items())]
-    warning = "Emergency stop requested. Waiting for runtime acknowledgement." if global_emergency_stop_active else ""
+    if runtime_context is not None:
+        metadata_lines.extend(
+            [
+                f"stop_requested: {runtime_context.stop_requested}",
+                f"health_check_ok: {runtime_context.health_check_ok}",
+            ]
+        )
+        if runtime_context.active_task_id:
+            metadata_lines.append(f"active_task_id: {runtime_context.active_task_id}")
+        if runtime_context.active_run_id:
+            metadata_lines.append(f"active_run_id: {runtime_context.active_run_id}")
+        if runtime_context.profile_binding is not None:
+            metadata_lines.append(
+                f"profile_binding: {runtime_context.profile_binding.display_name} [{runtime_context.profile_binding.profile_id}]"
+            )
+        if runtime_context.preview_frame is not None:
+            metadata_lines.append(f"preview_frame: {runtime_context.preview_frame.image_path}")
+        if runtime_context.failure_snapshot is not None:
+            metadata_lines.append(
+                "failure_snapshot: "
+                f"{runtime_context.failure_snapshot.snapshot_id} "
+                f"({runtime_context.failure_snapshot.reason.value})"
+            )
+    warning_parts: list[str] = []
+    if global_emergency_stop_active:
+        warning_parts.append("Emergency stop requested. Waiting for runtime acknowledgement.")
+    elif runtime_context is not None and runtime_context.stop_requested:
+        warning_parts.append("Stop requested for this instance.")
+    if runtime_context is not None and runtime_context.health_check_ok is False:
+        warning_parts.append("Latest health check failed.")
+    warning = " ".join(warning_parts)
     return InstanceDetailView(
         instance_id=instance.instance_id,
         label=instance.label,
         status=instance.status,
         adb_serial=instance.adb_serial,
         last_seen_at=instance.last_seen_at,
-        queue_depth=queue.total_count if queue is not None else 0,
+        queue_depth=runtime_context.queue_depth if runtime_context is not None else (queue.total_count if queue is not None else 0),
         metadata_lines=metadata_lines,
         warning=warning,
     )
@@ -483,8 +608,13 @@ def build_manual_controls(
     *,
     selected_instance_id: str = "",
     selected_instance_label: str = "",
+    events: Iterable[AppEvent] = (),
     global_emergency_stop_active: bool = False,
 ) -> ManualControlsView:
+    last_command_summary, last_command_status = _latest_command_feedback(
+        events,
+        selected_instance_id=selected_instance_id,
+    )
     buttons = [
         ManualControlButtonView(
             action_key=spec.action_key,
@@ -492,13 +622,21 @@ def build_manual_controls(
             command_type=spec.command_type.value,
             requires_instance=spec.requires_instance,
             enabled=(not spec.requires_instance or bool(selected_instance_id))
-            and (not global_emergency_stop_active or spec.command_type in {InstanceCommandType.REFRESH, InstanceCommandType.EMERGENCY_STOP}),
+            and (
+                not global_emergency_stop_active
+                or spec.command_type
+                in {
+                    InstanceCommandType.REFRESH,
+                    InstanceCommandType.START_QUEUE,
+                    InstanceCommandType.EMERGENCY_STOP,
+                }
+            ),
             help_text=spec.help_text,
         )
         for spec in _ACTION_SPECS.values()
     ]
     if global_emergency_stop_active:
-        banner = "Emergency stop requested. Instance actions are locked until runtime clears the stop."
+        banner = "Emergency stop requested. Refresh or Start Queue after verification."
     elif selected_instance_id:
         banner = f"Manual controls target {selected_instance_label or selected_instance_id}."
     else:
@@ -507,9 +645,129 @@ def build_manual_controls(
         selected_instance_id=selected_instance_id,
         selected_instance_label=selected_instance_label,
         available_actions=buttons,
-        enabled=bool(selected_instance_id) and not global_emergency_stop_active,
+        enabled=any(button.enabled for button in buttons),
         banner=banner,
+        last_command_summary=last_command_summary,
+        last_command_status=last_command_status,
     )
+
+
+def _latest_command_feedback(
+    events: Iterable[AppEvent],
+    *,
+    selected_instance_id: str = "",
+) -> tuple[str, str]:
+    for event in reversed(list(events)):
+        payload_instance_id = str(event.payload.get("instance_id", ""))
+        if selected_instance_id and payload_instance_id not in {"", selected_instance_id}:
+            continue
+        if event.name == "operator.command.dispatched":
+            return (
+                str(event.payload.get("message", "Command dispatched.")),
+                str(event.payload.get("status", "completed")),
+            )
+        if event.name == "operator.refresh.completed":
+            return (
+                str(event.payload.get("message", "Runtime refresh completed.")),
+                "completed",
+            )
+        if event.name == "command.executed":
+            command_type = str(event.payload.get("command_type", "command"))
+            status = str(event.payload.get("status", "completed"))
+            return (f"{command_type} {status}", status)
+    return ("No operator command dispatched yet.", "idle")
+
+
+def build_console_summary(
+    snapshot: ConsoleSnapshot,
+    *,
+    selected_instance_id: str = "",
+    queue: QueuePaneView | None = None,
+    logs: LogPaneView | None = None,
+    runtime_contexts: dict[str, InstanceRuntimeContext | None] | None = None,
+    global_emergency_stop_active: bool = False,
+) -> ConsoleSummaryView:
+    status_counts = {
+        "ready": 0,
+        "busy": 0,
+        "paused": 0,
+        "error": 0,
+        "disconnected": 0,
+    }
+    for instance in snapshot.instances:
+        normalized = instance.status.lower()
+        if normalized in status_counts:
+            status_counts[normalized] += 1
+
+    contexts = _runtime_context_lookup(runtime_contexts)
+    selected_instance = _instance_lookup(snapshot).get(selected_instance_id)
+    selected_context = contexts.get(selected_instance_id)
+    if global_emergency_stop_active:
+        status_message = "Global emergency stop is active."
+    elif selected_context is not None and selected_context.stop_requested:
+        status_message = f"{selected_instance.label if selected_instance else selected_instance_id} is stopped."
+    elif selected_instance is not None:
+        status_message = f"{selected_instance.label} is {selected_instance.status}."
+    else:
+        status_message = "Select an instance to inspect runtime state."
+
+    return ConsoleSummaryView(
+        total_instances=snapshot.instance_count,
+        ready_count=status_counts["ready"],
+        busy_count=status_counts["busy"],
+        paused_count=status_counts["paused"],
+        error_count=status_counts["error"],
+        disconnected_count=status_counts["disconnected"],
+        queued_count=queue.total_count if queue is not None else 0,
+        failure_count=logs.failure_count if logs is not None else 0,
+        selected_instance_label=selected_instance.label if selected_instance is not None else "",
+        selected_instance_status=selected_instance.status if selected_instance is not None else "",
+        selected_queue_depth=selected_context.queue_depth if selected_context is not None else (queue.total_count if queue is not None else 0),
+        global_status_message=status_message,
+    )
+
+
+def build_instance_list_rows(
+    snapshot: ConsoleSnapshot,
+    *,
+    runtime_contexts: dict[str, InstanceRuntimeContext | None] | None = None,
+) -> list[InstanceListEntryView]:
+    contexts = _runtime_context_lookup(runtime_contexts)
+    rows: list[InstanceListEntryView] = []
+    for instance in snapshot.instances:
+        context = contexts.get(instance.instance_id)
+        health_summary = "health unknown"
+        if context is not None:
+            if context.health_check_ok is True:
+                health_summary = "healthy"
+            elif context.health_check_ok is False:
+                health_summary = "health check failed"
+        profile_summary = ""
+        if context is not None and context.profile_binding is not None:
+            profile_summary = context.profile_binding.display_name
+        preview_summary = ""
+        if context is not None and context.preview_frame is not None:
+            preview_summary = context.preview_frame.image_path
+        warning = ""
+        if context is not None and context.stop_requested:
+            warning = "stop requested"
+        elif instance.status.lower() == "error":
+            warning = "runtime error"
+        rows.append(
+            InstanceListEntryView(
+                instance_id=instance.instance_id,
+                label=instance.label,
+                status=instance.status,
+                subtitle=instance.adb_serial,
+                queue_depth=context.queue_depth if context is not None else int(instance.metadata.get("queue_depth", 0) or 0),
+                active_task_id=context.active_task_id if context is not None and context.active_task_id else "",
+                profile_summary=profile_summary,
+                health_summary=health_summary,
+                preview_summary=preview_summary,
+                warning=warning,
+            )
+        )
+    return rows
 
 
 def build_operator_console_state(
@@ -519,28 +777,44 @@ def build_operator_console_state(
     queue_items: Iterable[QueuedTask] = (),
     events: Iterable[AppEvent] = (),
     selected_instance_id: str = "",
+    runtime_contexts: dict[str, InstanceRuntimeContext | None] | None = None,
     global_emergency_stop_active: bool = False,
 ) -> OperatorConsoleState:
     resolved_instance_id = selected_instance_id
     if not resolved_instance_id and snapshot.instances:
         resolved_instance_id = snapshot.instances[0].instance_id
 
+    contexts = runtime_contexts or {}
     queue = build_queue_pane(queue_items, selected_instance_id=resolved_instance_id)
     logs = build_log_pane(events, selected_instance_id=resolved_instance_id)
     instance = _instance_lookup(snapshot).get(resolved_instance_id)
+    runtime_context = contexts.get(resolved_instance_id)
     manual_controls = build_manual_controls(
         selected_instance_id=resolved_instance_id,
         selected_instance_label=instance.label if instance is not None else "",
+        events=events,
         global_emergency_stop_active=global_emergency_stop_active,
     )
     detail = build_instance_detail(
         snapshot,
         selected_instance_id=resolved_instance_id,
         queue=queue,
+        runtime_context=runtime_context,
         global_emergency_stop_active=global_emergency_stop_active,
     )
+    summary = build_console_summary(
+        snapshot,
+        selected_instance_id=resolved_instance_id,
+        queue=queue,
+        logs=logs,
+        runtime_contexts=contexts,
+        global_emergency_stop_active=global_emergency_stop_active,
+    )
+    instance_rows = build_instance_list_rows(snapshot, runtime_contexts=contexts)
     return OperatorConsoleState(
         snapshot=snapshot,
+        summary=summary,
+        instance_rows=instance_rows,
         selected_instance_id=resolved_instance_id,
         detail=detail,
         queue=queue,
@@ -588,6 +862,7 @@ def build_vision_workspace_snapshot(
     match_result: TemplateMatchResult | None = None,
     source_image: str = "",
     failure_message: str = "",
+    preview_context_lines: Iterable[str] = (),
 ) -> VisionWorkspaceSnapshot:
     repository_root = str(repository.root) if repository is not None else ""
     anchors = repository.list_anchors() if repository is not None else []
@@ -616,6 +891,7 @@ def build_vision_workspace_snapshot(
             match_status=match_result.status.value,
             confidence=best_candidate.confidence if best_candidate is not None else 0.0,
             message=match_result.message,
+            context_lines=list(preview_context_lines),
             candidate_summaries=candidate_summaries,
         )
         failure = FailureInspectionView(
@@ -633,6 +909,7 @@ def build_vision_workspace_snapshot(
             match_status=MatchStatus.MISSED.value,
             confidence=0.0,
             message=failure_message or "Preview pipeline not connected yet.",
+            context_lines=list(preview_context_lines),
             candidate_summaries=[],
         )
         failure = FailureInspectionView(
