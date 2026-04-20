@@ -4,7 +4,20 @@ import unittest
 from datetime import datetime, timezone
 
 import tests._bootstrap  # noqa: F401
-from roxauto.vision import CalibrationProfile, RecordingAction, RecordingActionType, ReplayScript
+from roxauto.vision import (
+    CalibrationProfile,
+    CaptureArtifact,
+    CaptureArtifactKind,
+    CaptureSession,
+    CropRegion,
+    FailureInspectionRecord,
+    MatchStatus,
+    RecordingAction,
+    RecordingActionType,
+    ReplayScript,
+    TemplateMatchResult,
+)
+from roxauto.core.models import VisionMatch
 
 
 class VisionSerializationTests(unittest.TestCase):
@@ -65,4 +78,68 @@ class VisionSerializationTests(unittest.TestCase):
         self.assertEqual(restored.actions[1].payload["label"], "close")
         self.assertEqual(restored.actions[0].occurred_at, script.actions[0].occurred_at)
         self.assertEqual(restored.to_dict(), script.to_dict())
+
+    def test_capture_session_roundtrip(self) -> None:
+        session = CaptureSession(
+            session_id="capture-1",
+            instance_id="mumu-1",
+            source_image="captures/source.png",
+            selected_anchor_id="common.close_button",
+            crop_region=CropRegion(x=10, y=20, width=30, height=40),
+            artifacts=[
+                CaptureArtifact(
+                    artifact_id="artifact-1",
+                    kind=CaptureArtifactKind.SCREENSHOT,
+                    image_path="captures/source.png",
+                    source_image="captures/source.png",
+                ),
+                CaptureArtifact(
+                    artifact_id="artifact-2",
+                    kind=CaptureArtifactKind.CROP,
+                    image_path="captures/crop.png",
+                    source_image="captures/source.png",
+                    crop_region=CropRegion(x=10, y=20, width=30, height=40),
+                ),
+            ],
+            metadata={"source": "test"},
+        )
+
+        restored = CaptureSession.from_json(session.to_json())
+
+        self.assertEqual(restored.session_id, session.session_id)
+        self.assertEqual(restored.crop_region.to_tuple(), (10, 20, 30, 40))
+        self.assertEqual(restored.artifacts[1].kind, CaptureArtifactKind.CROP)
+        self.assertEqual(restored.to_dict(), session.to_dict())
+
+    def test_failure_inspection_roundtrip(self) -> None:
+        inspection = FailureInspectionRecord(
+            failure_id="failure-1",
+            instance_id="mumu-1",
+            screenshot_path="captures/failure.png",
+            anchor_id="common.close_button",
+            preview_image_path="captures/failure-preview.png",
+            match_result=TemplateMatchResult(
+                source_image="captures/failure.png",
+                candidates=[
+                    VisionMatch(
+                        anchor_id="common.close_button",
+                        confidence=0.92,
+                        bbox=(1, 2, 3, 4),
+                        source_image="captures/failure.png",
+                    )
+                ],
+                expected_anchor_id="common.close_button",
+                threshold=0.9,
+                status=MatchStatus.MATCHED,
+                message="matched",
+            ),
+            message="Captured failure context",
+            metadata={"source": "test"},
+        )
+
+        restored = FailureInspectionRecord.from_dict(inspection.to_dict())
+
+        self.assertEqual(restored.failure_id, inspection.failure_id)
+        self.assertEqual(restored.best_candidate().anchor_id, "common.close_button")
+        self.assertEqual(restored.to_dict(), inspection.to_dict())
 
