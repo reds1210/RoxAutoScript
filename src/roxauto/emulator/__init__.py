@@ -1,6 +1,14 @@
 """Emulator integration package."""
 
-from roxauto.emulator.adapter import Coordinate, EmulatorAdapter
+from roxauto.emulator.adapter import (
+    AdbCommandError,
+    AdbCommandResult,
+    AdbEmulatorAdapter,
+    AdbTransport,
+    Coordinate,
+    EmulatorAdapter,
+    SubprocessAdbTransport,
+)
 from roxauto.emulator.execution import (
     ActionExecutor,
     CommandExecutionResult,
@@ -19,6 +27,10 @@ from roxauto.emulator.live_runtime import (
 
 __all__ = [
     "ActionExecutor",
+    "AdbCommandError",
+    "AdbCommandResult",
+    "AdbEmulatorAdapter",
+    "AdbTransport",
     "CommandExecutionResult",
     "CommandExecutionStatus",
     "Coordinate",
@@ -31,5 +43,6 @@ __all__ = [
     "LiveRuntimeSession",
     "LiveRuntimeSnapshot",
     "ScreenshotCapturePipeline",
+    "SubprocessAdbTransport",
 ]
 

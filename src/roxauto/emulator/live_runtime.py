@@ -21,7 +21,7 @@ from roxauto.core.events import (
 )
 from roxauto.core.models import InstanceRuntimeContext, InstanceState, PreviewFrame, ProfileBinding
 from roxauto.core.queue import QueuedTask, TaskQueue
-from roxauto.core.runtime import AuditSink, QueueRunResult, RuntimeCoordinator
+from roxauto.core.runtime import AuditSink, QueueRunResult, RuntimeCoordinator, RuntimeInspectionResult
 from roxauto.core.time import utc_now
 from roxauto.emulator.discovery import discover_instances
 from roxauto.emulator.execution import (
@@ -109,9 +109,11 @@ class LiveRuntimeSnapshot:
     revision: int = 0
     last_sync_at: object | None = None
     last_discovery_at: object | None = None
+    last_sync_ok: bool = True
     last_sync_error: str = ""
     last_command_result: CommandDispatchResult | None = None
     last_queue_result: QueueRunResult | None = None
+    last_inspection_results: list[RuntimeInspectionResult] = field(default_factory=list)
     instance_snapshots: list[LiveRuntimeInstanceSnapshot] = field(default_factory=list)
     instances: list[InstanceState] = field(default_factory=list)
     contexts: list[InstanceRuntimeContext] = field(default_factory=list)
@@ -146,9 +148,11 @@ class LiveRuntimeSession:
         self._revision = 0
         self._last_sync_at: object | None = None
         self._last_discovery_at: object | None = None
+        self._last_sync_ok = True
         self._last_sync_error = ""
         self._last_command_result: CommandDispatchResult | None = None
         self._last_queue_result: QueueRunResult | None = None
+        self._last_inspection_results: list[RuntimeInspectionResult] = []
         self._last_snapshot: LiveRuntimeSnapshot | None = None
         self._coordinator = RuntimeCoordinator(
             command_executor=ActionExecutor(
@@ -200,12 +204,20 @@ class LiveRuntimeSession:
         return self._last_sync_error
 
     @property
+    def last_sync_ok(self) -> bool:
+        return self._last_sync_ok
+
+    @property
     def last_command_result(self) -> CommandDispatchResult | None:
         return self._last_command_result
 
     @property
     def last_queue_result(self) -> QueueRunResult | None:
         return self._last_queue_result
+
+    @property
+    def last_inspection_results(self) -> list[RuntimeInspectionResult]:
+        return list(self._last_inspection_results)
 
     @property
     def last_snapshot(self) -> LiveRuntimeSnapshot:
@@ -216,9 +228,22 @@ class LiveRuntimeSession:
     def discover(self) -> list[InstanceState]:
         return list(self._discovery())
 
-    def poll(self) -> LiveRuntimeSnapshot:
+    def poll(
+        self,
+        instance_id: str | None = None,
+        *,
+        refresh_runtime: bool = False,
+        run_health_check: bool = True,
+        capture_preview: bool = True,
+    ) -> LiveRuntimeSnapshot:
         self.sync_instances()
-        return self.snapshot()
+        if refresh_runtime and self._last_sync_ok:
+            self.refresh_runtime_contexts(
+                instance_id=instance_id,
+                run_health_check=run_health_check,
+                capture_preview=capture_preview,
+            )
+        return self.snapshot(instance_id=instance_id)
 
     def sync_instances(self, states: list[InstanceState] | None = None) -> list[InstanceState]:
         before_revision = self._revision
@@ -227,6 +252,7 @@ class LiveRuntimeSession:
                 states = self.discover()
             except Exception as exc:
                 self._last_sync_at = utc_now()
+                self._last_sync_ok = False
                 self._last_sync_error = str(exc)
                 self._ensure_revision_changed(before_revision)
                 return self._coordinator.registry.list_instances()
@@ -236,6 +262,7 @@ class LiveRuntimeSession:
 
         synced = self._coordinator.sync_instances(states)
         self._last_sync_at = utc_now()
+        self._last_sync_ok = True
         self._last_sync_error = ""
         self._auto_bind_profiles(synced)
         self._ensure_revision_changed(before_revision)
@@ -270,6 +297,8 @@ class LiveRuntimeSession:
         self._last_command_result = result
         if command.command_type == InstanceCommandType.START_QUEUE:
             self._store_last_queue_result_from_dispatch(result)
+        elif command.command_type == InstanceCommandType.REFRESH:
+            self._store_last_inspection_results_from_contexts(result.instance_ids)
         self._ensure_revision_changed(before_revision)
         return result
 
@@ -279,6 +308,31 @@ class LiveRuntimeSession:
         self._last_queue_result = result
         self._ensure_revision_changed(before_revision)
         return result
+
+    def refresh_runtime_contexts(
+        self,
+        instance_id: str | None = None,
+        *,
+        run_health_check: bool = True,
+        capture_preview: bool = True,
+    ) -> list[RuntimeInspectionResult]:
+        before_revision = self._revision
+        if instance_id is None:
+            results = self._coordinator.inspect_instances(
+                run_health_check=run_health_check,
+                capture_preview=capture_preview,
+            )
+        else:
+            results = [
+                self._coordinator.inspect_instance(
+                    instance_id,
+                    run_health_check=run_health_check,
+                    capture_preview=capture_preview,
+                )
+            ]
+        self._last_inspection_results = list(results)
+        self._ensure_revision_changed(before_revision)
+        return list(results)
 
     def get_runtime_context(self, instance_id: str) -> InstanceRuntimeContext | None:
         return self._coordinator.get_runtime_context(instance_id)
@@ -319,9 +373,11 @@ class LiveRuntimeSession:
             revision=self._revision,
             last_sync_at=self._last_sync_at,
             last_discovery_at=self._last_discovery_at,
+            last_sync_ok=self._last_sync_ok,
             last_sync_error=self._last_sync_error,
             last_command_result=self._last_command_result,
             last_queue_result=self._last_queue_result,
+            last_inspection_results=self._filter_inspection_results(instance_id=instance_id),
             instance_snapshots=self._build_instance_snapshots(instances, contexts, queue_items),
             instances=instances,
             contexts=contexts,
@@ -369,6 +425,19 @@ class LiveRuntimeSession:
             for instance in instances
         ]
 
+    def _filter_inspection_results(
+        self,
+        *,
+        instance_id: str | None = None,
+    ) -> list[RuntimeInspectionResult]:
+        if instance_id is None:
+            return list(self._last_inspection_results)
+        return [
+            result
+            for result in self._last_inspection_results
+            if result.instance_id == instance_id
+        ]
+
     def _subscribe_runtime_events(self) -> None:
         for event_name in _RUNTIME_EVENT_NAMES:
             self._event_bus.subscribe(event_name, self._record_event)
@@ -402,6 +471,26 @@ class LiveRuntimeSession:
             if isinstance(result, QueueRunResult):
                 self._last_queue_result = result
                 return
+
+    def _store_last_inspection_results_from_contexts(self, instance_ids: list[str]) -> None:
+        inspections: list[RuntimeInspectionResult] = []
+        for instance_id in instance_ids:
+            context = self._coordinator.get_runtime_context(instance_id)
+            if context is None:
+                continue
+            inspections.append(
+                RuntimeInspectionResult(
+                    instance_id=instance_id,
+                    status=context.status,
+                    health_check_ok=context.health_check_ok,
+                    health_check_message=str(context.metadata.get("last_health_check_message", "")),
+                    preview_frame=context.preview_frame,
+                    failure_snapshot=context.failure_snapshot,
+                    metadata={"source": "dispatch.refresh"},
+                )
+            )
+        if inspections:
+            self._last_inspection_results = inspections
 
     def _ensure_revision_changed(self, previous_revision: int) -> None:
         if self._revision == previous_revision:
