@@ -61,7 +61,7 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
         )
         self.assertEqual(
             records["daily_ui.guild_check_in:template:daily_ui.guild_check_in_button"].status.value,
-            "missing",
+            "placeholder",
         )
         self.assertEqual(
             records["odin.preset_entry:golden:odin_idle_state"].status.value,

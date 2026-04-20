@@ -40,7 +40,7 @@
 ## Blockers
 
 - Still foundations-only; future task implementations depend on Gate 3 runtime and GUI integration.
-- `daily_ui.guild_check_in_button` remains explicitly missing in the asset inventory until the vision line provides it.
+- `daily_ui.guild_check_in_button` is now tracked as a placeholder template in the asset inventory; it still needs curated captures before any runtime task should treat it as ready.
 
 ## Next Step
 

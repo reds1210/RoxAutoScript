@@ -13,7 +13,12 @@ from roxauto.core.commands import (
     InstanceCommand,
     InstanceCommandType,
 )
-from roxauto.core.events import EVENT_INSTANCE_ERROR, EVENT_INSTANCE_HEALTH_CHECKED, EVENT_PREVIEW_CAPTURED
+from roxauto.core.events import (
+    EVENT_COMMAND_EXECUTED,
+    EVENT_INSTANCE_ERROR,
+    EVENT_INSTANCE_HEALTH_CHECKED,
+    EVENT_PREVIEW_CAPTURED,
+)
 from roxauto.core.models import InstanceState, PreviewFrame
 from roxauto.core.runtime import AuditSink
 from roxauto.core.time import utc_now
@@ -193,7 +198,7 @@ class ActionExecutor:
             )
         if self._event_bus is not None:
             self._event_bus.publish(
-                "command.executed",
+                EVENT_COMMAND_EXECUTED,
                 {
                     "command_id": result.command_id,
                     "command_type": result.command_type.value,
