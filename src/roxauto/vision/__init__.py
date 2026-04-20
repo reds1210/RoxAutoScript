@@ -2,12 +2,16 @@ from __future__ import annotations
 
 from roxauto.vision.models import (
     AnchorSpec,
+    CalibrationOverrideResolution,
     CalibrationProfile,
     CaptureArtifact,
     CaptureArtifactKind,
     CaptureSession,
     CropRegion,
     FailureInspectionRecord,
+    ImageInspectionState,
+    InspectionOverlay,
+    InspectionOverlayKind,
     MatchStatus,
     RecordingAction,
     RecordingActionType,
@@ -20,11 +24,13 @@ from roxauto.vision.models import (
 )
 from roxauto.vision.repository import AnchorRepository
 from roxauto.vision.services import (
+    build_image_inspection_state,
     build_failure_inspection,
     build_match_result,
     build_replay_view,
     create_capture_artifact,
     create_capture_session,
+    resolve_calibration_override,
 )
 from roxauto.vision.tooling import (
     AnchorInspectionRow,
@@ -64,6 +70,7 @@ __all__ = [
     "AnchorInspectionRow",
     "AnchorInspectorState",
     "AnchorSpec",
+    "CalibrationOverrideResolution",
     "CalibrationProfile",
     "CalibrationInspectorState",
     "CaptureArtifactView",
@@ -74,6 +81,9 @@ __all__ = [
     "CropRegion",
     "FailureInspectorState",
     "FailureInspectionRecord",
+    "ImageInspectionState",
+    "InspectionOverlay",
+    "InspectionOverlayKind",
     "MatchStatus",
     "MatchCandidateView",
     "MatchInspectorState",
@@ -98,6 +108,7 @@ __all__ = [
     "build_anchor_inspector",
     "build_calibration_inspector",
     "build_capture_inspector",
+    "build_image_inspection_state",
     "build_failure_inspection",
     "build_failure_inspector",
     "build_match_result",
@@ -108,6 +119,7 @@ __all__ = [
     "build_vision_tooling_state",
     "create_capture_artifact",
     "create_capture_session",
+    "resolve_calibration_override",
     "validate_template_repository",
     "validate_template_workspace",
 ]

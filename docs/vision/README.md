@@ -7,7 +7,9 @@ This branch owns the developer-facing observability layer for anchors, calibrati
 - `AnchorSpec`: a single template definition with an id, label, relative asset path, confidence threshold, optional match region, and metadata.
 - `AnchorRepository`: a filesystem-backed repository rooted at `assets/templates/<pack>/` with a `manifest.json` file.
 - `CalibrationProfile`: per-instance calibration data for scale, offsets, crop region, and anchor-specific overrides.
+- `CalibrationOverrideResolution`: the normalized per-anchor result after base template values, profile crop, and anchor override are merged.
 - `CropRegion`, `CaptureArtifact`, and `CaptureSession`: the minimal capture/crop contract for screenshot tooling and asset extraction.
+- `InspectionOverlay` and `ImageInspectionState`: overlay-ready inspection contracts for preview, anchor, crop, match, and failure panes.
 - `RecordingAction` and `ReplayScript`: the minimal UI-layer recording format used by the calibration/recording tooling.
 - `ReplayActionView` and `ReplayViewerState`: replay-viewer models derived from `ReplayScript` without requiring GUI widgets.
 - `TemplateMatchResult`: the UI-facing result wrapper around one or more `VisionMatch` candidates.
@@ -126,10 +128,12 @@ The vision package now exposes service-layer builders so the GUI can stop invent
 - `build_template_workspace_catalog(..., asset_inventory_path=...)` can also attach the readiness report so GUI panes get validation and dependency status in one payload.
 - `build_anchor_inspector()` returns anchor rows with resolved asset paths, validation issue codes, and effective calibration overrides.
 - `build_calibration_inspector()` returns one calibration-focused state object with profile values, selected anchor context, and capture-session linkage.
-- `build_capture_inspector()` returns selected artifact state and derived artifact metadata for capture/crop tooling.
-- `build_match_inspector()` converts `TemplateMatchResult` into a viewer-safe candidate list with best/matched flags.
-- `build_failure_inspector()` merges `FailureInspectionRecord`, match context, and selected anchor context into one inspector-safe payload.
+- `build_capture_inspector()` returns selected artifact state, capture summaries, and `ImageInspectionState` payloads for source/selected artifact inspection.
+- `build_match_inspector()` converts `TemplateMatchResult` into a viewer-safe candidate list plus an overlay-ready inspection state.
+- `build_failure_inspector()` merges `FailureInspectionRecord`, match context, selected anchor context, and failure inspection overlays into one payload.
 - `build_vision_tooling_state()` stitches the workspace catalog, readiness report, match/anchor/calibration/capture/replay/failure states into one aggregate contract.
+- `resolve_calibration_override()` centralizes per-anchor threshold/region/crop resolution so GUI and tooling do not each re-implement override logic.
+- `build_image_inspection_state()` turns match/crop/calibration context into a shared `ImageInspectionState` that preview, capture, and failure panes can all consume directly.
 
 These builders stay inside the vision layer and do not depend on `app`, `core` runtime orchestration details, or emulator transport implementations.
 
@@ -138,7 +142,7 @@ Current sample coverage:
 - `daily_ui.claim_reward` placeholder template exists
 - `daily_ui.guild_check_in_button` placeholder template now exists under `assets/templates/daily_ui/`
 - `odin.start_button` placeholder template exists
-- task asset inventory still marks `daily_ui.guild_check_in_button` as missing, so readiness tooling reports that as an inventory mismatch until Engine D refreshes the inventory file
+- task asset inventory currently marks all three template dependencies as `placeholder`, so readiness tooling stays aligned with the current template workspace
 
 ## Capture/Crop Workflow Skeleton
 
@@ -147,7 +151,7 @@ The first-wave tooling uses a simple artifact model:
 1. runtime or operator tooling produces a source screenshot path
 2. `create_capture_session()` records the source image, instance id, optional selected anchor, and optional crop region
 3. `create_capture_artifact()` records derived files such as a manual crop or annotation output
-4. the session is serialized or passed to GUI tooling for inspection
+4. `build_capture_inspector()` and `build_image_inspection_state()` expose crop/overlay-ready inspection payloads for GUI panes
 
 This intentionally stops at metadata and paths. Pixel processing and OCR stay out of this branch.
 
@@ -155,6 +159,7 @@ This intentionally stops at metadata and paths. Pixel processing and OCR stay ou
 
 - `build_replay_view()` converts a `ReplayScript` into a viewer-safe shape with labels, selection state, and payload summaries.
 - `build_failure_inspection()` converts a failed match or screenshot into a serializable record for a future failure inspector pane.
+- `build_image_inspection_state()` is the shared overlay generator used by preview, capture, match, and failure tooling states.
 - both helpers are designed to remain independent of `app`, `core`, and `emulator` implementation details.
 
 ## Serialization
