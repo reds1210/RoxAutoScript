@@ -67,3 +67,46 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
             records["odin.preset_entry:golden:odin_idle_state"].status.value,
             "planned",
         )
+
+    def test_builds_runtime_builder_inputs(self) -> None:
+        inputs = self.repository.build_runtime_builder_inputs()
+        by_task = {item.task_id: item for item in inputs}
+
+        self.assertEqual(
+            by_task["daily_ui.claim_rewards"].runtime_requirement_ids,
+            ["runtime.daily_ui.dispatch_bridge"],
+        )
+        self.assertEqual(
+            by_task["daily_ui.guild_check_in"].asset_requirement_ids,
+            ["asset.daily_ui.guild_check_in_button"],
+        )
+        self.assertEqual(
+            by_task["odin.preset_entry"].calibration_requirement_ids,
+            ["calibration.odin.idle_state_profile"],
+        )
+
+    def test_evaluates_task_readinesses(self) -> None:
+        reports = self.repository.evaluate_task_readinesses()
+        by_task = {report.task_id: report for report in reports}
+
+        self.assertEqual(by_task["daily_ui.claim_rewards"].builder_readiness_state.value, "ready")
+        self.assertEqual(
+            by_task["daily_ui.claim_rewards"].implementation_readiness_state.value,
+            "blocked_by_runtime",
+        )
+        self.assertEqual(by_task["daily_ui.guild_check_in"].builder_readiness_state.value, "blocked_by_asset")
+        self.assertEqual(
+            by_task["daily_ui.guild_check_in"].implementation_readiness_state.value,
+            "blocked_by_asset",
+        )
+        self.assertEqual(by_task["odin.preset_entry"].builder_readiness_state.value, "ready")
+        self.assertEqual(
+            by_task["odin.preset_entry"].implementation_readiness_state.value,
+            "blocked_by_calibration",
+        )
+
+    def test_loads_curated_readiness_report(self) -> None:
+        readiness = self.repository.load_readiness_report()
+
+        self.assertEqual(readiness.report_id, "pre_gate_3_task_readiness")
+        self.assertEqual(len(readiness.reports), 3)

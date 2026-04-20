@@ -11,6 +11,9 @@
       "golden_root": "daily_ui/daily_ui_claim_rewards/{screen_slug}",
       "implementation_state": "spec_only",
       "manifest_path": "packs/daily_ui/daily_claim_rewards.task.json",
+      "runtime_requirement_ids": [
+        "runtime.daily_ui.dispatch_bridge"
+      ],
       "metadata": {
         "source": "curated_inventory"
       },
@@ -28,6 +31,9 @@
       "golden_root": "daily_ui/daily_ui_guild_check_in/{screen_slug}",
       "implementation_state": "spec_only",
       "manifest_path": "packs/daily_ui/guild_check_in.task.json",
+      "asset_requirement_ids": [
+        "asset.daily_ui.guild_check_in_button"
+      ],
       "metadata": {
         "source": "curated_inventory"
       },
@@ -45,6 +51,9 @@
       "golden_root": "odin/odin_preset_entry/{screen_slug}",
       "implementation_state": "spec_only",
       "manifest_path": "packs/odin/odin_preset_entry.task.json",
+      "calibration_requirement_ids": [
+        "calibration.odin.idle_state_profile"
+      ],
       "metadata": {
         "source": "curated_inventory"
       },
