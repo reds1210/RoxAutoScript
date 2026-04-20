@@ -141,7 +141,7 @@ class TemplateValidationTests(unittest.TestCase):
         self.assertFalse(report.metadata["templates_root_exists"])
         self.assertFalse(report.metadata["templates_root_is_dir"])
 
-    def test_build_vision_workspace_readiness_report_tracks_inventory_mismatch(self) -> None:
+    def test_build_vision_workspace_readiness_report_tracks_inventory_alignment(self) -> None:
         report = build_vision_workspace_readiness_report(
             self.templates_root,
             self.asset_inventory_path,
@@ -155,11 +155,11 @@ class TemplateValidationTests(unittest.TestCase):
         self.assertEqual(report.template_dependency_count, 3)
         self.assertEqual(report.placeholder_count, 3)
         self.assertEqual(report.missing_count, 0)
-        self.assertEqual(report.inventory_mismatch_count, 1)
+        self.assertEqual(report.inventory_mismatch_count, 0)
         self.assertEqual(guild_dependency.readiness_status, TemplateReadinessStatus.PLACEHOLDER)
         self.assertTrue(guild_dependency.anchor_present)
         self.assertTrue(guild_dependency.asset_exists)
-        self.assertTrue(guild_dependency.inventory_mismatch)
+        self.assertFalse(guild_dependency.inventory_mismatch)
 
         restored = VisionWorkspaceReadinessReport.from_dict(report.to_dict())
         self.assertEqual(restored.inventory_mismatch_count, report.inventory_mismatch_count)

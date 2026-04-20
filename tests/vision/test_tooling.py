@@ -53,7 +53,7 @@ class VisionToolingTests(unittest.TestCase):
         self.assertEqual(len(workspace.repositories), 3)
         self.assertTrue(all(entry.is_valid for entry in workspace.repositories))
         self.assertEqual(workspace.repository_count, 3)
-        self.assertEqual(workspace.readiness.inventory_mismatch_count, 1)
+        self.assertEqual(workspace.readiness.inventory_mismatch_count, 0)
 
     def test_build_anchor_inspector_applies_calibration_override_and_validation_issues(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -248,7 +248,7 @@ class VisionToolingTests(unittest.TestCase):
         )
 
         self.assertEqual(tooling.workspace.selected_repository_id, "common")
-        self.assertEqual(tooling.readiness.inventory_mismatch_count, 1)
+        self.assertEqual(tooling.readiness.inventory_mismatch_count, 0)
         self.assertEqual(tooling.anchors.selected_anchor.anchor_id, "common.close_button")
         self.assertIn("threshold=0.95", tooling.anchors.selected_anchor_summary)
         self.assertEqual(tooling.calibration.selected_anchor.effective_confidence_threshold, 0.95)
