@@ -1,0 +1,19 @@
+{
+  "display_name": "TW Guild Fixture",
+  "emulator_name": "mumu",
+  "fixture_id": "fixture.tw.guild.default",
+  "locale": "zh-TW",
+  "metadata": {
+    "account_tier": "sample",
+    "purpose": "guild"
+  },
+  "notes": "Reference fixture for guild-panel screenshots and task-side fixtures.",
+  "resolution": [
+    1280,
+    720
+  ],
+  "template_packs": [
+    "common",
+    "daily_ui"
+  ]
+}

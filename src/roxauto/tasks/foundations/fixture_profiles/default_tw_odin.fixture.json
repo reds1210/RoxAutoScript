@@ -1,0 +1,19 @@
+{
+  "display_name": "TW Odin Fixture",
+  "emulator_name": "mumu",
+  "fixture_id": "fixture.tw.odin.default",
+  "locale": "zh-TW",
+  "metadata": {
+    "account_tier": "sample",
+    "purpose": "odin"
+  },
+  "notes": "Reference fixture for Odin screen inventory and validation fixtures only.",
+  "resolution": [
+    1280,
+    720
+  ],
+  "template_packs": [
+    "common",
+    "odin"
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "display_name": "TW Daily UI Fixture",
+  "emulator_name": "mumu",
+  "fixture_id": "fixture.tw.daily_ui.default",
+  "locale": "zh-TW",
+  "metadata": {
+    "account_tier": "sample",
+    "purpose": "daily_ui"
+  },
+  "notes": "Reference fixture for stable TW client UI states before gameplay automation exists.",
+  "resolution": [
+    1280,
+    720
+  ],
+  "template_packs": [
+    "common",
+    "daily_ui"
+  ]
+}

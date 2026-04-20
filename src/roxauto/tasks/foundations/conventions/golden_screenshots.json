@@ -1,0 +1,15 @@
+{
+  "convention_id": "pre_gate_3_goldens",
+  "directory_template": "{pack_id}/{task_id}/{screen_slug}",
+  "filename_template": "{task_id}__{screen_slug}__{variant}__v{revision}.png",
+  "required_variants": [
+    "baseline",
+    "failure"
+  ],
+  "image_format": "png",
+  "notes": "Golden screenshots are defined for fixture planning only in pre-Gate-3. Use lowercase snake_case slugs and revisioned png names.",
+  "metadata": {
+    "phase": "pre_gate_3",
+    "owner": "engine_d"
+  }
+}
