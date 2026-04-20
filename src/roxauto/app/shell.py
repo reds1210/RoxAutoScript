@@ -4,17 +4,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from roxauto.app.runtime_bridge import OperatorConsoleRuntimeBridge
-from roxauto.app.viewmodels import ConsoleSnapshot, build_operator_console_state, build_vision_workspace_snapshot
-from roxauto.core.models import VisionMatch
-from roxauto.vision import (
-    AnchorRepository,
-    CalibrationProfile,
-    RecordingAction,
-    RecordingActionType,
-    ReplayScript,
-    TemplateMatchResult,
-    build_match_result,
-)
+from roxauto.app.viewmodels import ConsoleSnapshot, build_operator_console_state
 
 if TYPE_CHECKING:
     from typing import Any
@@ -22,77 +12,6 @@ if TYPE_CHECKING:
 
 def _workspace_root() -> Path:
     return Path(__file__).resolve().parents[3]
-
-
-def _sample_repository() -> AnchorRepository | None:
-    common_root = _workspace_root() / "assets" / "templates" / "common"
-    if (common_root / "manifest.json").exists():
-        return AnchorRepository.load(common_root)
-    discovered = AnchorRepository.discover(_workspace_root() / "assets" / "templates")
-    return discovered[0] if discovered else None
-
-
-def _sample_calibration_profile(instance_id: str = "mumu-0") -> CalibrationProfile:
-    return CalibrationProfile(
-        profile_id="sample.default",
-        instance_id=instance_id,
-        emulator_name="mumu",
-        scale_x=1.0,
-        scale_y=1.0,
-        offset_x=0,
-        offset_y=0,
-        crop_region=(0, 0, 1920, 1080),
-        anchor_overrides={"common.close_button": {"confidence_threshold": 0.90}},
-    )
-
-
-def _sample_replay_script() -> ReplayScript:
-    return ReplayScript(
-        script_id="sample.recording",
-        name="Sample Calibration Walkthrough",
-        version="0.1.0",
-        actions=[
-            RecordingAction(
-                action_id="action-1",
-                action_type=RecordingActionType.CAPTURE,
-                target="preview",
-                payload={"note": "capture current preview"},
-            ),
-            RecordingAction(
-                action_id="action-2",
-                action_type=RecordingActionType.ANNOTATE,
-                target="common.close_button",
-                payload={"label": "close button anchor"},
-            ),
-        ],
-    )
-
-
-def _sample_match_result(
-    repository: AnchorRepository | None,
-    *,
-    source_image: str = "preview://sample",
-) -> TemplateMatchResult | None:
-    if repository is None:
-        return None
-    anchors = repository.list_anchors()
-    if not anchors:
-        return None
-    anchor = anchors[0]
-    return build_match_result(
-        source_image=source_image,
-        candidates=[
-            VisionMatch(
-                anchor_id=anchor.anchor_id,
-                confidence=0.94,
-                bbox=(30, 24, 160, 56),
-                source_image=source_image,
-            )
-        ],
-        expected_anchor=anchor,
-        threshold=anchor.confidence_threshold,
-        message="Sample anchor detected",
-    )
 
 
 def _load_stylesheet() -> str:
@@ -108,6 +27,7 @@ def _parse_point(value: str) -> tuple[int, int]:
 def launch_placeholder_gui() -> int:
     try:
         from PySide6.QtCore import Qt
+        from PySide6.QtGui import QPixmap
         from PySide6.QtWidgets import (
             QApplication,
             QFormLayout,
@@ -133,7 +53,6 @@ def launch_placeholder_gui() -> int:
 
     bridge = OperatorConsoleRuntimeBridge(workspace_root=_workspace_root())
     bridge.refresh()
-    repository = _sample_repository()
     app = QApplication([])
     stylesheet = _load_stylesheet()
     if stylesheet:
@@ -143,12 +62,12 @@ def launch_placeholder_gui() -> int:
         def __init__(self, runtime_bridge: OperatorConsoleRuntimeBridge) -> None:
             super().__init__()
             self.setWindowTitle("RoxAutoScript Operator Console")
-            self.resize(1560, 940)
+            self.resize(1560, 980)
             self._bridge = runtime_bridge
-            self._repository = repository
             self._state = build_operator_console_state(
                 ConsoleSnapshot(adb_path="not found", instance_count=0, packages={}, instances=[]),
-                build_vision_workspace_snapshot(source_image="preview://sample"),
+                self._bridge.snapshot(),
+                self._bridge.vision_tooling_state(""),
             )
 
             central = QWidget()
@@ -173,7 +92,7 @@ def launch_placeholder_gui() -> int:
             title_col = QVBoxLayout()
             title = QLabel("ROX operator console")
             title.setObjectName("titleLabel")
-            subtitle = QLabel("Runtime-backed multi-instance operator tooling.")
+            subtitle = QLabel("Live runtime and vision tooling operator surface.")
             subtitle.setObjectName("subtitleLabel")
             title_col.addWidget(title)
             title_col.addWidget(subtitle)
@@ -371,6 +290,7 @@ def launch_placeholder_gui() -> int:
         def _build_observability_panel(self) -> QWidget:
             tabs = QTabWidget()
             tabs.addTab(self._build_preview_tab(Qt), "Preview")
+            tabs.addTab(self._text_tab("readiness_header", "readiness_box"), "Readiness")
             tabs.addTab(self._text_tab("calibration_header", "calibration_box"), "Calibration")
             tabs.addTab(self._text_tab("recording_header", "recording_box"), "Recording")
             tabs.addTab(self._text_tab("anchor_header", "anchor_box"), "Anchors")
@@ -387,10 +307,10 @@ def launch_placeholder_gui() -> int:
             self.preview_visual.setObjectName("previewFrame")
             self.preview_visual.setAlignment(qt.AlignmentFlag.AlignCenter)
             self.preview_visual.setWordWrap(True)
-            self.preview_visual.setMinimumHeight(150)
+            self.preview_visual.setMinimumHeight(220)
             self.preview_context_box = QPlainTextEdit()
             self.preview_context_box.setReadOnly(True)
-            self.preview_context_box.setMaximumHeight(110)
+            self.preview_context_box.setMaximumHeight(150)
             self.preview_box = QPlainTextEdit()
             self.preview_box.setReadOnly(True)
             layout.addWidget(self.preview_header)
@@ -424,7 +344,11 @@ def launch_placeholder_gui() -> int:
             self._rebuild_state(selected_instance_id=self._state.selected_instance_id)
 
         def _request_global_emergency_stop(self) -> None:
-            confirmed = QMessageBox.question(self, "Emergency Stop", "Request a global emergency stop for every instance?")
+            confirmed = QMessageBox.question(
+                self,
+                "Emergency Stop",
+                "Request a global emergency stop for every instance?",
+            )
             if confirmed != QMessageBox.StandardButton.Yes:
                 return
             self._bridge.dispatch_manual_action("emergency_stop")
@@ -474,62 +398,21 @@ def launch_placeholder_gui() -> int:
             self._rebuild_state(selected_instance_id=self._state.selected_instance_id)
 
         def _resolve_selected_instance_id(self, selected_instance_id: str) -> str:
-            ids = {instance.instance_id for instance in self._snapshot.instances}
+            ids = {instance.instance_id for instance in self._console_snapshot.instances}
             if selected_instance_id and selected_instance_id in ids:
                 return selected_instance_id
-            return self._snapshot.instances[0].instance_id if self._snapshot.instances else ""
-
-        def _preview_context_lines(self, selected_instance_id: str) -> list[str]:
-            context = self._bridge.get_runtime_context(selected_instance_id) if selected_instance_id else None
-            if context is None:
-                return ["Runtime context unavailable."]
-            lines = [
-                f"Instance: {context.instance_id}",
-                f"Queue depth: {context.queue_depth}",
-                f"Stop requested: {context.stop_requested}",
-                f"Health check: {context.health_check_ok}",
-            ]
-            if context.profile_binding is not None:
-                lines.append(f"Profile: {context.profile_binding.display_name}")
-            if context.active_task_id:
-                lines.append(f"Active task: {context.active_task_id}")
-            if context.preview_frame is not None:
-                lines.append(f"Preview frame: {context.preview_frame.image_path}")
-            if context.failure_snapshot is not None:
-                lines.append(f"Failure snapshot: {context.failure_snapshot.snapshot_id}")
-            return lines
-
-        def _build_vision_snapshot(self, selected_instance_id: str):
-            context = self._bridge.get_runtime_context(selected_instance_id) if selected_instance_id else None
-            source_image = "preview://sample"
-            failure_message = ""
-            if context is not None:
-                if context.preview_frame is not None:
-                    source_image = context.preview_frame.image_path
-                if context.failure_snapshot is not None:
-                    source_image = context.failure_snapshot.screenshot_path or source_image
-                    failure_message = str(context.failure_snapshot.metadata.get("message") or context.failure_snapshot.reason.value)
-            return build_vision_workspace_snapshot(
-                repository=self._repository,
-                calibration_profile=_sample_calibration_profile(selected_instance_id or "mumu-0"),
-                replay_script=_sample_replay_script(),
-                match_result=_sample_match_result(self._repository, source_image=source_image),
-                source_image=source_image,
-                failure_message=failure_message,
-                preview_context_lines=self._preview_context_lines(selected_instance_id),
-            )
+            return self._console_snapshot.instances[0].instance_id if self._console_snapshot.instances else ""
 
         def _rebuild_state(self, *, selected_instance_id: str) -> None:
-            self._snapshot = self._bridge.snapshot()
+            self._runtime_snapshot = self._bridge.snapshot()
+            self._console_snapshot = self._bridge.console_snapshot()
             resolved = self._resolve_selected_instance_id(selected_instance_id)
-            self._vision_snapshot = self._build_vision_snapshot(resolved)
+            self._vision_state = self._bridge.vision_tooling_state(resolved)
             self._state = build_operator_console_state(
-                self._snapshot,
-                self._vision_snapshot,
-                queue_items=self._bridge.queue_items(),
-                events=self._bridge.events(),
+                self._console_snapshot,
+                self._runtime_snapshot,
+                self._vision_state,
                 selected_instance_id=resolved,
-                runtime_contexts=self._bridge.runtime_contexts(),
                 global_emergency_stop_active=self._bridge.global_emergency_stop_active(),
             )
             self._render_state()
@@ -537,10 +420,16 @@ def launch_placeholder_gui() -> int:
         def _render_state(self) -> None:
             summary = self._state.summary
             features = ", ".join(self._state.snapshot.available_runtime_features) or "none"
+            workspace = self._state.vision.workspace
+            readiness = self._state.vision.readiness
+
             self.summary_label.setText(summary.global_status_message)
             self.features_label.setText(f"ADB: {self._state.snapshot.adb_path} | Optional packages: {features}")
             self.template_summary_label.setText(
-                f"Template repository: {self._state.vision.anchors.display_name} ({self._state.vision.anchors.repository_id or 'untracked'})"
+                "Templates: "
+                f"{workspace.selected_repository_id or 'none'} | "
+                f"repos={workspace.repository_count} | "
+                f"blocking={readiness.blocking_count if readiness is not None else 0}"
             )
             self.metric_total.setText(str(summary.total_instances))
             self.metric_ready.setText(str(summary.ready_count))
@@ -567,11 +456,17 @@ def launch_placeholder_gui() -> int:
             self.instance_list.clear()
             selected_row = -1
             for index, row in enumerate(self._state.instance_rows):
-                lines = [f"{row.label} [{row.status}]", f"ADB {row.subtitle}", f"Queue {row.queue_depth} | {row.health_summary}"]
+                lines = [
+                    f"{row.label} [{row.status}]",
+                    f"ADB {row.subtitle}",
+                    f"Queue {row.queue_depth} | {row.health_summary}",
+                ]
                 if row.profile_summary:
                     lines.append(f"Profile {row.profile_summary}")
                 if row.active_task_id:
                     lines.append(f"Active {row.active_task_id}")
+                if row.preview_summary:
+                    lines.append(f"Preview {row.preview_summary}")
                 if row.warning:
                     lines.append(f"Warning {row.warning}")
                 item = QListWidgetItem("\n".join(lines))
@@ -593,13 +488,25 @@ def launch_placeholder_gui() -> int:
             self.detail_queue.setText(str(detail.queue_depth))
             self.detail_seen.setText(detail.last_seen_at or "n/a")
             self.detail_adb.setText(detail.adb_serial or "n/a")
-            profile_line = next((line.split(": ", maxsplit=1)[1] for line in detail.metadata_lines if line.startswith("profile_binding: ")), "n/a")
+            profile_line = next(
+                (
+                    line.split(": ", maxsplit=1)[1]
+                    for line in detail.metadata_lines
+                    if line.startswith("profile_binding: ")
+                ),
+                "n/a",
+            )
             self.detail_profile.setText(profile_line)
-            self.instance_meta.setPlainText("\n".join(detail.metadata_lines) if detail.metadata_lines else "No runtime metadata available.")
+            self.instance_meta.setPlainText(
+                "\n".join(detail.metadata_lines) if detail.metadata_lines else "No runtime metadata available."
+            )
 
         def _render_queue(self) -> None:
             queue = self._state.queue
-            self.queue_summary_label.setText(f"Queued items for {self._state.detail.label}: {queue.total_count}")
+            self.queue_summary_label.setText(
+                f"Queued items for {self._state.detail.label}: {queue.total_count} "
+                f"(runtime total {len(self._state.runtime_snapshot.queue_items)})"
+            )
             if not queue.items:
                 self.queue_output.setPlainText(queue.empty_message)
                 return
@@ -622,7 +529,9 @@ def launch_placeholder_gui() -> int:
 
         def _render_logs(self) -> None:
             logs = self._state.logs
-            self.log_summary_label.setText(f"Log entries: {logs.filtered_count}/{logs.total_count} | failures: {logs.failure_count}")
+            self.log_summary_label.setText(
+                f"Log entries: {logs.filtered_count}/{logs.total_count} | failures: {logs.failure_count}"
+            )
             self.log_latest_label.setText(f"Latest: {logs.latest_summary}")
             if not logs.entries:
                 self.log_output.setPlainText(logs.empty_message)
@@ -646,7 +555,9 @@ def launch_placeholder_gui() -> int:
         def _render_controls(self) -> None:
             controls = self._state.manual_controls
             self.manual_banner_label.setText(controls.banner)
-            self.manual_last_command_label.setText(f"Last command [{controls.last_command_status}]: {controls.last_command_summary}")
+            self.manual_last_command_label.setText(
+                f"Last command [{controls.last_command_status}]: {controls.last_command_summary}"
+            )
             enabled = {button.action_key: button.enabled for button in controls.available_actions}
             self.start_queue_button.setEnabled(enabled.get("start_queue", False))
             self.pause_button.setEnabled(enabled.get("pause", False))
@@ -658,42 +569,229 @@ def launch_placeholder_gui() -> int:
             self.global_emergency_button.setEnabled(enabled.get("emergency_stop", True))
 
         def _render_vision(self) -> None:
-            preview = self._state.vision.preview
+            selected = self._state.selected_instance_snapshot
+            vision = self._state.vision
+            readiness = vision.readiness
+            workspace = vision.workspace
+            preview_path = self._preview_path()
+
             self.preview_header.setText(
-                f"Status: {preview.match_status} | Confidence: {preview.confidence:.3f} | Selected anchor: {preview.selected_anchor_id or 'none'}"
+                f"Match: {vision.match.status.value} | "
+                f"Anchor: {vision.anchors.selected_anchor_id or 'none'} | "
+                f"Repository: {workspace.selected_repository_id or 'none'}"
             )
-            preview_path = preview.source_image or "n/a"
-            path = Path(preview_path) if "://" not in preview_path else None
-            available = path is not None and path.exists()
-            self.preview_visual.setText(f"{'Preview source available' if available else 'Preview source not materialized yet'}\n{preview_path}")
-            self.preview_context_box.setPlainText("\n".join(preview.context_lines) if preview.context_lines else "No runtime preview context.")
+            self._render_preview_visual(preview_path, QPixmap, Qt)
+            self.preview_context_box.setPlainText(
+                "\n".join(self._preview_context_lines()) or "No runtime preview context."
+            )
             self.preview_box.setPlainText(
-                "\n".join([f"Repository: {preview.repository_id or 'none'}", f"Message: {preview.message}", "Candidates:", *(preview.candidate_summaries or ["  none"])])
+                "\n".join(
+                    [
+                        f"Source image: {preview_path or 'n/a'}",
+                        f"Match message: {vision.match.message or 'n/a'}",
+                        f"Failure message: {vision.failure.message or 'n/a'}",
+                        f"Matched candidate: {vision.match.matched_candidate_summary or 'no candidate'}",
+                        f"Best candidate: {vision.match.best_candidate_summary or 'no candidate'}",
+                    ]
+                )
             )
 
-            calibration = self._state.vision.calibration
-            self.calibration_header.setText(f"Profile: {calibration.profile_id} | Instance: {calibration.instance_id or 'n/a'} | Scale: {calibration.scale_summary}")
+            if readiness is None:
+                self.readiness_header.setText("Workspace readiness unavailable.")
+                self.readiness_box.setPlainText("Asset inventory or template readiness report unavailable.")
+            else:
+                self.readiness_header.setText(
+                    f"Workspace: {workspace.templates_root} | "
+                    f"repos={workspace.repository_count} | "
+                    f"blocking={readiness.blocking_count}"
+                )
+                dependency_lines = [
+                    (
+                        f"{item.asset_id} | pack={item.pack_id} | anchor={item.anchor_id or 'n/a'} | "
+                        f"status={item.readiness_status.value} | inventory={item.inventory_status} | "
+                        f"mismatch={'yes' if item.inventory_mismatch else 'no'}"
+                    )
+                    for item in readiness.template_dependencies
+                ]
+                self.readiness_box.setPlainText(
+                    "\n".join(
+                        [
+                            f"ready={readiness.ready_count}",
+                            f"placeholder={readiness.placeholder_count}",
+                            f"missing={readiness.missing_count}",
+                            f"invalid={readiness.invalid_count}",
+                            f"inventory_mismatch={readiness.inventory_mismatch_count}",
+                            "Dependencies:",
+                            *(dependency_lines or ["none"]),
+                        ]
+                    )
+                )
+
+            calibration = vision.calibration
+            self.calibration_header.setText(
+                f"Profile: {calibration.profile_id or 'n/a'} | "
+                f"Instance: {calibration.instance_id or 'n/a'} | "
+                f"Scale: {calibration.scale_summary or '1.00 x 1.00'}"
+            )
             self.calibration_box.setPlainText(
-                "\n".join([f"Emulator: {calibration.emulator_name}", f"Offset: {calibration.offset_summary}", f"Crop: {calibration.crop_region}", "Anchors:", *([f"  {row.anchor_id} | threshold={row.confidence_threshold:.2f} | region={row.match_region} | override={row.override_summary or 'none'}" for row in calibration.anchor_rows] or ["  none"])])
+                "\n".join(
+                    [
+                        f"Emulator: {calibration.emulator_name or 'n/a'}",
+                        f"Offset: {calibration.offset_summary or '0, 0'}",
+                        f"Crop: {calibration.crop_summary or 'n/a'}",
+                        f"Override count: {calibration.override_count}",
+                        "Anchors:",
+                        *(
+                            [
+                                f"  {row.anchor_id} | threshold={row.effective_confidence_threshold:.2f} | "
+                                f"region={row.effective_match_region or row.match_region} | "
+                                f"issues={','.join(row.issue_codes) or 'none'}"
+                                for row in calibration.anchors
+                            ]
+                            or ["  none"]
+                        ),
+                    ]
+                )
             )
 
-            recording = self._state.vision.recording
-            self.recording_header.setText(f"Script: {recording.script_id} | Actions: {recording.action_count} | Version: {recording.version}")
+            replay = vision.replay
+            self.recording_header.setText(
+                f"Script: {replay.script_id or 'n/a'} | Actions: {replay.total_actions} | Version: {replay.version}"
+            )
             self.recording_box.setPlainText(
-                "\n".join([f"Name: {recording.name}", "Actions:", *([f"  {row.action_id} | {row.action_type} | target={row.target or 'n/a'} | payload={row.payload_summary} | at={row.occurred_at}" for row in recording.action_rows] or ["  none"])])
+                "\n".join(
+                    [
+                        f"Name: {replay.script_name or 'No replay script'}",
+                        "Actions:",
+                        *(
+                            [
+                                f"  {row.action_id} | {row.action_type.value} | "
+                                f"label={row.label} | payload={row.payload_summary or 'n/a'} | "
+                                f"selected={'yes' if row.is_selected else 'no'}"
+                                for row in replay.actions
+                            ]
+                            or ["  none"]
+                        ),
+                    ]
+                )
             )
 
-            anchors = self._state.vision.anchors
-            self.anchor_header.setText(f"Repository: {anchors.display_name} | Version: {anchors.version} | Selected: {anchors.selected_anchor_id or 'none'}")
+            anchors = vision.anchors
+            self.anchor_header.setText(
+                f"Repository: {anchors.display_name or 'none'} | "
+                f"Version: {anchors.version or 'n/a'} | "
+                f"Selected: {anchors.selected_anchor_id or 'none'}"
+            )
             self.anchor_box.setPlainText(
-                "\n".join([f"Selected summary: {anchors.selected_anchor_summary or 'n/a'}", "Anchors:", *([f"  {row.anchor_id} | {row.label} | template={row.template_path} | threshold={row.confidence_threshold:.2f} | region={row.match_region}" for row in anchors.anchor_rows] or ["  none"])])
+                "\n".join(
+                    [
+                        f"Selected summary: {anchors.selected_anchor_summary or 'n/a'}",
+                        "Anchors:",
+                        *(
+                            [
+                                f"  {row.anchor_id} | {row.label} | template={row.template_path} | "
+                                f"resolved={row.resolved_template_path} | exists={'yes' if row.asset_exists else 'no'} | "
+                                f"threshold={row.effective_confidence_threshold:.2f}"
+                                for row in anchors.anchors
+                            ]
+                            or ["  none"]
+                        ),
+                    ]
+                )
             )
 
-            failure = self._state.vision.failure
-            self.failure_header.setText(f"Status: {failure.status} | Source: {failure.source_image or 'n/a'}")
-            self.failure_box.setPlainText(
-                "\n".join([f"Message: {failure.message}", f"Best candidate: {failure.best_candidate_summary}", "Candidates:", *(failure.candidate_summaries or ["  none"])])
+            failure = vision.failure
+            self.failure_header.setText(
+                f"Failure: {failure.failure_id or 'none'} | "
+                f"Status: {failure.status.value} | "
+                f"Instance: {failure.instance_id or (selected.instance_id if selected is not None else 'n/a')}"
             )
+            self.failure_box.setPlainText(
+                "\n".join(
+                    [
+                        f"Screenshot: {failure.screenshot_path or 'n/a'}",
+                        f"Preview image: {failure.preview_image_path or 'n/a'}",
+                        f"Message: {failure.message or 'n/a'}",
+                        f"Best candidate: {failure.best_candidate_summary or 'no candidate'}",
+                        "Candidates:",
+                        *(
+                            [
+                                f"  {candidate.anchor_id} | confidence={candidate.confidence:.3f} | bbox={candidate.bbox}"
+                                for candidate in failure.candidates
+                            ]
+                            or ["  none"]
+                        ),
+                    ]
+                )
+            )
+
+        def _preview_path(self) -> str:
+            selected = self._state.selected_instance_snapshot
+            if selected is not None and selected.preview_frame is not None:
+                return selected.preview_frame.image_path
+            if self._state.vision.capture.selected_artifact is not None:
+                return self._state.vision.capture.selected_artifact.image_path
+            if self._state.vision.failure.preview_image_path:
+                return self._state.vision.failure.preview_image_path
+            if self._state.vision.failure.screenshot_path:
+                return self._state.vision.failure.screenshot_path
+            return self._state.vision.match.source_image
+
+        def _render_preview_visual(self, preview_path: str, pixmap_class, qt) -> None:
+            path = Path(preview_path) if preview_path and "://" not in preview_path else None
+            if path is not None and path.exists():
+                pixmap = pixmap_class(str(path))
+                if not pixmap.isNull():
+                    scaled = pixmap.scaled(
+                        self.preview_visual.width() or 520,
+                        self.preview_visual.height() or 220,
+                        qt.AspectRatioMode.KeepAspectRatio,
+                        qt.TransformationMode.SmoothTransformation,
+                    )
+                    self.preview_visual.setPixmap(scaled)
+                    self.preview_visual.setText("")
+                    return
+            self.preview_visual.setPixmap(pixmap_class())
+            availability = "Preview source available" if path is not None and path.exists() else "Preview source not materialized yet"
+            self.preview_visual.setText(f"{availability}\n{preview_path or 'n/a'}")
+
+        def _preview_context_lines(self) -> list[str]:
+            selected = self._state.selected_instance_snapshot
+            vision = self._state.vision
+            lines: list[str] = []
+            if selected is None:
+                return ["Runtime context unavailable."]
+            context = selected.context
+            lines.extend(
+                [
+                    f"Instance: {selected.instance_id}",
+                    f"Runtime status: {selected.instance.status.value}",
+                    f"Queue depth: {selected.queue_depth}",
+                ]
+            )
+            if context is not None:
+                lines.append(f"Stop requested: {context.stop_requested}")
+                lines.append(f"Health check: {context.health_check_ok}")
+                if context.active_task_id:
+                    lines.append(f"Active task: {context.active_task_id}")
+                if context.active_run_id:
+                    lines.append(f"Active run: {context.active_run_id}")
+                if context.profile_binding is not None:
+                    lines.append(
+                        f"Profile: {context.profile_binding.display_name} [{context.profile_binding.profile_id}]"
+                    )
+                if context.preview_frame is not None:
+                    lines.append(f"Preview frame: {context.preview_frame.image_path}")
+                    lines.append(f"Preview source: {context.preview_frame.source}")
+                if context.failure_snapshot is not None:
+                    lines.append(f"Failure snapshot: {context.failure_snapshot.snapshot_id}")
+                    lines.append(f"Failure reason: {context.failure_snapshot.reason.value}")
+            readiness = vision.readiness
+            if readiness is not None:
+                lines.append(f"Workspace blockers: {readiness.blocking_count}")
+            if vision.anchors.selected_anchor_summary:
+                lines.append(f"Anchor: {vision.anchors.selected_anchor_summary}")
+            return lines
 
     window = MainWindow(bridge)
     window.show()
