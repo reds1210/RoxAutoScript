@@ -11,8 +11,14 @@ from roxauto.tasks import (
     TaskAssetRecord,
     TaskAssetStatus,
     TaskFixtureProfile,
+    TaskGapDomain,
     TaskPackCatalog,
     TaskPackCatalogEntry,
+    TaskReadinessCollection,
+    TaskReadinessReport,
+    TaskReadinessRequirement,
+    TaskReadinessState,
+    TaskRuntimeBuilderInput,
     TaskStepBlueprint,
 )
 
@@ -125,3 +131,63 @@ class TaskStepBlueprintTests(unittest.TestCase):
 
         self.assertEqual(payload["step_id"], "verify_claim_affordance")
         self.assertEqual(payload["action"], "vision_verify")
+
+
+class TaskReadinessRequirementTests(unittest.TestCase):
+    def test_round_trips_requirement(self) -> None:
+        requirement = TaskReadinessRequirement(
+            requirement_id="runtime.daily_ui.dispatch_bridge",
+            domain=TaskGapDomain.RUNTIME,
+            summary="Runtime bridge is required.",
+            satisfied=False,
+            blocking=True,
+        )
+
+        restored = TaskReadinessRequirement.from_dict(requirement.to_dict())
+
+        self.assertEqual(restored.domain, TaskGapDomain.RUNTIME)
+        self.assertFalse(restored.satisfied)
+        self.assertTrue(restored.blocking)
+
+
+class TaskReadinessReportTests(unittest.TestCase):
+    def test_round_trips_report_collection(self) -> None:
+        report = TaskReadinessReport(
+            task_id="daily_ui.claim_rewards",
+            pack_id="daily_ui",
+            builder_readiness_state=TaskReadinessState.READY,
+            implementation_readiness_state=TaskReadinessState.BLOCKED_BY_RUNTIME,
+            implementation_requirements=[
+                TaskReadinessRequirement(
+                    requirement_id="runtime.daily_ui.dispatch_bridge",
+                    domain=TaskGapDomain.RUNTIME,
+                    summary="Runtime bridge required.",
+                    satisfied=False,
+                    blocking=True,
+                )
+            ],
+        )
+        collection = TaskReadinessCollection(
+            report_id="pre_gate_3_task_readiness",
+            version="0.1.0",
+            reports=[report],
+        )
+
+        restored = TaskReadinessCollection.from_json(collection.to_json())
+
+        self.assertEqual(restored.reports[0].implementation_readiness_state, TaskReadinessState.BLOCKED_BY_RUNTIME)
+
+
+class TaskRuntimeBuilderInputTests(unittest.TestCase):
+    def test_round_trips_builder_input(self) -> None:
+        builder_input = TaskRuntimeBuilderInput(
+            task_id="odin.preset_entry",
+            pack_id="odin",
+            manifest_path="packs/odin/odin_preset_entry.task.json",
+            calibration_requirement_ids=["calibration.odin.idle_state_profile"],
+        )
+
+        restored = TaskRuntimeBuilderInput.from_dict(builder_input.to_dict())
+
+        self.assertEqual(restored.task_id, "odin.preset_entry")
+        self.assertEqual(restored.calibration_requirement_ids, ["calibration.odin.idle_state_profile"])

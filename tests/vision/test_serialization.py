@@ -5,12 +5,16 @@ from datetime import datetime, timezone
 
 import tests._bootstrap  # noqa: F401
 from roxauto.vision import (
+    CalibrationOverrideResolution,
     CalibrationProfile,
     CaptureArtifact,
     CaptureArtifactKind,
     CaptureSession,
     CropRegion,
     FailureInspectionRecord,
+    ImageInspectionState,
+    InspectionOverlay,
+    InspectionOverlayKind,
     MatchStatus,
     RecordingAction,
     RecordingActionType,
@@ -142,4 +146,72 @@ class VisionSerializationTests(unittest.TestCase):
         self.assertEqual(restored.failure_id, inspection.failure_id)
         self.assertEqual(restored.best_candidate().anchor_id, "common.close_button")
         self.assertEqual(restored.to_dict(), inspection.to_dict())
+
+    def test_image_inspection_state_roundtrip(self) -> None:
+        inspection = ImageInspectionState(
+            inspection_id="inspection-1",
+            image_path="captures/source.png",
+            source_image="captures/source.png",
+            selected_overlay_id="overlay-1",
+            selected_overlay=InspectionOverlay(
+                overlay_id="overlay-1",
+                kind=InspectionOverlayKind.MATCHED_ANCHOR,
+                label="common.close_button",
+                region=CropRegion(x=10, y=20, width=30, height=40),
+                confidence=0.97,
+                is_match=True,
+                metadata={"source": "selected"},
+            ),
+            overlays=[
+                InspectionOverlay(
+                    overlay_id="overlay-1",
+                    kind=InspectionOverlayKind.MATCHED_ANCHOR,
+                    label="common.close_button",
+                    region=CropRegion(x=10, y=20, width=30, height=40),
+                    confidence=0.97,
+                    is_match=True,
+                ),
+                InspectionOverlay(
+                    overlay_id="overlay-2",
+                    kind=InspectionOverlayKind.EXPECTED_ANCHOR,
+                    label="expected",
+                    region=CropRegion(x=11, y=22, width=33, height=44),
+                    is_expected=True,
+                ),
+            ],
+            overlay_count=2,
+            selected_overlay_summary="common.close_button | kind=matched_anchor",
+            metadata={"source": "test"},
+        )
+
+        restored = ImageInspectionState.from_dict(inspection.to_dict())
+
+        self.assertEqual(restored.inspection_id, inspection.inspection_id)
+        self.assertEqual(restored.selected_overlay.kind, InspectionOverlayKind.MATCHED_ANCHOR)
+        self.assertEqual(restored.overlays[1].kind, InspectionOverlayKind.EXPECTED_ANCHOR)
+        self.assertEqual(restored.to_dict(), inspection.to_dict())
+
+    def test_calibration_override_resolution_roundtrip(self) -> None:
+        resolution = CalibrationOverrideResolution(
+            anchor_id="common.close_button",
+            profile_id="profile-1",
+            base_confidence_threshold=0.88,
+            effective_confidence_threshold=0.96,
+            base_match_region=(1, 2, 3, 4),
+            effective_match_region=(5, 6, 7, 8),
+            capture_crop_region=CropRegion(x=10, y=20, width=30, height=40),
+            scale_x=1.2,
+            scale_y=1.3,
+            offset_x=14,
+            offset_y=15,
+            override={"confidence_threshold": 0.96},
+            metadata={"source": "test"},
+        )
+
+        restored = CalibrationOverrideResolution.from_dict(resolution.to_dict())
+
+        self.assertEqual(restored.anchor_id, resolution.anchor_id)
+        self.assertEqual(restored.effective_match_region, resolution.effective_match_region)
+        self.assertEqual(restored.capture_crop_region.to_tuple(), (10, 20, 30, 40))
+        self.assertEqual(restored.to_dict(), resolution.to_dict())
 

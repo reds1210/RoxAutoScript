@@ -42,6 +42,9 @@
   ],
   "metadata": {
     "phase": "pre_gate_3",
+    "runtime_requirement_ids": [
+      "runtime.daily_ui.dispatch_bridge"
+    ],
     "task_pack_owner": "engine_d"
   },
   "notes": "Specification-only blueprint for a future fixed-UI reward claim task.",

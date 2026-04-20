@@ -2,7 +2,7 @@
 
 ## Scope
 
-- Extended the pre-Gate-3 task foundations with richer schema, pack catalogs, asset inventory, and pack-specific loaders.
+- Extended the pre-Gate-3 task foundations with typed readiness schema, runtime-builder input, and readiness evaluation.
 - Kept the work at the foundations layer only; no gameplay automation handlers were added.
 
 ## Changed Files
@@ -26,6 +26,7 @@
 - `src/roxauto/tasks/foundations/packs/odin/odin_preset_entry.task.json`
 - `src/roxauto/tasks/foundations/inventory.json`
 - `src/roxauto/tasks/foundations/asset_inventory.json`
+- `src/roxauto/tasks/foundations/readiness_report.json`
 - `tests/tasks/test_models.py`
 - `tests/tasks/test_catalog.py`
 - `tests/tasks/test_inventory_fixtures.py`
@@ -37,12 +38,26 @@
 - `python -m unittest discover -s tests/tasks -t .`
 - `python -m unittest discover -s tests -t .`
 
+## What shipped
+
+- Added typed readiness schema under `src/roxauto/tasks/models.py`: `TaskReadinessState`, `TaskGapDomain`, `TaskReadinessRequirement`, `TaskReadinessReport`, `TaskReadinessCollection`, and `TaskRuntimeBuilderInput`.
+- Added repository-side readiness evaluators: `build_runtime_builder_input()`, `build_runtime_builder_inputs()`, `evaluate_task_readiness()`, `evaluate_task_readinesses()`, and `load_readiness_report()`.
+- Curated `inventory.json` now carries `asset_requirement_ids`, `runtime_requirement_ids`, and `calibration_requirement_ids`, which lets later task-implementation work decide whether a task is blocked by asset, runtime, calibration, or foundation.
+- Added `readiness_report.json` as a serialized snapshot of the current pre-Gate-3 state.
+- Current readiness states are:
+  - `daily_ui.claim_rewards`: builder `ready`, implementation `blocked_by_runtime`
+  - `daily_ui.guild_check_in`: builder `blocked_by_asset`, implementation `blocked_by_asset`
+  - `odin.preset_entry`: builder `ready`, implementation `blocked_by_calibration`
+- Placeholder anchors and planned goldens remain visible as warning requirements instead of being mixed into runtime or calibration blockers.
+
 ## Blockers
 
 - Still foundations-only; future task implementations depend on Gate 3 runtime and GUI integration.
-- `daily_ui.guild_check_in_button` is now tracked as a placeholder template in the asset inventory; it still needs curated captures before any runtime task should treat it as ready.
+- `daily_ui.claim_rewards` still needs a production runtime action-dispatch bridge.
+- `daily_ui.guild_check_in` still needs a curated guild check-in template asset beyond placeholder scaffolding.
+- `odin.preset_entry` still needs an Odin idle-state calibration profile.
 
 ## Next Step
 
-- Keep the pack catalogs and asset inventory as the source of truth for future `daily_ui` and `odin` implementations.
-- When Gate 3 is complete, bind each blueprint to runtime `TaskSpec` construction and replace placeholder/planned assets with curated captures.
+- Keep task readiness output as the source of truth for future `daily_ui` and `odin` implementations.
+- Once the runtime bridge, curated guild asset, and Odin calibration profile are available, task implementation work can consume `TaskRuntimeBuilderInput` and `TaskReadinessReport` directly.

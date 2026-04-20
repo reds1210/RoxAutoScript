@@ -12,6 +12,7 @@ from roxauto.vision import (
     AnchorRepository,
     CalibrationProfile,
     CaptureArtifactKind,
+    InspectionOverlayKind,
     MatchStatus,
     RecordingAction,
     RecordingActionType,
@@ -103,6 +104,9 @@ class VisionToolingTests(unittest.TestCase):
         self.assertIn("missing_template_asset", inspector.selected_anchor.issue_codes)
         self.assertFalse(inspector.selected_anchor.asset_exists)
         self.assertIn("threshold=0.96", inspector.selected_anchor_summary)
+        self.assertEqual(inspector.selected_anchor.calibration_resolution.profile_id, "profile-1")
+        self.assertEqual(inspector.selected_overlay.kind, InspectionOverlayKind.EXPECTED_ANCHOR)
+        self.assertEqual(inspector.selected_overlay.region.to_tuple(), (5, 6, 7, 8))
 
     def test_capture_and_failure_inspectors_expose_selected_items(self) -> None:
         session = create_capture_session(
@@ -162,11 +166,15 @@ class VisionToolingTests(unittest.TestCase):
         self.assertEqual(capture.artifact_kind_counts["screenshot"], 1)
         self.assertEqual(capture.artifact_kind_counts["crop"], 1)
         self.assertIn("crop", capture.selected_artifact_summary)
+        self.assertEqual(capture.source_inspection.selected_overlay.kind, InspectionOverlayKind.CROP_REGION)
+        self.assertEqual(capture.selected_artifact_inspection.selected_overlay.kind, InspectionOverlayKind.CROP_REGION)
         self.assertEqual(failure.status, MatchStatus.MATCHED)
         self.assertEqual(failure.selected_anchor.anchor_id, "common.close_button")
         self.assertEqual(failure.best_candidate.anchor_id, "common.close_button")
         self.assertEqual(failure.candidate_count, 1)
         self.assertIn("confidence=0.910", failure.best_candidate_summary)
+        self.assertEqual(failure.calibration_resolution.anchor_id, "common.close_button")
+        self.assertEqual(failure.inspection.selected_overlay.kind, InspectionOverlayKind.MATCHED_ANCHOR)
 
     def test_build_vision_tooling_state_stitches_workspace_capture_replay_and_failure(self) -> None:
         repository = AnchorRepository.load(self.templates_root / "common")
@@ -254,11 +262,17 @@ class VisionToolingTests(unittest.TestCase):
         self.assertEqual(tooling.calibration.selected_anchor.effective_confidence_threshold, 0.95)
         self.assertEqual(tooling.calibration.scale_summary, "1.00 x 1.00")
         self.assertEqual(tooling.calibration.crop_summary, "1,2,3,4")
+        self.assertEqual(tooling.calibration.selected_resolution.effective_confidence_threshold, 0.95)
         self.assertEqual(tooling.capture.selected_artifact.artifact_id, "artifact-1")
         self.assertTrue(tooling.capture.selected_artifact.is_selected)
+        self.assertEqual(tooling.capture.source_inspection.selected_overlay.kind, InspectionOverlayKind.CROP_REGION)
         self.assertEqual(tooling.replay.selected_action_id, "action-2")
         self.assertEqual(tooling.match.matched_candidate.anchor_id, "common.close_button")
         self.assertEqual(tooling.match.candidate_count, 1)
         self.assertIn("confidence=0.960", tooling.match.matched_candidate_summary)
+        self.assertEqual(tooling.match.calibration_resolution.effective_confidence_threshold, 0.95)
+        self.assertEqual(tooling.match.inspection.selected_overlay.kind, InspectionOverlayKind.MATCHED_ANCHOR)
+        self.assertEqual(tooling.preview.selected_overlay.kind, InspectionOverlayKind.MATCHED_ANCHOR)
         self.assertEqual(tooling.failure.best_candidate.anchor_id, "common.close_button")
+        self.assertEqual(tooling.failure.inspection.selected_overlay.kind, InspectionOverlayKind.MATCHED_ANCHOR)
         self.assertEqual(tooling.to_dict()["workspace"]["selected_repository_id"], "common")

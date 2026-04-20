@@ -32,6 +32,15 @@ class CaptureArtifactKind(str, Enum):
     ANNOTATION = "annotation"
 
 
+class InspectionOverlayKind(str, Enum):
+    CROP_REGION = "crop_region"
+    EXPECTED_ANCHOR = "expected_anchor"
+    MATCH_CANDIDATE = "match_candidate"
+    MATCHED_ANCHOR = "matched_anchor"
+    FAILURE_FOCUS = "failure_focus"
+    CAPTURE_ARTIFACT = "capture_artifact"
+
+
 class StopConditionType(str, Enum):
     MANUAL_STOP = "manual_stop"
     TIMEOUT = "timeout"
@@ -180,6 +189,44 @@ class CalibrationProfile:
 
 
 @dataclass(slots=True)
+class CalibrationOverrideResolution:
+    anchor_id: str
+    profile_id: str = ""
+    base_confidence_threshold: float = 0.85
+    effective_confidence_threshold: float = 0.85
+    base_match_region: tuple[int, int, int, int] | None = None
+    effective_match_region: tuple[int, int, int, int] | None = None
+    capture_crop_region: CropRegion | None = None
+    scale_x: float = 1.0
+    scale_y: float = 1.0
+    offset_x: int = 0
+    offset_y: int = 0
+    override: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return to_primitive(asdict(self))
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        return cls(
+            anchor_id=str(data.get("anchor_id", "")),
+            profile_id=str(data.get("profile_id", "")),
+            base_confidence_threshold=float(data.get("base_confidence_threshold", 0.85)),
+            effective_confidence_threshold=float(data.get("effective_confidence_threshold", 0.85)),
+            base_match_region=tuple(data.get("base_match_region")) if data.get("base_match_region") else None,
+            effective_match_region=tuple(data.get("effective_match_region")) if data.get("effective_match_region") else None,
+            capture_crop_region=CropRegion.from_value(data.get("capture_crop_region")),
+            scale_x=float(data.get("scale_x", 1.0)),
+            scale_y=float(data.get("scale_y", 1.0)),
+            offset_x=int(data.get("offset_x", 0)),
+            offset_y=int(data.get("offset_y", 0)),
+            override=dict(data.get("override", {})),
+            metadata=dict(data.get("metadata", {})),
+        )
+
+
+@dataclass(slots=True)
 class CaptureArtifact:
     artifact_id: str
     kind: CaptureArtifactKind
@@ -307,6 +354,88 @@ class ReplayScript:
 
     def append(self, action: RecordingAction) -> None:
         self.actions.append(action)
+
+
+@dataclass(slots=True)
+class InspectionOverlay:
+    overlay_id: str
+    kind: InspectionOverlayKind
+    label: str
+    region: CropRegion | None = None
+    stroke_color: str = "#33c3ff"
+    fill_color: str = ""
+    stroke_style: str = "solid"
+    line_width: int = 2
+    is_selected: bool = False
+    is_expected: bool = False
+    is_match: bool = False
+    is_warning: bool = False
+    confidence: float | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return to_primitive(asdict(self))
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        raw_kind = data.get("kind", InspectionOverlayKind.MATCH_CANDIDATE.value)
+        if isinstance(raw_kind, InspectionOverlayKind):
+            kind = raw_kind
+        else:
+            kind = InspectionOverlayKind(str(raw_kind))
+        return cls(
+            overlay_id=str(data.get("overlay_id", "")),
+            kind=kind,
+            label=str(data.get("label", "")),
+            region=CropRegion.from_value(data.get("region")),
+            stroke_color=str(data.get("stroke_color", "#33c3ff")),
+            fill_color=str(data.get("fill_color", "")),
+            stroke_style=str(data.get("stroke_style", "solid")),
+            line_width=int(data.get("line_width", 2)),
+            is_selected=bool(data.get("is_selected", False)),
+            is_expected=bool(data.get("is_expected", False)),
+            is_match=bool(data.get("is_match", False)),
+            is_warning=bool(data.get("is_warning", False)),
+            confidence=float(data.get("confidence")) if data.get("confidence") is not None else None,
+            metadata=dict(data.get("metadata", {})),
+        )
+
+
+@dataclass(slots=True)
+class ImageInspectionState:
+    inspection_id: str
+    image_path: str
+    source_image: str = ""
+    selected_overlay_id: str = ""
+    selected_overlay: InspectionOverlay | None = None
+    overlays: list[InspectionOverlay] = field(default_factory=list)
+    overlay_count: int = 0
+    selected_overlay_summary: str = ""
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return to_primitive(asdict(self))
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        raw_selected_overlay = data.get("selected_overlay")
+        if isinstance(raw_selected_overlay, InspectionOverlay):
+            selected_overlay = raw_selected_overlay
+        elif isinstance(raw_selected_overlay, dict):
+            selected_overlay = InspectionOverlay.from_dict(raw_selected_overlay)
+        else:
+            selected_overlay = None
+        return cls(
+            inspection_id=str(data.get("inspection_id", "")),
+            image_path=str(data.get("image_path", "")),
+            source_image=str(data.get("source_image", "")),
+            selected_overlay_id=str(data.get("selected_overlay_id", "")),
+            selected_overlay=selected_overlay,
+            overlays=[InspectionOverlay.from_dict(entry) for entry in data.get("overlays", [])],
+            overlay_count=int(data.get("overlay_count", 0)),
+            selected_overlay_summary=str(data.get("selected_overlay_summary", "")),
+            metadata=dict(data.get("metadata", {})),
+        )
 
 
 @dataclass(slots=True)

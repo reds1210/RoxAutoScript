@@ -41,6 +41,9 @@
     }
   ],
   "metadata": {
+    "calibration_requirement_ids": [
+      "calibration.odin.idle_state_profile"
+    ],
     "phase": "pre_gate_3",
     "task_pack_owner": "engine_d"
   },
