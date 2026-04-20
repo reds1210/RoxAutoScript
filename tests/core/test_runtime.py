@@ -23,6 +23,7 @@ from roxauto.core.runtime import (
     step_failure,
     step_success,
 )
+from roxauto.emulator.execution import CommandExecutionStatus
 
 
 class RecordingAuditSink:
@@ -44,6 +45,28 @@ class FakeCommandExecutor:
             "status": "executed",
             "command_type": command.command_type.value,
         }
+
+
+class FakeSelectiveCommandExecutor:
+    def __init__(self, rejected_instance_ids: set[str] | None = None) -> None:
+        self.rejected_instance_ids = rejected_instance_ids or set()
+
+    def execute(self, instance: InstanceState, command: InstanceCommand) -> object:
+        status = (
+            CommandExecutionStatus.REJECTED
+            if instance.instance_id in self.rejected_instance_ids
+            else CommandExecutionStatus.EXECUTED
+        )
+        return type(
+            "CommandExecutionResult",
+            (),
+            {
+                "instance_id": instance.instance_id,
+                "command_type": command.command_type.value,
+                "status": status,
+                "message": status.value,
+            },
+        )()
 
 
 class FakeHealthChecker:
@@ -243,6 +266,8 @@ class RuntimeCoordinatorTests(unittest.TestCase):
         self.assertEqual(dispatch.instance_ids, ["mumu-0"])
         self.assertTrue(context.health_check_ok)
         self.assertIsNotNone(context.preview_frame)
+        self.assertEqual(context.metadata["last_health_check_message"], "healthy")
+        self.assertEqual(context.metadata["last_preview_command_id"], dispatch.command_id)
         self.assertEqual(coordinator.registry.get("mumu-0").status, InstanceStatus.READY)
 
     def test_dispatch_stop_and_emergency_stop_pause_instances(self) -> None:
@@ -274,6 +299,38 @@ class RuntimeCoordinatorTests(unittest.TestCase):
         self.assertIn(("mumu-0", "stop"), executor.executed)
         self.assertIn(("mumu-1", "emergency_stop"), executor.executed)
 
+    def test_dispatch_command_rejects_unknown_instance(self) -> None:
+        coordinator = RuntimeCoordinator(task_runner=TaskRunner())
+        coordinator.sync_instances([self.instance])
+
+        dispatch = coordinator.dispatch_command(
+            InstanceCommand(
+                command_type=InstanceCommandType.STOP,
+                instance_id="missing-instance",
+            )
+        )
+
+        self.assertEqual(dispatch.status, CommandDispatchStatus.REJECTED)
+        self.assertIn("Unknown instance_id", dispatch.message)
+
+    def test_dispatch_command_marks_partial_when_one_target_is_rejected(self) -> None:
+        second = InstanceState(
+            instance_id="mumu-1",
+            label="MuMu 1",
+            adb_serial="127.0.0.1:16448",
+            status=InstanceStatus.READY,
+        )
+        coordinator = RuntimeCoordinator(
+            task_runner=TaskRunner(),
+            command_executor=FakeSelectiveCommandExecutor(rejected_instance_ids={"mumu-1"}),
+        )
+        coordinator.sync_instances([self.instance, second])
+
+        dispatch = coordinator.dispatch_command(InstanceCommand(command_type=InstanceCommandType.EMERGENCY_STOP))
+
+        self.assertEqual(dispatch.status, CommandDispatchStatus.PARTIAL)
+        self.assertEqual(dispatch.instance_ids, ["mumu-0", "mumu-1"])
+
     def test_start_queue_aborts_when_health_check_fails(self) -> None:
         queue = TaskQueue()
         coordinator = RuntimeCoordinator(
@@ -292,5 +349,90 @@ class RuntimeCoordinatorTests(unittest.TestCase):
         self.assertEqual(run.status, TaskRunStatus.ABORTED)
         self.assertIsNotNone(run.stop_condition)
         self.assertEqual(run.stop_condition.kind, StopConditionKind.HEALTH_CHECK_FAILED)
+        self.assertIsNotNone(run.failure_snapshot)
+        self.assertEqual(run.failure_snapshot.reason, FailureSnapshotReason.HEALTH_CHECK_FAILED)
+        self.assertEqual(run.failure_snapshot.metadata["message"], "health check failed")
         self.assertEqual(coordinator.registry.get("mumu-0").status, InstanceStatus.ERROR)
         self.assertIsNotNone(context.failure_snapshot)
+        self.assertEqual(context.metadata["last_health_check_message"], "health check failed")
+
+    def test_start_queue_clears_active_execution_after_completion(self) -> None:
+        coordinator = RuntimeCoordinator(
+            queue=TaskQueue(),
+            task_runner=TaskRunner(),
+            health_checker=FakeHealthChecker(healthy=True),
+            preview_capture=FakePreviewCapture(),
+        )
+        coordinator.sync_instances([self.instance])
+        coordinator.bind_profile(
+            "mumu-0",
+            ProfileBinding(
+                profile_id="main-account",
+                display_name="Main Account",
+                server_name="TW-1",
+                character_name="Knight",
+                allowed_tasks=["task.success"],
+            ),
+        )
+        coordinator.enqueue(QueuedTask(instance_id="mumu-0", spec=self._success_spec(), priority=100))
+
+        result = coordinator.start_queue("mumu-0")
+        context = coordinator.get_runtime_context("mumu-0")
+
+        self.assertEqual(result.runs[0].status, TaskRunStatus.SUCCEEDED)
+        self.assertIsNone(context.active_task_id)
+        self.assertIsNone(context.active_run_id)
+        self.assertNotIn("queue_id", context.metadata)
+        self.assertEqual(context.metadata["last_run_id"], result.runs[0].run_id)
+        self.assertEqual(context.metadata["last_run_status"], TaskRunStatus.SUCCEEDED.value)
+
+    def test_sync_instances_marks_missing_runtime_contexts_disconnected(self) -> None:
+        coordinator = RuntimeCoordinator(task_runner=TaskRunner())
+        coordinator.sync_instances([self.instance])
+
+        coordinator.sync_instances([])
+        contexts = coordinator.list_runtime_contexts()
+
+        self.assertEqual(len(contexts), 1)
+        self.assertEqual(contexts[0].instance_id, "mumu-0")
+        self.assertEqual(contexts[0].status, InstanceStatus.DISCONNECTED)
+
+    def test_refresh_failure_records_runtime_health_snapshot_and_recovery_clears_it(self) -> None:
+        checker = FakeHealthChecker(healthy=False)
+        coordinator = RuntimeCoordinator(
+            task_runner=TaskRunner(),
+            health_checker=checker,
+            preview_capture=FakePreviewCapture(),
+        )
+        coordinator.sync_instances([self.instance])
+
+        failed_refresh = coordinator.dispatch_command(
+            InstanceCommand(
+                command_type=InstanceCommandType.REFRESH,
+                instance_id="mumu-0",
+            )
+        )
+        failed_context = coordinator.get_runtime_context("mumu-0")
+
+        self.assertEqual(failed_refresh.status, CommandDispatchStatus.COMPLETED)
+        self.assertFalse(failed_context.health_check_ok)
+        self.assertIsNotNone(failed_context.preview_frame)
+        self.assertIsNotNone(failed_context.failure_snapshot)
+        self.assertEqual(failed_context.failure_snapshot.task_id, "runtime.health_check")
+        self.assertEqual(failed_context.failure_snapshot.reason, FailureSnapshotReason.HEALTH_CHECK_FAILED)
+        self.assertEqual(failed_context.metadata["last_health_check_command_id"], failed_refresh.command_id)
+        self.assertEqual(coordinator.registry.get("mumu-0").status, InstanceStatus.ERROR)
+
+        checker.healthy = True
+        recovered_refresh = coordinator.dispatch_command(
+            InstanceCommand(
+                command_type=InstanceCommandType.REFRESH,
+                instance_id="mumu-0",
+            )
+        )
+        recovered_context = coordinator.get_runtime_context("mumu-0")
+
+        self.assertEqual(recovered_refresh.status, CommandDispatchStatus.COMPLETED)
+        self.assertTrue(recovered_context.health_check_ok)
+        self.assertIsNone(recovered_context.failure_snapshot)
+        self.assertEqual(coordinator.registry.get("mumu-0").status, InstanceStatus.READY)
