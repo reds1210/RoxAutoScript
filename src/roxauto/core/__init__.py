@@ -1,6 +1,8 @@
 """Core runtime package."""
 
 from roxauto.core.commands import (
+    CommandDispatchResult,
+    CommandDispatchStatus,
     CommandRoute,
     CommandRouteKind,
     CommandRouter,
@@ -13,8 +15,10 @@ from roxauto.core.models import (
     FailureSnapshotMetadata,
     FailureSnapshotReason,
     InstanceState,
+    InstanceRuntimeContext,
     InstanceStatus,
     PreviewFrame,
+    ProfileBinding,
     StepStatus,
     StopCondition,
     StopConditionKind,
@@ -26,14 +30,17 @@ from roxauto.core.models import (
     VisionMatch,
 )
 from roxauto.core.queue import QueuedTask, TaskQueue
-from roxauto.core.runtime import TaskExecutionContext, TaskRunner, TaskStep
+from roxauto.core.runtime import QueueRunResult, RuntimeCoordinator, TaskExecutionContext, TaskRunner, TaskStep
 
 __all__ = [
     "InstanceCommand",
     "InstanceCommandType",
     "InstanceRegistry",
     "InstanceState",
+    "InstanceRuntimeContext",
     "InstanceStatus",
+    "CommandDispatchResult",
+    "CommandDispatchStatus",
     "CommandRoute",
     "CommandRouteKind",
     "CommandRouter",
@@ -42,6 +49,9 @@ __all__ = [
     "FailureSnapshotReason",
     "QueuedTask",
     "PreviewFrame",
+    "ProfileBinding",
+    "QueueRunResult",
+    "RuntimeCoordinator",
     "StepStatus",
     "StopCondition",
     "StopConditionKind",

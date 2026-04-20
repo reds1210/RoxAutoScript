@@ -48,3 +48,55 @@ class ProfileStoreTests(unittest.TestCase):
             self.assertEqual(loaded.calibration.capture_offset, (12, 24))
             self.assertEqual(loaded.instance_overrides["mumu-0"].calibration_id, "calib-main")
             self.assertEqual(loaded.instance_overrides["mumu-0"].capture_offset, (4, 8))
+
+    def test_resolve_binding_applies_instance_override(self) -> None:
+        profile = Profile(
+            profile_id="main-account",
+            display_name="Main Account",
+            server_name="TW-1",
+            character_name="Knight",
+            allowed_tasks=["guild_donation"],
+            settings={"language": "zh-TW"},
+            calibration=CalibrationProfile(
+                calibration_id="calib-main",
+                capture_offset=(12, 24),
+                capture_scale=1.25,
+                anchor_overrides={"daily_panel": {"threshold": 0.92}},
+            ),
+            instance_overrides={
+                "mumu-0": InstanceProfileOverride(
+                    instance_id="mumu-0",
+                    adb_serial="127.0.0.1:16384",
+                    calibration_id="calib-main",
+                    capture_offset=(4, 8),
+                    capture_scale=1.1,
+                    notes="Primary emulator",
+                )
+            },
+        )
+
+        binding = profile.resolve_binding("mumu-0", adb_serial="127.0.0.1:16384")
+
+        self.assertEqual(binding.profile_id, "main-account")
+        self.assertEqual(binding.capture_offset, (4, 8))
+        self.assertEqual(binding.capture_scale, 1.1)
+        self.assertEqual(binding.calibration_id, "calib-main")
+        self.assertEqual(binding.settings["language"], "zh-TW")
+        self.assertIn("anchor_overrides", binding.metadata)
+
+    def test_store_can_resolve_binding_from_disk(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            store = JsonProfileStore(Path(tmp_dir))
+            profile = Profile(
+                profile_id="main-account",
+                display_name="Main Account",
+                server_name="TW-1",
+                character_name="Knight",
+                calibration=CalibrationProfile(calibration_id="calib-main"),
+            )
+
+            store.save(profile)
+            binding = store.resolve_binding("main-account", "mumu-0")
+
+            self.assertIsNotNone(binding)
+            self.assertEqual(binding.profile_id, "main-account")

@@ -34,6 +34,12 @@ class CommandRouteKind(str, Enum):
     INTERACTION = "interaction"
 
 
+class CommandDispatchStatus(str, Enum):
+    COMPLETED = "completed"
+    PARTIAL = "partial"
+    REJECTED = "rejected"
+
+
 @dataclass(slots=True)
 class CommandRoute:
     command_id: str
@@ -44,6 +50,17 @@ class CommandRoute:
     accepted: bool = True
     message: str = ""
     routed_at: object = field(default_factory=utc_now)
+
+
+@dataclass(slots=True)
+class CommandDispatchResult:
+    command_id: str
+    command_type: InstanceCommandType
+    instance_ids: list[str] = field(default_factory=list)
+    status: CommandDispatchStatus = CommandDispatchStatus.COMPLETED
+    results: list[Any] = field(default_factory=list)
+    message: str = ""
+    dispatched_at: object = field(default_factory=utc_now)
 
 
 class CommandRoutingError(ValueError):

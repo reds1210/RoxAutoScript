@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from roxauto.core.models import ProfileBinding
 from roxauto.core.serde import to_primitive
 
 
@@ -97,6 +98,53 @@ class Profile:
             },
         )
 
+    def resolve_binding(self, instance_id: str, adb_serial: str | None = None) -> ProfileBinding:
+        override = self.instance_overrides.get(instance_id)
+        if override is None and adb_serial is not None:
+            override = next(
+                (
+                    candidate
+                    for candidate in self.instance_overrides.values()
+                    if candidate.adb_serial == adb_serial
+                ),
+                None,
+            )
+
+        calibration_id = None
+        capture_offset = (0, 0)
+        capture_scale = 1.0
+        metadata: dict[str, Any] = {}
+        if self.calibration is not None:
+            calibration_id = self.calibration.calibration_id
+            capture_offset = self.calibration.capture_offset
+            capture_scale = self.calibration.capture_scale
+            metadata["calibration_metadata"] = dict(self.calibration.metadata)
+            if self.calibration.anchor_overrides:
+                metadata["anchor_overrides"] = dict(self.calibration.anchor_overrides)
+
+        notes = ""
+        if override is not None:
+            calibration_id = override.calibration_id or calibration_id
+            capture_offset = override.capture_offset
+            capture_scale = override.capture_scale if override.capture_scale is not None else capture_scale
+            notes = override.notes
+            if override.metadata:
+                metadata["override_metadata"] = dict(override.metadata)
+
+        return ProfileBinding(
+            profile_id=self.profile_id,
+            display_name=self.display_name,
+            server_name=self.server_name,
+            character_name=self.character_name,
+            allowed_tasks=list(self.allowed_tasks),
+            calibration_id=calibration_id,
+            capture_offset=capture_offset,
+            capture_scale=capture_scale,
+            settings=dict(self.settings),
+            notes=notes,
+            metadata=metadata,
+        )
+
 
 class JsonProfileStore:
     def __init__(self, root: Path) -> None:
@@ -124,3 +172,9 @@ class JsonProfileStore:
                 raw = json.load(handle)
             profiles.append(Profile.from_mapping(raw))
         return profiles
+
+    def resolve_binding(self, profile_id: str, instance_id: str, adb_serial: str | None = None) -> ProfileBinding | None:
+        profile = self.load(profile_id)
+        if profile is None:
+            return None
+        return profile.resolve_binding(instance_id=instance_id, adb_serial=adb_serial)

@@ -97,12 +97,42 @@ class FailureSnapshotMetadata:
 
 
 @dataclass(slots=True)
+class ProfileBinding:
+    profile_id: str
+    display_name: str
+    server_name: str
+    character_name: str
+    allowed_tasks: list[str] = field(default_factory=list)
+    calibration_id: str | None = None
+    capture_offset: tuple[int, int] = (0, 0)
+    capture_scale: float = 1.0
+    settings: dict[str, Any] = field(default_factory=dict)
+    notes: str = ""
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
 class InstanceState:
     instance_id: str
     label: str
     adb_serial: str
     status: InstanceStatus
     last_seen_at: object = field(default_factory=utc_now)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class InstanceRuntimeContext:
+    instance_id: str
+    status: InstanceStatus
+    queue_depth: int = 0
+    active_task_id: str | None = None
+    active_run_id: str | None = None
+    stop_requested: bool = False
+    health_check_ok: bool | None = None
+    profile_binding: ProfileBinding | None = None
+    preview_frame: PreviewFrame | None = None
+    failure_snapshot: FailureSnapshotMetadata | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
