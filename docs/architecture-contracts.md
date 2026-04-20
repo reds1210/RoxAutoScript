@@ -64,6 +64,9 @@ Responsibilities:
 - screenshots
 - tap, swipe, text input
 - app launch and reconnect
+- screenshot capture pipeline
+- action execution and command routing
+- health checks and preview frame capture
 
 Must not contain:
 
@@ -102,6 +105,8 @@ Responsibilities:
 - account and character presets
 - approved task-pack list
 - per-instance settings
+- calibration profiles
+- per-instance overrides for capture or anchor behavior
 
 ### `logs`
 
@@ -109,6 +114,7 @@ Responsibilities:
 
 - audit records
 - failure snapshots
+- preview frame references
 - structured execution history
 
 ## 4. Shared Runtime Concepts
@@ -149,6 +155,24 @@ Minimum fields:
 - `version`
 - `entry_state`
 - `steps`
+- `manifest` optional
+- `stop_conditions` optional
+- `metadata` optional
+
+### `TaskManifest`
+
+Minimum fields:
+
+- `task_id`
+- `name`
+- `version`
+- `requires`
+- `entry_condition`
+- `success_condition`
+- `failure_condition`
+- `recovery_policy`
+- `stop_conditions`
+- `metadata`
 
 ### `TaskRun`
 
@@ -160,6 +184,9 @@ Minimum fields:
 - `status`
 - `started_at`
 - `finished_at`
+- `stop_condition` optional
+- `failure_snapshot` optional
+- `preview_frame` optional
 
 Status values:
 
@@ -203,6 +230,75 @@ Minimum fields:
 - `bbox`
 - `source_image`
 
+### `PreviewFrame`
+
+Minimum fields:
+
+- `frame_id`
+- `instance_id`
+- `image_path`
+- `captured_at`
+- `thumbnail_path` optional
+- `source`
+- `metadata`
+
+### `StopCondition`
+
+Minimum fields:
+
+- `condition_id`
+- `kind`
+- `message`
+- `enabled`
+- `timeout_ms` optional
+- `metadata`
+
+Recommended kinds:
+
+- `manual`
+- `timeout`
+- `health_check_failed`
+- `vision_mismatch`
+
+### `FailureSnapshotMetadata`
+
+Minimum fields:
+
+- `snapshot_id`
+- `instance_id`
+- `task_id`
+- `run_id`
+- `reason`
+- `screenshot_path` optional
+- `step_id` optional
+- `preview_frame` optional
+- `captured_at`
+- `metadata`
+
+### `CalibrationProfile`
+
+Minimum fields:
+
+- `calibration_id`
+- `description`
+- `capture_offset`
+- `capture_scale`
+- `crop_box` optional
+- `anchor_overrides`
+- `metadata`
+
+### `InstanceProfileOverride`
+
+Minimum fields:
+
+- `instance_id`
+- `adb_serial` optional
+- `calibration_id` optional
+- `capture_offset`
+- `capture_scale` optional
+- `notes`
+- `metadata`
+
 ### `InstanceCommand`
 
 Minimum fields:
@@ -224,6 +320,24 @@ Recommended command types:
 - `swipe`
 - `input_text`
 
+### `CommandRoute`
+
+Minimum fields:
+
+- `command_id`
+- `command_type`
+- `instance_id` optional
+- `kind`
+- `payload`
+- `accepted`
+- `message`
+
+Recommended route kinds:
+
+- `control`
+- `global_control`
+- `interaction`
+
 ### `EmulatorAdapter`
 
 Minimum methods:
@@ -243,9 +357,13 @@ Recommended event names:
 
 - `instance.updated`
 - `instance.error`
+- `instance.health_checked`
+- `preview.captured`
+- `command.executed`
 - `task.queued`
 - `task.started`
 - `task.progress`
+- `task.failure_snapshot`
 - `task.finished`
 - `alert.raised`
 
@@ -295,7 +413,7 @@ Allowed import directions:
 - `app` may import from any lower layer
 - `tasks` may import `core`, `emulator`, `vision`, `profiles`, `logs`
 - `vision` may import `core`
-- `emulator` may import `core`
+- `emulator` may import `core`, `logs`
 - `profiles` may import `core`
 - `logs` may import `core`
 
