@@ -145,6 +145,17 @@ class Profile:
             metadata=metadata,
         )
 
+    def matches_instance(self, instance_id: str, adb_serial: str | None = None) -> bool:
+        if instance_id in self.instance_overrides:
+            return True
+        if adb_serial is None:
+            return False
+        return any(
+            override.adb_serial == adb_serial
+            for override in self.instance_overrides.values()
+            if override.adb_serial is not None
+        )
+
 
 class JsonProfileStore:
     def __init__(self, root: Path) -> None:
@@ -173,8 +184,29 @@ class JsonProfileStore:
             profiles.append(Profile.from_mapping(raw))
         return profiles
 
+    def list_matching_profiles(self, instance_id: str, adb_serial: str | None = None) -> list[Profile]:
+        return [
+            profile
+            for profile in self.list_profiles()
+            if profile.matches_instance(instance_id=instance_id, adb_serial=adb_serial)
+        ]
+
     def resolve_binding(self, profile_id: str, instance_id: str, adb_serial: str | None = None) -> ProfileBinding | None:
         profile = self.load(profile_id)
         if profile is None:
             return None
         return profile.resolve_binding(instance_id=instance_id, adb_serial=adb_serial)
+
+    def resolve_binding_for_instance(
+        self,
+        instance_id: str,
+        adb_serial: str | None = None,
+        *,
+        profile_id: str | None = None,
+    ) -> ProfileBinding | None:
+        if profile_id is not None:
+            return self.resolve_binding(profile_id=profile_id, instance_id=instance_id, adb_serial=adb_serial)
+        matches = self.list_matching_profiles(instance_id=instance_id, adb_serial=adb_serial)
+        if len(matches) != 1:
+            return None
+        return matches[0].resolve_binding(instance_id=instance_id, adb_serial=adb_serial)
