@@ -36,7 +36,7 @@ class TaskFixtureExamplesTests(unittest.TestCase):
 
         self.assertEqual(
             statuses["daily_ui.guild_check_in:template:daily_ui.guild_check_in_button"],
-            TaskAssetStatus.MISSING,
+            TaskAssetStatus.PLACEHOLDER,
         )
         self.assertEqual(
             statuses["daily_ui.claim_rewards:template:daily_ui.claim_reward"],

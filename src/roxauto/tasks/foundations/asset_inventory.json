@@ -19,8 +19,8 @@
       "pack_id": "daily_ui",
       "task_id": "daily_ui.guild_check_in",
       "asset_kind": "template",
-      "status": "missing",
-      "source_path": "",
+      "status": "placeholder",
+      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.guild_check_in_button",
       "metadata": {
         "anchor_id": "daily_ui.guild_check_in_button",
         "source": "template_manifest"
