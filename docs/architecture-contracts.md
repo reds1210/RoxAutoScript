@@ -169,6 +169,22 @@ Status values:
 - `failed`
 - `aborted`
 
+### `QueuedTask`
+
+Minimum fields:
+
+- `queue_id`
+- `instance_id`
+- `task_id`
+- `priority`
+- `enqueued_at`
+
+Rules:
+
+- queue order is deterministic
+- higher priority runs first
+- per-instance dequeue is supported
+
 ### `TaskStepResult`
 
 Minimum fields:
@@ -186,6 +202,38 @@ Minimum fields:
 - `confidence`
 - `bbox`
 - `source_image`
+
+### `InstanceCommand`
+
+Minimum fields:
+
+- `command_id`
+- `command_type`
+- `instance_id`
+- `payload`
+- `requested_at`
+
+Recommended command types:
+
+- `refresh`
+- `start_queue`
+- `pause`
+- `stop`
+- `emergency_stop`
+- `tap`
+- `swipe`
+- `input_text`
+
+### `EmulatorAdapter`
+
+Minimum methods:
+
+- `capture_screenshot(instance)`
+- `tap(instance, point)`
+- `swipe(instance, start, end, duration_ms)`
+- `input_text(instance, text)`
+- `launch_app(instance, package_name)`
+- `health_check(instance)`
 
 ## 5. Event Names
 
