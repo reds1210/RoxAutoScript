@@ -7,6 +7,7 @@ from tempfile import TemporaryDirectory
 
 import tests._bootstrap  # noqa: F401
 from roxauto.vision import (
+    AnchorAssetProvenanceKind,
     AnchorRepository,
     TemplateReadinessStatus,
     TemplateWorkspaceValidationReport,
@@ -57,7 +58,15 @@ class TemplateValidationTests(unittest.TestCase):
         self.assertNotIn("missing_anchor_task_support_role", issue_codes)
         self.assertNotIn("missing_anchor_curation_metadata", issue_codes)
         self.assertNotIn("missing_anchor_curation_field", issue_codes)
+        self.assertNotIn("missing_anchor_curation_provenance", issue_codes)
         self.assertNotIn("missing_curation_reference_asset", issue_codes)
+        self.assertNotIn("missing_claim_rewards_golden_catalog", issue_codes)
+        self.assertNotIn("invalid_claim_rewards_golden_catalog_json", issue_codes)
+        self.assertNotIn("invalid_claim_rewards_golden_catalog_entries", issue_codes)
+        self.assertNotIn("missing_anchor_golden_id", issue_codes)
+        self.assertNotIn("missing_anchor_golden_catalog_entry", issue_codes)
+        self.assertNotIn("anchor_golden_catalog_live_capture_mismatch", issue_codes)
+        self.assertNotIn("anchor_golden_catalog_source_kind_mismatch", issue_codes)
 
     def test_validate_template_repository_reports_invalid_anchor_configuration(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -211,6 +220,11 @@ class TemplateValidationTests(unittest.TestCase):
                                 "intent_id": "claim_rewards_reward_panel",
                                 "scene_id": "reward_panel_open",
                                 "variant_id": "tw_baseline",
+                                "provenance": {
+                                    "kind": "curated_stand_in",
+                                    "source": "repo_curated_baseline",
+                                    "locale": "zh-TW"
+                                },
                                 "references": [],
                             },
                         },
@@ -225,6 +239,56 @@ class TemplateValidationTests(unittest.TestCase):
         self.assertFalse(report.is_valid)
         self.assertIn("curated_anchor_missing_references", issue_codes)
         self.assertIn("curated_anchor_requires_raster_template", issue_codes)
+
+    def test_validate_template_repository_requires_claim_rewards_curation_provenance(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            repository_root = Path(temp_dir) / "daily_ui"
+            anchors_root = repository_root / "anchors"
+            anchors_root.mkdir(parents=True)
+            (anchors_root / "reward_panel.png").write_text("placeholder", encoding="utf-8")
+            (repository_root / "manifest.json").write_text(
+                json.dumps(
+                    {
+                        "repository_id": "daily_ui",
+                        "display_name": "Daily UI Templates",
+                        "version": "0.1.0",
+                        "anchors": [
+                            {
+                                "anchor_id": "daily_ui.reward_panel",
+                                "label": "Reward Panel",
+                                "template_path": "anchors/reward_panel.png",
+                                "confidence_threshold": 0.93,
+                                "match_region": [1, 2, 3, 4],
+                                "metadata": {
+                                    "task_id": "daily_ui.claim_rewards",
+                                    "inspection_role": "reward_panel",
+                                    "placeholder": False,
+                                    "curation": {
+                                        "status": "curated",
+                                        "intent_id": "claim_rewards_reward_panel",
+                                        "scene_id": "reward_panel_open",
+                                        "variant_id": "tw_baseline",
+                                        "references": [
+                                            {
+                                                "reference_id": "reward_panel_baseline_v1",
+                                                "image_path": "goldens/reward_panel.png",
+                                                "kind": "golden_screenshot",
+                                            }
+                                        ],
+                                    },
+                                },
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            report = validate_template_repository(AnchorRepository.load(repository_root))
+
+        issue_codes = {issue.code for issue in report.issues}
+        self.assertFalse(report.is_valid)
+        self.assertIn("missing_anchor_curation_provenance", issue_codes)
 
     def test_validate_template_workspace_reports_missing_and_invalid_manifests(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -308,8 +372,54 @@ class TemplateValidationTests(unittest.TestCase):
         self.assertEqual(claim_dependency.readiness_status, TemplateReadinessStatus.READY)
         self.assertTrue(claim_dependency.inventory_mismatch)
         self.assertEqual(claim_dependency.curation_status.value, "curated")
+        self.assertEqual(claim_dependency.provenance_kind, AnchorAssetProvenanceKind.CURATED_STAND_IN)
         self.assertEqual(claim_dependency.curation_reference_count, 1)
+        self.assertIn("locale=zh-TW", claim_dependency.provenance_summary)
         self.assertIn("scene=reward_panel_claimable", claim_dependency.curation_summary)
 
         restored = VisionWorkspaceReadinessReport.from_dict(report.to_dict())
         self.assertEqual(restored.inventory_mismatch_count, report.inventory_mismatch_count)
+
+    def test_build_vision_workspace_readiness_report_distinguishes_live_claim_rewards_dependency(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            inventory_path = Path(temp_dir) / "asset_inventory.json"
+            inventory_path.write_text(
+                json.dumps(
+                    {
+                        "inventory_id": "test_inventory",
+                        "version": "0.1.0",
+                        "records": [
+                            {
+                                "asset_id": "daily_ui.claim_rewards:template:daily_ui.reward_panel",
+                                "pack_id": "daily_ui",
+                                "task_id": "daily_ui.claim_rewards",
+                                "asset_kind": "template",
+                                "status": "ready",
+                                "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.reward_panel",
+                                "metadata": {
+                                    "anchor_id": "daily_ui.reward_panel",
+                                    "source": "test_inventory",
+                                },
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            report = build_vision_workspace_readiness_report(self.templates_root, inventory_path)
+
+        dependency = next(
+            dependency
+            for dependency in report.template_dependencies
+            if dependency.anchor_id == "daily_ui.reward_panel"
+        )
+        self.assertEqual(report.template_dependency_count, 1)
+        self.assertEqual(report.ready_count, 1)
+        self.assertEqual(report.inventory_mismatch_count, 0)
+        self.assertEqual(dependency.readiness_status, TemplateReadinessStatus.READY)
+        self.assertFalse(dependency.inventory_mismatch)
+        self.assertEqual(dependency.curation_status.value, "curated")
+        self.assertEqual(dependency.provenance_kind, AnchorAssetProvenanceKind.LIVE_CAPTURE)
+        self.assertIn("live_capture", dependency.provenance_summary)
+        self.assertIn("scene=reward_panel_open", dependency.curation_summary)

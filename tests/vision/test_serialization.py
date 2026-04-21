@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 
 import tests._bootstrap  # noqa: F401
 from roxauto.vision import (
+    AnchorAssetProvenance,
+    AnchorAssetProvenanceKind,
     AnchorCurationProfile,
     AnchorCurationReference,
     AnchorCurationStatus,
@@ -43,6 +45,12 @@ class VisionSerializationTests(unittest.TestCase):
                     notes="Capture after deterministic panel entry.",
                 )
             ],
+            provenance=AnchorAssetProvenance(
+                kind=AnchorAssetProvenanceKind.CURATED_STAND_IN,
+                source="repo_curated_baseline",
+                locale="zh-TW",
+                notes="Still a curated screenshot-style stand-in.",
+            ),
             metadata={"task_id": "daily_ui.claim_rewards"},
         )
 
@@ -52,6 +60,8 @@ class VisionSerializationTests(unittest.TestCase):
         self.assertEqual(restored.scene_id, profile.scene_id)
         self.assertEqual(restored.reference_count, 1)
         self.assertEqual(restored.references[0].kind, "planned_capture")
+        self.assertEqual(restored.provenance.kind, AnchorAssetProvenanceKind.CURATED_STAND_IN)
+        self.assertEqual(restored.provenance.locale, "zh-TW")
         self.assertEqual(restored.to_dict(), profile.to_dict())
 
     def test_calibration_profile_roundtrip(self) -> None:

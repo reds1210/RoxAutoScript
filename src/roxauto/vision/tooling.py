@@ -8,6 +8,7 @@ from roxauto.core.models import VisionMatch
 from roxauto.core.serde import to_primitive
 from roxauto.core.time import utc_now
 from roxauto.vision.models import (
+    AnchorAssetProvenanceKind,
     AnchorCurationProfile,
     AnchorCurationReference,
     AnchorCurationStatus,
@@ -60,6 +61,8 @@ class AnchorInspectionRow:
     issue_codes: list[str] = field(default_factory=list)
     curation_status: AnchorCurationStatus | None = None
     curation_reference_count: int = 0
+    provenance_kind: AnchorAssetProvenanceKind | None = None
+    provenance_summary: str = ""
     curation_summary: str = ""
     curation_profile: AnchorCurationProfile | None = None
     calibration_resolution: CalibrationOverrideResolution | None = None
@@ -183,6 +186,8 @@ class MatchInspectorState:
     selected_template_path: str = ""
     selected_reference_image_path: str = ""
     curation_status: AnchorCurationStatus | None = None
+    provenance_kind: AnchorAssetProvenanceKind | None = None
+    provenance_summary: str = ""
     curation_summary: str = ""
     failure_explanation: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -266,6 +271,8 @@ class FailureInspectorState:
     selected_template_path: str = ""
     selected_reference_image_path: str = ""
     curation_status: AnchorCurationStatus | None = None
+    provenance_kind: AnchorAssetProvenanceKind | None = None
+    provenance_summary: str = ""
     curation_summary: str = ""
     failure_explanation: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -300,6 +307,8 @@ class ClaimRewardsCheckState:
     selected_template_path: str = ""
     selected_reference_image_path: str = ""
     curation_status: AnchorCurationStatus | None = None
+    provenance_kind: AnchorAssetProvenanceKind | None = None
+    provenance_summary: str = ""
     curation_summary: str = ""
     failure_explanation: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -330,6 +339,8 @@ class ClaimRewardsInspectorState:
     selected_template_path: str = ""
     selected_reference_image_path: str = ""
     selected_curation_status: AnchorCurationStatus | None = None
+    selected_provenance_kind: AnchorAssetProvenanceKind | None = None
+    selected_provenance_summary: str = ""
     selected_curation_summary: str = ""
     selected_check_summary: str = ""
     workflow_summary: str = ""
@@ -598,6 +609,8 @@ def build_match_inspector(
             selected_template_path=selected_template_path,
             selected_reference_image_path=selected_reference_image_path,
             curation_status=curation.status if curation is not None else None,
+            provenance_kind=curation.provenance_kind if curation is not None else None,
+            provenance_summary=_provenance_summary(curation),
             curation_summary=_curation_summary(curation),
             failure_explanation=_match_failure_explanation(
                 anchor_id=expected_anchor_id,
@@ -664,6 +677,8 @@ def build_match_inspector(
         selected_template_path=selected_template_path,
         selected_reference_image_path=selected_reference_image_path,
         curation_status=curation.status if curation is not None else None,
+        provenance_kind=curation.provenance_kind if curation is not None else None,
+        provenance_summary=_provenance_summary(curation),
         curation_summary=_curation_summary(curation),
         failure_explanation=_match_failure_explanation(
             anchor_id=match_result.expected_anchor_id,
@@ -758,6 +773,8 @@ def build_failure_inspector(
     selected_template_path = match_state.selected_template_path
     selected_reference_image_path = match_state.selected_reference_image_path
     curation_status = match_state.curation_status
+    provenance_kind = match_state.provenance_kind
+    provenance_summary = match_state.provenance_summary
     curation_summary = match_state.curation_summary
     failure_explanation = _match_failure_explanation(
         anchor_id=resolved_anchor_id,
@@ -804,6 +821,8 @@ def build_failure_inspector(
         selected_template_path = selected_claim_check.selected_template_path
         selected_reference_image_path = selected_claim_check.selected_reference_image_path
         curation_status = selected_claim_check.curation_status
+        provenance_kind = selected_claim_check.provenance_kind
+        provenance_summary = selected_claim_check.provenance_summary
         curation_summary = selected_claim_check.curation_summary
         failure_explanation = selected_claim_check.failure_explanation or failure_explanation
 
@@ -835,6 +854,8 @@ def build_failure_inspector(
         selected_template_path=selected_template_path,
         selected_reference_image_path=selected_reference_image_path,
         curation_status=curation_status,
+        provenance_kind=provenance_kind,
+        provenance_summary=provenance_summary,
         curation_summary=curation_summary,
         failure_explanation=failure_explanation,
         metadata=dict(failure_record.metadata),
@@ -975,6 +996,8 @@ def _build_anchor_row(
         issue_codes=list(issue_codes or []),
         curation_status=curation.status if curation is not None else None,
         curation_reference_count=curation.reference_count if curation is not None else 0,
+        provenance_kind=curation.provenance_kind if curation is not None else None,
+        provenance_summary=_provenance_summary(curation),
         curation_summary=_curation_summary(curation),
         curation_profile=curation,
         calibration_resolution=calibration_resolution,
@@ -1115,6 +1138,8 @@ def _anchor_summary(anchor: AnchorInspectionRow | None) -> str:
         f"region={_format_region(anchor.effective_match_region)} | "
         f"issues={','.join(anchor.issue_codes) or 'none'}"
     )
+    if anchor.provenance_summary:
+        summary += f" | provenance={anchor.provenance_summary}"
     if anchor.curation_summary:
         summary += f" | curation={anchor.curation_summary}"
     return summary
@@ -1222,6 +1247,12 @@ def _curation_summary(curation: AnchorCurationProfile | None) -> str:
     if curation is None:
         return ""
     parts = [curation.status.value]
+    if curation.provenance_kind is not None:
+        parts.append(f"provenance={curation.provenance_kind.value}")
+    if curation.provenance is not None and curation.provenance.locale:
+        parts.append(f"locale={curation.provenance.locale}")
+    if curation.provenance is not None and curation.provenance.source:
+        parts.append(f"source={curation.provenance.source}")
     if curation.scene_id:
         parts.append(f"scene={curation.scene_id}")
     if curation.variant_id:
@@ -1232,11 +1263,27 @@ def _curation_summary(curation: AnchorCurationProfile | None) -> str:
     return " | ".join(parts)
 
 
+def _provenance_summary(curation: AnchorCurationProfile | None) -> str:
+    if curation is None:
+        return ""
+    return curation.provenance_summary
+
+
 def _append_curation_note(message: str, curation: AnchorCurationProfile | None) -> str:
     normalized_message = message.strip()
-    if curation is None or curation.status == AnchorCurationStatus.CURATED:
+    if curation is None:
         return normalized_message
-    note = f"Template curation status: {_curation_summary(curation)}."
+    note = ""
+    if curation.status != AnchorCurationStatus.CURATED:
+        note = f"Template curation status: {_curation_summary(curation)}."
+    elif curation.provenance_kind == AnchorAssetProvenanceKind.CURATED_STAND_IN:
+        note = (
+            "Template baseline is a curated stand-in"
+            + (f" ({_provenance_summary(curation)})" if _provenance_summary(curation) else "")
+            + "."
+        )
+    if not note:
+        return normalized_message
     if not normalized_message:
         return note
     if note.lower() in normalized_message.lower():
@@ -1350,6 +1397,8 @@ def _claim_rewards_check_summary(check: ClaimRewardsCheckState | None) -> str:
         f"{check.label} | anchor={check.anchor_id} | threshold={check.threshold:.3f} | "
         f"image={check.selected_image_path or 'n/a'} | message={check.message or 'n/a'}"
     )
+    if check.provenance_summary:
+        summary += f" | provenance={check.provenance_summary}"
     if check.curation_summary:
         summary += f" | curation={check.curation_summary}"
     return summary
@@ -1393,6 +1442,8 @@ def _mark_claim_rewards_check_selection(
         selected_template_path=check.selected_template_path,
         selected_reference_image_path=check.selected_reference_image_path,
         curation_status=check.curation_status,
+        provenance_kind=check.provenance_kind,
+        provenance_summary=check.provenance_summary,
         curation_summary=check.curation_summary,
         failure_explanation=check.failure_explanation,
         metadata=dict(check.metadata),
@@ -1482,6 +1533,8 @@ def _build_claim_rewards_inspector(
                 selected_template_path=selected_template_path,
                 selected_reference_image_path=selected_reference_image_path,
                 curation_status=match_state.curation_status,
+                provenance_kind=match_state.provenance_kind,
+                provenance_summary=match_state.provenance_summary,
                 curation_summary=match_state.curation_summary,
                 failure_explanation=match_state.failure_explanation,
                 metadata={**dict(anchor.metadata), **dict(payload.get("metadata", {}))},
@@ -1522,6 +1575,8 @@ def _build_claim_rewards_inspector(
         selected_template_path=selected_check.selected_template_path if selected_check is not None else "",
         selected_reference_image_path=selected_check.selected_reference_image_path if selected_check is not None else "",
         selected_curation_status=selected_check.curation_status if selected_check is not None else None,
+        selected_provenance_kind=selected_check.provenance_kind if selected_check is not None else None,
+        selected_provenance_summary=selected_check.provenance_summary if selected_check is not None else "",
         selected_curation_summary=selected_check.curation_summary if selected_check is not None else "",
         selected_check_summary=_claim_rewards_check_summary(selected_check),
         workflow_summary=_claim_rewards_workflow_summary(checks, current_check_id=current_check_id),

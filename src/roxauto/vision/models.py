@@ -23,6 +23,12 @@ class AnchorCurationStatus(str, Enum):
     CURATED = "curated"
 
 
+class AnchorAssetProvenanceKind(str, Enum):
+    LIVE_CAPTURE = "live_capture"
+    CURATED_STAND_IN = "curated_stand_in"
+    PLACEHOLDER = "placeholder"
+
+
 class RecordingActionType(str, Enum):
     TAP = "tap"
     SWIPE = "swipe"
@@ -118,6 +124,42 @@ class AnchorCurationReference:
 
 
 @dataclass(slots=True)
+class AnchorAssetProvenance:
+    kind: AnchorAssetProvenanceKind
+    source: str = ""
+    locale: str = ""
+    notes: str = ""
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return to_primitive(asdict(self))
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        raw_kind = data.get("kind", AnchorAssetProvenanceKind.CURATED_STAND_IN.value)
+        if isinstance(raw_kind, AnchorAssetProvenanceKind):
+            kind = raw_kind
+        else:
+            kind = AnchorAssetProvenanceKind(str(raw_kind))
+        return cls(
+            kind=kind,
+            source=str(data.get("source", "")),
+            locale=str(data.get("locale", "")),
+            notes=str(data.get("notes", "")),
+            metadata=dict(data.get("metadata", {})),
+        )
+
+    @property
+    def summary(self) -> str:
+        parts = [self.kind.value]
+        if self.locale:
+            parts.append(f"locale={self.locale}")
+        if self.source:
+            parts.append(f"source={self.source}")
+        return " | ".join(parts)
+
+
+@dataclass(slots=True)
 class AnchorCurationProfile:
     status: AnchorCurationStatus
     intent_id: str = ""
@@ -125,6 +167,7 @@ class AnchorCurationProfile:
     variant_id: str = ""
     notes: str = ""
     references: list[AnchorCurationReference] = field(default_factory=list)
+    provenance: AnchorAssetProvenance | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -134,6 +177,18 @@ class AnchorCurationProfile:
     @property
     def is_curated(self) -> bool:
         return self.status == AnchorCurationStatus.CURATED
+
+    @property
+    def provenance_kind(self) -> AnchorAssetProvenanceKind | None:
+        return self.provenance.kind if self.provenance is not None else None
+
+    @property
+    def provenance_summary(self) -> str:
+        return self.provenance.summary if self.provenance is not None else ""
+
+    @property
+    def is_live_capture(self) -> bool:
+        return self.provenance_kind == AnchorAssetProvenanceKind.LIVE_CAPTURE
 
     def to_dict(self) -> dict[str, Any]:
         return to_primitive(asdict(self))
@@ -145,6 +200,13 @@ class AnchorCurationProfile:
             status = raw_status
         else:
             status = AnchorCurationStatus(str(raw_status))
+        raw_provenance = data.get("provenance")
+        if isinstance(raw_provenance, AnchorAssetProvenance):
+            provenance = raw_provenance
+        elif isinstance(raw_provenance, dict):
+            provenance = AnchorAssetProvenance.from_dict(raw_provenance)
+        else:
+            provenance = None
         return cls(
             status=status,
             intent_id=str(data.get("intent_id", "")),
@@ -156,6 +218,7 @@ class AnchorCurationProfile:
                 for entry in data.get("references", [])
                 if isinstance(entry, dict)
             ],
+            provenance=provenance,
             metadata=dict(data.get("metadata", {})),
         )
 

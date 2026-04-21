@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from roxauto.vision.models import (
+    AnchorAssetProvenance,
+    AnchorAssetProvenanceKind,
     AnchorCurationProfile,
     AnchorCurationReference,
     AnchorCurationStatus,
@@ -72,6 +74,8 @@ from roxauto.vision.validation import (
 
 __all__ = [
     "AnchorRepository",
+    "AnchorAssetProvenance",
+    "AnchorAssetProvenanceKind",
     "AnchorInspectionRow",
     "AnchorInspectorState",
     "AnchorCurationProfile",

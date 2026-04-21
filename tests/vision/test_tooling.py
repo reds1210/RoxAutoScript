@@ -9,6 +9,7 @@ from tempfile import TemporaryDirectory
 import tests._bootstrap  # noqa: F401
 from roxauto.core.models import VisionMatch
 from roxauto.vision import (
+    AnchorAssetProvenanceKind,
     AnchorRepository,
     CalibrationProfile,
     CaptureArtifactKind,
@@ -63,6 +64,8 @@ class VisionToolingTests(unittest.TestCase):
         )
         self.assertEqual(claim_dependency.readiness_status, TemplateReadinessStatus.READY)
         self.assertEqual(claim_dependency.curation_status.value, "curated")
+        self.assertEqual(claim_dependency.provenance_kind, AnchorAssetProvenanceKind.CURATED_STAND_IN)
+        self.assertIn("locale=zh-TW", claim_dependency.provenance_summary)
         self.assertIn("intent=claim_rewards_claim_button", claim_dependency.curation_summary)
 
     def test_build_anchor_inspector_applies_calibration_override_and_validation_issues(self) -> None:
@@ -377,13 +380,37 @@ class VisionToolingTests(unittest.TestCase):
             )
         )
         self.assertEqual(failure.claim_rewards.selected_check.curation_status.value, "curated")
+        self.assertEqual(
+            failure.claim_rewards.selected_check.provenance_kind,
+            AnchorAssetProvenanceKind.CURATED_STAND_IN,
+        )
+        self.assertIn("locale=zh-TW", failure.claim_rewards.selected_check.provenance_summary)
         self.assertIn("scene=reward_confirm_modal", failure.claim_rewards.selected_check.curation_summary)
+        self.assertEqual(
+            failure.claim_rewards.selected_provenance_kind,
+            AnchorAssetProvenanceKind.CURATED_STAND_IN,
+        )
+        self.assertIn("locale=zh-TW", failure.claim_rewards.selected_provenance_summary)
         self.assertIn("threshold=0.920", failure.claim_rewards.selected_check_summary)
         self.assertIn("image=captures/reward-preview.png", failure.claim_rewards.selected_check_summary)
+        self.assertIn("provenance=curated_stand_in", failure.claim_rewards.selected_check_summary)
         self.assertIn("below threshold 0.920", failure.claim_rewards.failure_explanation)
         self.assertIn("Reward Confirm State (daily_ui.reward_confirm_state)", failure.claim_rewards.failure_explanation)
         self.assertIn("template=", failure.claim_rewards.failure_explanation)
         self.assertIn("reference=", failure.claim_rewards.failure_explanation)
+        reward_panel_check = next(
+            check for check in failure.claim_rewards.checks if check.check_id == "reward_panel"
+        )
+        self.assertEqual(reward_panel_check.anchor_id, "daily_ui.reward_panel")
+        self.assertEqual(reward_panel_check.provenance_kind, AnchorAssetProvenanceKind.LIVE_CAPTURE)
+        self.assertIn("locale=zh-TW", reward_panel_check.provenance_summary)
+        self.assertTrue(reward_panel_check.selected_template_path.endswith("daily_reward_panel.png"))
+        self.assertTrue(
+            reward_panel_check.selected_reference_image_path.endswith(
+                "daily_ui_claim_rewards__reward_panel__baseline__v1.png"
+            )
+        )
+        self.assertNotIn("curated stand-in", reward_panel_check.failure_explanation.lower())
         self.assertEqual(failure.best_candidate.anchor_id, "daily_ui.reward_confirm_state")
         self.assertEqual(failure.candidate_count, 1)
         self.assertEqual(failure.focus_check_id, "confirm_state")
@@ -402,8 +429,11 @@ class VisionToolingTests(unittest.TestCase):
             )
         )
         self.assertEqual(failure.curation_status.value, "curated")
+        self.assertEqual(failure.provenance_kind, AnchorAssetProvenanceKind.CURATED_STAND_IN)
+        self.assertIn("locale=zh-TW", failure.provenance_summary)
         self.assertIn("scene=reward_confirm_modal", failure.curation_summary)
         self.assertIn("below threshold 0.920", failure.failure_explanation)
+        self.assertIn("curated stand-in", failure.failure_explanation)
         self.assertIn("template=", failure.failure_explanation)
         self.assertIn("reference=", failure.failure_explanation)
         self.assertEqual(failure.inspection.selected_overlay.kind, InspectionOverlayKind.EXPECTED_ANCHOR)

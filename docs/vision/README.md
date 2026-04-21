@@ -5,7 +5,7 @@ This branch owns the developer-facing observability layer for anchors, calibrati
 ## Core Concepts
 
 - `AnchorSpec`: a single template definition with an id, label, relative asset path, confidence threshold, optional match region, and metadata.
-- `AnchorCurationProfile` and `AnchorCurationReference`: the curation contract layered onto `AnchorSpec.metadata.curation`, used to track whether a task-critical template is only planned, already captured, or fully curated.
+- `AnchorCurationProfile`, `AnchorCurationReference`, and `AnchorAssetProvenance`: the curation contract layered onto `AnchorSpec.metadata.curation`, used to track whether a task-critical template is only planned, already captured, fully curated, and whether the shipped baseline is live or still a curated stand-in.
 - `AnchorRepository`: a filesystem-backed repository rooted at `assets/templates/<pack>/` with a `manifest.json` file.
 - `CalibrationProfile`: per-instance calibration data for scale, offsets, crop region, and anchor-specific overrides.
 - `CalibrationOverrideResolution`: the normalized per-anchor result after base template values, profile crop, and anchor override are merged.
@@ -37,6 +37,8 @@ assets/templates/
       claim_rewards/
         catalog.json
         *.png
+        live/
+          *.png
   odin/
     manifest.json
     anchors/
@@ -76,7 +78,8 @@ Rules:
 - the repo loader treats the manifest as the source of truth.
 - placeholder template anchors may set `metadata.placeholder=true` so readiness tooling can distinguish scaffold assets from fully-ready captures.
 - template packs may declare `metadata.task_support` so vision validation can assert that one task has the full set of required inspection roles before GUI/runtime consumes the pack.
-- task-critical anchors may declare `metadata.curation` with `status`, `intent_id`, `scene_id`, `variant_id`, optional `notes`, and optional `references` so curation work is explicit before live captures land.
+- task-critical anchors may declare `metadata.curation` with `status`, `intent_id`, `scene_id`, `variant_id`, `provenance`, optional `notes`, and optional `references` so curation work is explicit before live captures land.
+- `metadata.curation.provenance` uses a stable `kind` such as `live_capture` or `curated_stand_in`, plus optional `locale`, `source`, and `notes`.
 - a `curated` anchor is expected to point at a raster template and at least one reference image under the same repository, typically under `goldens/<task>/`.
 
 ## Template Validation
@@ -89,7 +92,8 @@ Vision-side tooling can now validate template packs before GUI or task code cons
 - `TemplateRepositoryValidationReport` summarizes error count, warning count, anchor count, and issue details.
 - `TemplateValidationIssue` carries a stable `code`, severity, affected anchor id, and path for operator-facing inspection.
 - `TemplateDependencyReadiness` carries task/pack/anchor-level readiness, placeholder state, and inventory-mismatch information.
-- claim-rewards anchors now also validate their curation contract: they must declare `metadata.curation`, and a `curated` anchor must carry at least one reference plus a raster template asset.
+- claim-rewards anchors now also validate their curation contract: they must declare `metadata.curation`, `metadata.curation.provenance`, and a `curated` anchor must carry at least one reference plus a raster template asset.
+- claim-rewards task support must also point at a valid `metadata.task_support.daily_ui.claim_rewards.golden_catalog_path`, and every curated anchor must map its `golden_id`, primary reference, and `live_capture` flag back to the matching catalog entry.
 
 Validation only enforces rules that are already part of the documented contracts:
 
@@ -156,10 +160,9 @@ These builders stay inside the vision layer and do not depend on `app`, `core` r
 
 Current sample coverage:
 
-- `daily_ui.reward_panel` now ships as a curated PNG crop plus one live zh-TW ROX baseline image for the opened reward panel scene
-- `daily_ui.claim_reward` now ships as a curated PNG crop plus one curated screenshot-style baseline image for the tappable claim button scene
-- `daily_ui.reward_confirm_state` now ships as a curated PNG crop plus one curated screenshot-style baseline image for the confirmation modal scene
-- `docs/vision/claim_rewards_live/raw/` now keeps the supporting live capture trail for this task only
+- `daily_ui.reward_panel` now ships as a curated PNG crop backed by a primary live zh-TW ROX daily-sign-in baseline plus two supplemental live captures, explicitly marked as `live_capture`
+- `daily_ui.claim_reward` now ships as a curated PNG crop plus one screenshot-style baseline image for the tappable claim button scene, explicitly marked as `curated_stand_in`
+- `daily_ui.reward_confirm_state` now ships as a curated PNG crop plus one screenshot-style baseline image for the confirmation modal scene, explicitly marked as `curated_stand_in`
 - `daily_ui.guild_check_in_button` placeholder template now exists under `assets/templates/daily_ui/`
 - `odin.start_button` placeholder template exists
 - Engine D's task asset inventory still marks the `daily_ui.claim_reward` dependency as `placeholder`; vision readiness now reports the curated template as `ready` and flags the inventory drift as an explicit mismatch instead of degrading the actual template status
@@ -183,17 +186,18 @@ Each anchor participating in that contract carries:
 - `metadata.curation.intent_id`
 - `metadata.curation.scene_id`
 - `metadata.curation.variant_id`
+- `metadata.curation.provenance.kind`
+- `metadata.curation.provenance.locale`
+- `metadata.curation.provenance.source`
 - `metadata.curation.metadata.golden_catalog_path`
 - `metadata.curation.metadata.golden_id`
-- `metadata.curation.metadata.live_capture`
-- `metadata.curation.metadata.proof_summary`
-- `metadata.curation.metadata.failure_case`
+- `metadata.curation.metadata.source_kind`
 
 This gives the vision layer enough information to:
 
 - validate that the pack has all three required claim-rewards checks
 - resolve a stable per-check expected anchor for overlays
-- expose whether the currently selected claim-rewards template is still planned or already curated
+- expose whether the currently selected claim-rewards template is live, a curated stand-in, still placeholder-backed, or out of sync with inventory
 - build claim-specific failure payloads without importing task runtime code
 
 The branch now also ships a minimal golden organization for this task only:
@@ -205,23 +209,9 @@ The branch now also ships a minimal golden organization for this task only:
 - `assets/templates/daily_ui/goldens/claim_rewards/live/daily_ui_claim_rewards__reward_panel__live_capture__emulator_5560__daily_signin.png`
 - `assets/templates/daily_ui/goldens/claim_rewards/live/daily_ui_claim_rewards__entry_context__live_capture__emulator_5556__after_fuli_tap.png`
 
-`catalog.json` is the machine-readable index for the three shipped claim-rewards baselines. It records:
+The reward-panel baseline is now promoted to a live zh-TW ROX capture. The claim-button and confirm-state baselines remain repo-curated screenshot-style stand-ins, and the provenance surface makes that distinction explicit without changing the anchor ids or flatten payload shape.
 
-- which anchor and inspection role each golden supports
-- which scene and stage the image proves
-- whether the file is a live capture or a curated stand-in
-- the current file hash and resolution so later live replacements stay traceable
-- which step or failure case each image is meant to explain during claim-rewards inspection
-
-Current claim-rewards golden coverage:
-
-- `daily_ui_claim_rewards__reward_panel__baseline__v1.png`: live zh-TW ROX daily sign-in panel-open golden for `daily_ui.reward_panel`
-- `daily_ui_claim_rewards__claim_button__baseline__v1.png`: curated stand-in for the claimable panel state used by `daily_ui.claim_reward`
-- `daily_ui_claim_rewards__confirm_state__baseline__v1.png`: curated stand-in for the confirmation modal used by `daily_ui.reward_confirm_state`
-- `live/daily_ui_claim_rewards__reward_panel__live_capture__emulator_5560__daily_signin.png`: descriptive copy of the canonical live panel-open screenshot for manual review and downstream tooling
-- `live/daily_ui_claim_rewards__entry_context__live_capture__emulator_5556__after_fuli_tap.png`: live pre-panel navigation evidence after the Fu Li tap, used to debug failures before the panel-open anchor appears
-
-`daily_ui.reward_panel` is now backed by a live capture. `daily_ui.claim_reward` and `daily_ui.reward_confirm_state` still rely on curated stand-ins because the available accounts did not expose approved live claimable or confirmation-modal states during this round. The manifest and golden catalog call this out explicitly so downstream consumers can distinguish canonical live evidence from still-pending live replacements.
+Supporting raw screenshots used during this curation pass are tracked under `docs/vision/claim_rewards_live/raw/` so future replacements can verify which files were true live captures versus upstream context only.
 
 ## GUI Consumption
 
@@ -237,6 +227,8 @@ When the failure metadata includes a nested `claim_rewards` payload, Engine B sh
 - `FailureInspectorState.claim_rewards.selected_anchor_label`
 - `FailureInspectorState.claim_rewards.selected_template_path`
 - `FailureInspectorState.claim_rewards.selected_reference_image_path`
+- `FailureInspectorState.claim_rewards.selected_provenance_kind`
+- `FailureInspectorState.claim_rewards.selected_provenance_summary`
 - `FailureInspectorState.claim_rewards.selected_curation_summary`
 - `FailureInspectorState.claim_rewards.selected_check_summary`: a one-line summary for the selected check
 - `FailureInspectorState.inspection`: the same selected-check inspection promoted to the generic failure pane for backward-compatible fallback rendering
@@ -246,6 +238,8 @@ When the failure metadata includes a nested `claim_rewards` payload, Engine B sh
 - `FailureInspectorState.selected_anchor_label`
 - `FailureInspectorState.selected_template_path`
 - `FailureInspectorState.selected_reference_image_path`
+- `FailureInspectorState.provenance_kind`
+- `FailureInspectorState.provenance_summary`
 - `FailureInspectorState.failure_explanation`
 - `FailureInspectorState.curation_summary`
 

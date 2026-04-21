@@ -8,7 +8,11 @@ from re import compile
 from typing import Any, Self
 
 from roxauto.core.serde import to_primitive
-from roxauto.vision.models import AnchorCurationProfile, AnchorCurationStatus
+from roxauto.vision.models import (
+    AnchorAssetProvenanceKind,
+    AnchorCurationProfile,
+    AnchorCurationStatus,
+)
 from roxauto.vision.repository import AnchorRepository
 
 _ASSET_NAME_PATTERN = compile(r"^[a-z0-9_]+$")
@@ -156,6 +160,8 @@ class TemplateDependencyReadiness:
     inventory_mismatch: bool = False
     curation_status: AnchorCurationStatus | None = None
     curation_reference_count: int = 0
+    provenance_kind: AnchorAssetProvenanceKind | None = None
+    provenance_summary: str = ""
     curation_summary: str = ""
     issue_codes: list[str] = field(default_factory=list)
     message: str = ""
@@ -178,6 +184,13 @@ class TemplateDependencyReadiness:
             curation_status = AnchorCurationStatus(str(raw_curation_status))
         else:
             curation_status = None
+        raw_provenance_kind = data.get("provenance_kind")
+        if isinstance(raw_provenance_kind, AnchorAssetProvenanceKind):
+            provenance_kind = raw_provenance_kind
+        elif raw_provenance_kind:
+            provenance_kind = AnchorAssetProvenanceKind(str(raw_provenance_kind))
+        else:
+            provenance_kind = None
         return cls(
             asset_id=str(data.get("asset_id", "")),
             task_id=str(data.get("task_id", "")),
@@ -193,6 +206,8 @@ class TemplateDependencyReadiness:
             inventory_mismatch=bool(data.get("inventory_mismatch", False)),
             curation_status=curation_status,
             curation_reference_count=int(data.get("curation_reference_count", 0)),
+            provenance_kind=provenance_kind,
+            provenance_summary=str(data.get("provenance_summary", "")),
             curation_summary=str(data.get("curation_summary", "")),
             issue_codes=[str(code) for code in data.get("issue_codes", [])],
             message=str(data.get("message", "")),
@@ -418,6 +433,7 @@ def validate_template_repository(
         issues.extend(_validate_template_path(repository_root, anchor.anchor_id, anchor.template_path))
         issues.extend(_validate_anchor_curation(repository, anchor))
 
+    issues.extend(_validate_claim_rewards_golden_catalog(repository))
     issues.extend(_validate_task_support_contract(repository))
 
     return TemplateRepositoryValidationReport(
@@ -571,6 +587,7 @@ def build_vision_workspace_readiness_report(
             issue_codes=issue_codes,
             placeholder=bool(metadata.get("placeholder", False)),
             curation_status=curation.status if curation is not None else None,
+            provenance_kind=curation.provenance_kind if curation is not None else None,
         )
 
         expected_source_path = ""
@@ -602,6 +619,8 @@ def build_vision_workspace_readiness_report(
                 inventory_mismatch=inventory_mismatch,
                 curation_status=curation.status if curation is not None else None,
                 curation_reference_count=curation.reference_count if curation is not None else 0,
+                provenance_kind=curation.provenance_kind if curation is not None else None,
+                provenance_summary=_provenance_summary(curation),
                 curation_summary=_curation_summary(curation),
                 issue_codes=issue_codes,
                 message=message,
@@ -674,6 +693,21 @@ def _validate_anchor_curation(
             )
         )
 
+    if "daily_ui.claim_rewards" in task_ids and curation.provenance is None:
+        issues.append(
+            TemplateValidationIssue(
+                code="missing_anchor_curation_provenance",
+                severity=TemplateValidationSeverity.ERROR,
+                message=(
+                    f"Anchor '{anchor.anchor_id}' must define metadata.curation.provenance "
+                    "so readiness can distinguish live captures from curated stand-ins."
+                ),
+                anchor_id=anchor.anchor_id,
+                path=str(repository.manifest_path),
+                metadata={"task_id": "daily_ui.claim_rewards"},
+            )
+        )
+
     if curation.status == AnchorCurationStatus.CURATED:
         if bool(metadata.get("placeholder", False)):
             issues.append(
@@ -714,6 +748,19 @@ def _validate_anchor_curation(
                     path=anchor.template_path,
                 )
             )
+        if curation.provenance_kind == AnchorAssetProvenanceKind.PLACEHOLDER:
+            issues.append(
+                TemplateValidationIssue(
+                    code="curated_anchor_invalid_provenance",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=(
+                        f"Anchor '{anchor.anchor_id}' cannot keep placeholder provenance "
+                        "after curation status becomes curated."
+                    ),
+                    anchor_id=anchor.anchor_id,
+                    path=str(repository.manifest_path),
+                )
+            )
     elif not bool(metadata.get("placeholder", False)):
         issues.append(
             TemplateValidationIssue(
@@ -730,6 +777,258 @@ def _validate_anchor_curation(
 
     for reference in curation.references:
         issues.extend(_validate_curation_reference_path(repository.root.resolve(), anchor.anchor_id, reference))
+
+    return issues
+
+
+def _validate_claim_rewards_golden_catalog(
+    repository: AnchorRepository,
+) -> list[TemplateValidationIssue]:
+    task_support = repository.get_task_support("daily_ui.claim_rewards")
+    if not task_support:
+        return []
+
+    catalog_path_value = str(task_support.get("golden_catalog_path", "")).strip()
+    if not catalog_path_value:
+        return [
+            TemplateValidationIssue(
+                code="missing_claim_rewards_golden_catalog_path",
+                severity=TemplateValidationSeverity.ERROR,
+                message=(
+                    "Task support for 'daily_ui.claim_rewards' must define "
+                    "metadata.task_support[task_id].golden_catalog_path."
+                ),
+                path=str(repository.manifest_path),
+                metadata={"task_id": "daily_ui.claim_rewards"},
+            )
+        ]
+
+    catalog_path = Path(catalog_path_value)
+    if catalog_path.is_absolute() or ".." in catalog_path.parts:
+        return [
+            TemplateValidationIssue(
+                code="invalid_claim_rewards_golden_catalog_path",
+                severity=TemplateValidationSeverity.ERROR,
+                message="Claim-rewards golden catalog path must stay relative to the repository root.",
+                path=catalog_path_value,
+                metadata={"task_id": "daily_ui.claim_rewards"},
+            )
+        ]
+
+    resolved_catalog_path = (repository.root.resolve() / catalog_path).resolve()
+    try:
+        resolved_catalog_path.relative_to(repository.root.resolve())
+    except ValueError:
+        return [
+            TemplateValidationIssue(
+                code="invalid_claim_rewards_golden_catalog_path",
+                severity=TemplateValidationSeverity.ERROR,
+                message="Claim-rewards golden catalog path cannot resolve outside the repository root.",
+                path=str(resolved_catalog_path),
+                metadata={"task_id": "daily_ui.claim_rewards"},
+            )
+        ]
+
+    if not resolved_catalog_path.exists():
+        return [
+            TemplateValidationIssue(
+                code="missing_claim_rewards_golden_catalog",
+                severity=TemplateValidationSeverity.ERROR,
+                message="Claim-rewards golden catalog file is missing.",
+                path=str(resolved_catalog_path),
+                metadata={"task_id": "daily_ui.claim_rewards"},
+            )
+        ]
+
+    try:
+        catalog = loads(resolved_catalog_path.read_text(encoding="utf-8"))
+    except JSONDecodeError as exc:
+        return [
+            TemplateValidationIssue(
+                code="invalid_claim_rewards_golden_catalog_json",
+                severity=TemplateValidationSeverity.ERROR,
+                message=f"Claim-rewards golden catalog could not be parsed: {exc.msg}",
+                path=str(resolved_catalog_path),
+                metadata={"task_id": "daily_ui.claim_rewards"},
+            )
+        ]
+
+    golden_entries = catalog.get("goldens", [])
+    if not isinstance(golden_entries, list):
+        return [
+            TemplateValidationIssue(
+                code="invalid_claim_rewards_golden_catalog_entries",
+                severity=TemplateValidationSeverity.ERROR,
+                message="Claim-rewards golden catalog must define a 'goldens' list.",
+                path=str(resolved_catalog_path),
+                metadata={"task_id": "daily_ui.claim_rewards"},
+            )
+        ]
+
+    goldens_by_id: dict[str, dict[str, Any]] = {}
+    issues: list[TemplateValidationIssue] = []
+    for entry in golden_entries:
+        if not isinstance(entry, dict):
+            issues.append(
+                TemplateValidationIssue(
+                    code="invalid_claim_rewards_golden_catalog_entry",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message="Claim-rewards golden catalog entries must be objects.",
+                    path=str(resolved_catalog_path),
+                    metadata={"task_id": "daily_ui.claim_rewards"},
+                )
+            )
+            continue
+        golden_id = str(entry.get("golden_id", "")).strip()
+        if not golden_id:
+            issues.append(
+                TemplateValidationIssue(
+                    code="missing_claim_rewards_golden_id",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message="Each claim-rewards golden catalog entry must define golden_id.",
+                    path=str(resolved_catalog_path),
+                    metadata={"task_id": "daily_ui.claim_rewards"},
+                )
+            )
+            continue
+        goldens_by_id[golden_id] = entry
+
+    for anchor in repository.list_anchors():
+        metadata = dict(anchor.metadata)
+        if "daily_ui.claim_rewards" not in _anchor_task_ids(metadata):
+            continue
+        curation = AnchorCurationProfile.from_metadata(metadata)
+        curation_metadata = dict(curation.metadata) if curation is not None else {}
+        golden_id = str(curation_metadata.get("golden_id", "")).strip()
+        anchor_catalog_path = str(curation_metadata.get("golden_catalog_path", "")).strip()
+        primary_reference_id = ""
+        primary_reference_file_name = ""
+        if curation is not None and curation.references:
+            primary_reference_id = curation.references[0].reference_id
+            primary_reference_file_name = Path(curation.references[0].image_path).name
+
+        if not golden_id:
+            issues.append(
+                TemplateValidationIssue(
+                    code="missing_anchor_golden_id",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=(
+                        f"Anchor '{anchor.anchor_id}' must define metadata.curation.metadata.golden_id "
+                        "for claim-rewards golden traceability."
+                    ),
+                    anchor_id=anchor.anchor_id,
+                    path=str(repository.manifest_path),
+                )
+            )
+            continue
+
+        if anchor_catalog_path != catalog_path_value:
+            issues.append(
+                TemplateValidationIssue(
+                    code="anchor_golden_catalog_path_mismatch",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=(
+                        f"Anchor '{anchor.anchor_id}' golden catalog path does not match the "
+                        "task-support golden_catalog_path."
+                    ),
+                    anchor_id=anchor.anchor_id,
+                    path=str(repository.manifest_path),
+                    metadata={"expected": catalog_path_value, "actual": anchor_catalog_path},
+                )
+            )
+
+        catalog_entry = goldens_by_id.get(golden_id)
+        if catalog_entry is None:
+            issues.append(
+                TemplateValidationIssue(
+                    code="missing_anchor_golden_catalog_entry",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=(
+                        f"Anchor '{anchor.anchor_id}' points at golden_id '{golden_id}', "
+                        "but that entry is missing from the claim-rewards golden catalog."
+                    ),
+                    anchor_id=anchor.anchor_id,
+                    path=str(resolved_catalog_path),
+                )
+            )
+            continue
+
+        if str(catalog_entry.get("anchor_id", "")) != anchor.anchor_id:
+            issues.append(
+                TemplateValidationIssue(
+                    code="anchor_golden_catalog_anchor_mismatch",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=(
+                        f"Golden catalog entry '{golden_id}' does not point back to "
+                        f"anchor '{anchor.anchor_id}'."
+                    ),
+                    anchor_id=anchor.anchor_id,
+                    path=str(resolved_catalog_path),
+                )
+            )
+
+        if primary_reference_id and str(catalog_entry.get("reference_id", "")) != primary_reference_id:
+            issues.append(
+                TemplateValidationIssue(
+                    code="anchor_golden_catalog_reference_mismatch",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=(
+                        f"Golden catalog entry '{golden_id}' does not match the primary "
+                        f"reference id for anchor '{anchor.anchor_id}'."
+                    ),
+                    anchor_id=anchor.anchor_id,
+                    path=str(resolved_catalog_path),
+                )
+            )
+
+        if primary_reference_file_name and str(catalog_entry.get("file_name", "")) != primary_reference_file_name:
+            issues.append(
+                TemplateValidationIssue(
+                    code="anchor_golden_catalog_file_mismatch",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=(
+                        f"Golden catalog entry '{golden_id}' does not match the primary "
+                        f"reference file for anchor '{anchor.anchor_id}'."
+                    ),
+                    anchor_id=anchor.anchor_id,
+                    path=str(resolved_catalog_path),
+                )
+            )
+
+        catalog_live_capture = bool(catalog_entry.get("live_capture", False))
+        expected_live_capture = curation is not None and curation.provenance_kind == AnchorAssetProvenanceKind.LIVE_CAPTURE
+        if catalog_live_capture != expected_live_capture:
+            issues.append(
+                TemplateValidationIssue(
+                    code="anchor_golden_catalog_live_capture_mismatch",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=(
+                        f"Golden catalog entry '{golden_id}' live-capture flag does not match "
+                        f"the curation provenance for anchor '{anchor.anchor_id}'."
+                    ),
+                    anchor_id=anchor.anchor_id,
+                    path=str(resolved_catalog_path),
+                    metadata={
+                        "catalog_live_capture": catalog_live_capture,
+                        "expected_live_capture": expected_live_capture,
+                    },
+                )
+            )
+
+        source_kind = str(curation_metadata.get("source_kind", "")).strip()
+        if source_kind and str(catalog_entry.get("source_kind", "")).strip() != source_kind:
+            issues.append(
+                TemplateValidationIssue(
+                    code="anchor_golden_catalog_source_kind_mismatch",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=(
+                        f"Golden catalog entry '{golden_id}' source_kind does not match "
+                        f"the curation metadata for anchor '{anchor.anchor_id}'."
+                    ),
+                    anchor_id=anchor.anchor_id,
+                    path=str(resolved_catalog_path),
+                )
+            )
 
     return issues
 
@@ -1028,6 +1327,12 @@ def _curation_summary(curation: AnchorCurationProfile | None) -> str:
     if curation is None:
         return ""
     parts = [curation.status.value]
+    if curation.provenance_kind is not None:
+        parts.append(f"provenance={curation.provenance_kind.value}")
+    if curation.provenance is not None and curation.provenance.locale:
+        parts.append(f"locale={curation.provenance.locale}")
+    if curation.provenance is not None and curation.provenance.source:
+        parts.append(f"source={curation.provenance.source}")
     if curation.scene_id:
         parts.append(f"scene={curation.scene_id}")
     if curation.variant_id:
@@ -1036,6 +1341,12 @@ def _curation_summary(curation: AnchorCurationProfile | None) -> str:
     if curation.intent_id:
         parts.append(f"intent={curation.intent_id}")
     return " | ".join(parts)
+
+
+def _provenance_summary(curation: AnchorCurationProfile | None) -> str:
+    if curation is None:
+        return ""
+    return curation.provenance_summary
 
 
 def _resolve_template_readiness_status(
@@ -1047,6 +1358,7 @@ def _resolve_template_readiness_status(
     issue_codes: list[str],
     placeholder: bool,
     curation_status: AnchorCurationStatus | None,
+    provenance_kind: AnchorAssetProvenanceKind | None,
 ) -> tuple[TemplateReadinessStatus, str]:
     if not repository_present:
         return (
@@ -1069,6 +1381,16 @@ def _resolve_template_readiness_status(
             "Anchor is present but has validation issues that should be resolved before consumption.",
         )
     if curation_status == AnchorCurationStatus.CURATED and not placeholder:
+        if provenance_kind == AnchorAssetProvenanceKind.LIVE_CAPTURE:
+            return (
+                TemplateReadinessStatus.READY,
+                "Template dependency is backed by a live capture and resolves without validation errors.",
+            )
+        if provenance_kind == AnchorAssetProvenanceKind.CURATED_STAND_IN:
+            return (
+                TemplateReadinessStatus.READY,
+                "Template dependency is backed by a curated stand-in and resolves without validation errors.",
+            )
         return (
             TemplateReadinessStatus.READY,
             "Template dependency is curated and resolves without validation errors.",
