@@ -40,6 +40,22 @@ class TemplateValidationTests(unittest.TestCase):
         self.assertEqual(report.error_count, 0)
         self.assertEqual(report.warning_count, 0)
 
+    def test_validate_template_repository_accepts_claim_rewards_task_support_contract(self) -> None:
+        repository = AnchorRepository.load(self.templates_root / "daily_ui")
+
+        report = validate_template_repository(repository)
+        issue_codes = {
+            issue.code
+            for issue in report.issues
+            if issue.metadata.get("task_id") == "daily_ui.claim_rewards"
+        }
+
+        self.assertTrue(report.is_valid)
+        self.assertEqual(report.anchor_count, 4)
+        self.assertNotIn("missing_task_support_anchor_role", issue_codes)
+        self.assertNotIn("duplicate_task_support_anchor_role", issue_codes)
+        self.assertNotIn("missing_anchor_task_support_role", issue_codes)
+
     def test_validate_template_repository_reports_invalid_anchor_configuration(self) -> None:
         with TemporaryDirectory() as temp_dir:
             repository_root = Path(temp_dir) / "broken_pack"
@@ -82,6 +98,56 @@ class TemplateValidationTests(unittest.TestCase):
         self.assertIn("invalid_match_region", issue_codes)
         self.assertIn("invalid_template_asset_name", issue_codes)
         self.assertIn("template_path_outside_repository", issue_codes)
+
+    def test_validate_template_repository_reports_missing_task_support_roles(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            repository_root = Path(temp_dir) / "daily_ui"
+            anchors_root = repository_root / "anchors"
+            anchors_root.mkdir(parents=True)
+            (anchors_root / "claim.svg").write_text("<svg />", encoding="utf-8")
+            manifest = {
+                "repository_id": "daily_ui",
+                "display_name": "Daily UI Templates",
+                "version": "0.1.0",
+                "metadata": {
+                    "task_support": {
+                        "daily_ui.claim_rewards": {
+                            "required_anchor_roles": [
+                                "reward_panel",
+                                "claim_reward_button",
+                                "confirm_state",
+                            ]
+                        }
+                    }
+                },
+                "anchors": [
+                    {
+                        "anchor_id": "daily_ui.claim_reward",
+                        "label": "Claim",
+                        "template_path": "anchors/claim.svg",
+                        "confidence_threshold": 0.91,
+                        "match_region": [1, 2, 3, 4],
+                        "metadata": {
+                            "task_id": "daily_ui.claim_rewards",
+                            "inspection_role": "claim_reward_button",
+                        },
+                    }
+                ],
+            }
+            (repository_root / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+            report = validate_template_repository(AnchorRepository.load(repository_root))
+
+        task_support_issues = [
+            issue
+            for issue in report.issues
+            if issue.code == "missing_task_support_anchor_role"
+            and issue.metadata.get("task_id") == "daily_ui.claim_rewards"
+        ]
+        missing_roles = {issue.metadata["inspection_role"] for issue in task_support_issues}
+
+        self.assertFalse(report.is_valid)
+        self.assertEqual(missing_roles, {"reward_panel", "confirm_state"})
 
     def test_validate_template_workspace_reports_missing_and_invalid_manifests(self) -> None:
         with TemporaryDirectory() as temp_dir:

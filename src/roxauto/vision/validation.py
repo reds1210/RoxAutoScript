@@ -403,6 +403,8 @@ def validate_template_repository(
 
         issues.extend(_validate_template_path(repository_root, anchor.anchor_id, anchor.template_path))
 
+    issues.extend(_validate_task_support_contract(repository))
+
     return TemplateRepositoryValidationReport(
         repository_root=str(repository.root),
         repository_id=manifest.repository_id,
@@ -711,6 +713,93 @@ def _build_anchor_issue_code_map(
                 continue
             result.setdefault(issue.anchor_id, []).append(issue.code)
     return result
+
+
+def _validate_task_support_contract(
+    repository: AnchorRepository,
+) -> list[TemplateValidationIssue]:
+    manifest = repository.manifest
+    task_support = manifest.metadata.get("task_support", {})
+    if not isinstance(task_support, dict):
+        return []
+
+    anchor_roles: dict[str, dict[str, list[str]]] = {}
+    anchors_missing_roles: dict[str, list[str]] = {}
+    for anchor in manifest.anchors:
+        anchor_metadata = dict(anchor.metadata)
+        task_ids = _anchor_task_ids(anchor_metadata)
+        role = str(anchor_metadata.get("inspection_role", "")).strip()
+        for task_id in task_ids:
+            role_map = anchor_roles.setdefault(task_id, {})
+            if role:
+                role_map.setdefault(role, []).append(anchor.anchor_id)
+            else:
+                anchors_missing_roles.setdefault(task_id, []).append(anchor.anchor_id)
+
+    issues: list[TemplateValidationIssue] = []
+    for task_id, support in task_support.items():
+        if not isinstance(support, dict):
+            continue
+        required_roles = [str(role).strip() for role in support.get("required_anchor_roles", []) if str(role).strip()]
+        role_map = anchor_roles.get(str(task_id), {})
+        for anchor_id in anchors_missing_roles.get(str(task_id), []):
+            issues.append(
+                TemplateValidationIssue(
+                    code="missing_anchor_task_support_role",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=(
+                        f"Anchor '{anchor_id}' is assigned to task '{task_id}' but is missing "
+                        "metadata.inspection_role."
+                    ),
+                    anchor_id=anchor_id,
+                    path=str(repository.manifest_path),
+                    metadata={"task_id": str(task_id)},
+                )
+            )
+        for role in required_roles:
+            anchor_ids = list(role_map.get(role, []))
+            if not anchor_ids:
+                issues.append(
+                    TemplateValidationIssue(
+                        code="missing_task_support_anchor_role",
+                        severity=TemplateValidationSeverity.ERROR,
+                        message=(
+                            f"Task '{task_id}' requires an anchor with inspection role '{role}'."
+                        ),
+                        path=str(repository.manifest_path),
+                        metadata={"task_id": str(task_id), "inspection_role": role},
+                    )
+                )
+                continue
+            if len(anchor_ids) > 1:
+                issues.append(
+                    TemplateValidationIssue(
+                        code="duplicate_task_support_anchor_role",
+                        severity=TemplateValidationSeverity.ERROR,
+                        message=(
+                            f"Task '{task_id}' has multiple anchors for inspection role '{role}'."
+                        ),
+                        anchor_id=anchor_ids[0],
+                        path=str(repository.manifest_path),
+                        metadata={
+                            "task_id": str(task_id),
+                            "inspection_role": role,
+                            "anchor_ids": anchor_ids,
+                        },
+                    )
+                )
+    return issues
+
+
+def _anchor_task_ids(metadata: dict[str, Any]) -> list[str]:
+    task_ids: list[str] = []
+    raw_task_id = metadata.get("task_id")
+    if raw_task_id:
+        task_ids.append(str(raw_task_id))
+    raw_task_ids = metadata.get("task_ids")
+    if isinstance(raw_task_ids, list):
+        task_ids.extend(str(task_id) for task_id in raw_task_ids if str(task_id))
+    return task_ids
 
 
 def _resolve_template_readiness_status(
