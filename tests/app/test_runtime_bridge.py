@@ -190,19 +190,38 @@ class OperatorConsoleRuntimeBridgeTests(unittest.TestCase):
             self.assertEqual(queued.task_id, "daily_ui.claim_rewards")
             self.assertEqual(queued_pane.workflow_status, "queued")
             self.assertTrue(queued_pane.is_queued)
+            self.assertEqual(queued_pane.preset_summary, "每日任務 | 可執行 | 固定介面的每日獎勵領取流程。")
+            self.assertEqual(queued_pane.active_step_summary, "已排入佇列，等待「開啟每日獎勵」。")
+            self.assertEqual(
+                queued_pane.next_action_summary,
+                "保持佇列啟動；如果長時間沒有開始，先按「啟動佇列」再重新同步。",
+            )
+            self.assertEqual(queued_pane.failure_check_summary, "")
             self.assertEqual(queued_pane.editor.artifact_count, 1)
             self.assertEqual(queued_pane.editor.crop_region_text, "1,2,120,80")
             self.assertEqual(
                 queued_pane.runtime_gate_summary,
                 "目前沒有阻擋執行的 runtime 條件。",
             )
+            self.assertIn("模擬器：", queued_pane.selected_scope_summary)
+            self.assertIn("設定檔：mumu-0 profile", queued_pane.selected_scope_summary)
+            self.assertEqual(queued_pane.step_rows[0].title, "開啟每日獎勵")
+            self.assertEqual(queued_pane.step_rows[0].status_text, "等待開啟獎勵面板")
             self.assertEqual(dispatch.command_type.value, "start_queue")
             self.assertEqual(pane.workflow_status, "succeeded")
             self.assertEqual(pane.last_run_status, "succeeded")
+            self.assertEqual(pane.active_step_summary, "每日領獎已完成。")
+            self.assertEqual(pane.failure_summary, "每日領獎已完成。")
+            self.assertEqual(
+                pane.next_action_summary,
+                "本輪已完成；若要再跑一次，先確認遊戲仍停留在可開啟每日獎勵的主畫面。",
+            )
             self.assertEqual(
                 [row.status for row in pane.step_rows],
                 ["succeeded", "succeeded", "succeeded", "succeeded", "succeeded"],
             )
+            self.assertEqual(pane.step_rows[2].title, "點擊領獎")
+            self.assertEqual(pane.step_rows[2].status_text, "已完成領獎點擊")
             self.assertEqual(vision.workspace.selected_repository_id, "daily_ui")
             self.assertIsNotNone(vision.calibration.selected_resolution)
             self.assertEqual(
@@ -232,9 +251,22 @@ class OperatorConsoleRuntimeBridgeTests(unittest.TestCase):
 
             self.assertEqual(pane.workflow_status, "failed")
             self.assertEqual(pane.failure_step_id, "verify_claim_affordance")
-            self.assertIn("ambiguous", pane.failure_summary)
+            self.assertEqual(pane.failure_reason, "獎勵狀態無法辨識")
+            self.assertEqual(pane.failure_summary, "獎勵狀態無法辨識：無法分辨目前是可領取、已領取或需要確認。")
+            self.assertEqual(pane.active_step_summary, "獎勵狀態無法辨識：無法分辨目前是可領取、已領取或需要確認。")
+            self.assertEqual(pane.current_step_title, "確認獎勵狀態")
+            self.assertEqual(
+                pane.failure_check_summary,
+                "確認彈窗 | 對應步驟：確認獎勵狀態 | 檢查結果：已命中 | 已看到確認彈窗。",
+            )
+            self.assertEqual(
+                pane.next_action_summary,
+                "先確認是否真的出現確認彈窗；若有，重擷取失敗畫面並檢查確認按鈕的比對區域後再執行。",
+            )
             self.assertEqual(pane.step_rows[0].status, "succeeded")
             self.assertEqual(pane.step_rows[1].status, "failed")
+            self.assertEqual(pane.step_rows[1].title, "確認獎勵狀態")
+            self.assertEqual(pane.step_rows[1].status_text, "獎勵狀態辨識失敗")
             self.assertEqual(
                 [row.status for row in pane.step_rows[2:]],
                 ["pending", "pending", "pending"],

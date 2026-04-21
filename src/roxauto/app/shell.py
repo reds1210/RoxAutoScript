@@ -78,6 +78,15 @@ def _zh_health(value: str) -> str:
     return translated
 
 
+def _zh_match_status(value: str) -> str:
+    labels = {
+        "matched": "\u5df2\u547d\u4e2d",
+        "missed": "\u672a\u547d\u4e2d",
+        "ambiguous": "\u7d50\u679c\u4e0d\u660e",
+    }
+    return labels.get(value.lower(), value)
+
+
 def _claim_readiness_row(state: OperatorConsoleState) -> TaskReadinessRowView | None:
     for row in state.task_readiness.rows:
         if row.task_id == "daily_ui.claim_rewards":
@@ -125,7 +134,7 @@ def launch_placeholder_gui() -> int:
     class MainWindow(QMainWindow):
         def __init__(self, runtime_bridge: OperatorConsoleRuntimeBridge) -> None:
             super().__init__()
-            self.setWindowTitle("ROX MVP GUI \u63a7\u5236\u53f0")
+            self.setWindowTitle("ROX \u6bcf\u65e5\u9818\u734e\u63a7\u5236\u53f0")
             self.resize(1480, 960)
             self._bridge = runtime_bridge
             self._list_syncing = False
@@ -154,9 +163,9 @@ def launch_placeholder_gui() -> int:
             hero.setObjectName("heroPanel")
             hero_layout = QVBoxLayout()
             hero.setLayout(hero_layout)
-            title = QLabel("ROX MVP GUI")
+            title = QLabel("ROX \u6bcf\u65e5\u9818\u734e\u63a7\u5236\u53f0")
             title.setObjectName("heroTitle")
-            subtitle = QLabel("\u6bcf\u65e5\u9818\u734e\u512a\u5148\u7684 LiveRuntimeSession \u63a7\u5236\u9762")
+            subtitle = QLabel("\u4ee5\u300c\u6bcf\u65e5\u9818\u734e\u300d\u70ba\u4e3b\u7684\u55ae\u4efb\u52d9\u63a7\u5236\u53f0\uff0c\u512a\u5148\u986f\u793a\u76ee\u524d\u6b65\u9a5f\u3001\u5931\u6557\u539f\u56e0\u8207\u4e0b\u4e00\u6b65\u3002")
             subtitle.setObjectName("heroSubtitle")
             hero_layout.addWidget(title)
             hero_layout.addWidget(subtitle)
@@ -180,7 +189,7 @@ def launch_placeholder_gui() -> int:
             body.setChildrenCollapsible(False)
             root.addWidget(body)
 
-            left = QGroupBox("\u6a21\u64ec\u5668\u5361\u7247")
+            left = QGroupBox("\u6a21\u64ec\u5668")
             left.setObjectName("panelCard")
             left_layout = QVBoxLayout()
             left.setLayout(left_layout)
@@ -201,7 +210,7 @@ def launch_placeholder_gui() -> int:
             body.addWidget(right)
             body.setSizes([360, 1120])
 
-            device_box = QGroupBox("\u7576\u524d\u6a21\u64ec\u5668")
+            device_box = QGroupBox("\u57f7\u884c\u5c0d\u8c61")
             device_box.setObjectName("panelCard")
             device_layout = QVBoxLayout()
             device_box.setLayout(device_layout)
@@ -295,7 +304,7 @@ def launch_placeholder_gui() -> int:
             preview_layout.addWidget(self.preview_summary)
             preview_layout.addWidget(self.preview_image)
             preview_layout.addWidget(self.preview_box)
-            tabs.addTab(preview_tab, "\u9810\u89bd")
+            tabs.addTab(preview_tab, "\u76ee\u524d\u756b\u9762")
 
             failure_tab = QWidget()
             failure_layout = QVBoxLayout()
@@ -307,7 +316,7 @@ def launch_placeholder_gui() -> int:
             self.failure_box.setReadOnly(True)
             failure_layout.addWidget(self.failure_summary)
             failure_layout.addWidget(self.failure_box)
-            tabs.addTab(failure_tab, "\u5931\u6557\u5206\u6790")
+            tabs.addTab(failure_tab, "\u5361\u95dc\u8a3a\u65b7")
 
             readiness_tab = QWidget()
             readiness_layout = QVBoxLayout()
@@ -319,12 +328,12 @@ def launch_placeholder_gui() -> int:
             self.readiness_box.setReadOnly(True)
             readiness_layout.addWidget(self.readiness_summary)
             readiness_layout.addWidget(self.readiness_box)
-            tabs.addTab(readiness_tab, "\u5c31\u7dd2\u6aa2\u67e5")
+            tabs.addTab(readiness_tab, "\u57f7\u884c\u689d\u4ef6")
 
             calibration_tab = QWidget()
             calibration_layout = QVBoxLayout()
             calibration_tab.setLayout(calibration_layout)
-            self.editor_summary = QLabel("\u53ef\u5957\u7528\u6216\u5132\u5b58\u6bcf\u65e5\u9818\u734e\u7684\u6821\u6b63/\u64f7\u53d6\u8a2d\u5b9a")
+            self.editor_summary = QLabel("\u9019\u88e1\u53ea\u7528\u4f86\u91cd\u65b0\u64f7\u53d6\u6a23\u672c\u6216\u8abf\u6574\u6821\u6e96\uff0c\u4e0d\u6703\u6539\u8b8a runtime \u5df2\u5b9a\u7fa9\u7684\u6bcf\u65e5\u9818\u734e\u6d41\u7a0b\u3002")
             self.editor_summary.setObjectName("secondaryText")
             self.editor_summary.setWordWrap(True)
             calibration_layout.addWidget(self.editor_summary)
@@ -339,12 +348,12 @@ def launch_placeholder_gui() -> int:
             self.threshold_input = QLineEdit()
             self.scale_input = QLineEdit()
             self.offset_input = QLineEdit()
-            form.addRow("\u6d41\u7a0b\u6a21\u5f0f", self.mode_combo)
+            form.addRow("\u6aa2\u8996\u6a21\u5f0f\uff08\u50c5\u8a3a\u65b7\uff09", self.mode_combo)
             form.addRow("\u88c1\u5207\u5340\u57df", self.crop_input)
             form.addRow("\u6bd4\u5c0d\u5340\u57df", self.match_input)
             form.addRow("\u4fe1\u5fc3\u9580\u6abb", self.threshold_input)
-            form.addRow("擷取縮放", self.scale_input)
-            form.addRow("擷取偏移", self.offset_input)
+            form.addRow("\u64f7\u53d6\u7e2e\u653e", self.scale_input)
+            form.addRow("\u64f7\u53d6\u504f\u79fb", self.offset_input)
             calibration_layout.addLayout(form)
             self._editor_widgets = [
                 self.mode_combo,
@@ -355,19 +364,19 @@ def launch_placeholder_gui() -> int:
                 self.offset_input,
             ]
             editor_actions = QHBoxLayout()
-            self.capture_preview_button = QPushButton("\u64f7\u53d6\u9810\u89bd")
+            self.capture_preview_button = QPushButton("\u64f7\u53d6\u76ee\u524d\u756b\u9762")
             self.capture_preview_button.setObjectName("secondaryButton")
             self.capture_preview_button.clicked.connect(lambda: self._schedule_claim_capture("preview"))
             self.capture_failure_button = QPushButton("\u64f7\u53d6\u5931\u6557\u756b\u9762")
             self.capture_failure_button.setObjectName("secondaryButton")
             self.capture_failure_button.clicked.connect(lambda: self._schedule_claim_capture("failure"))
-            self.apply_button = QPushButton("\u5957\u7528\u7de8\u8f2f")
+            self.apply_button = QPushButton("\u5957\u7528\u6821\u6e96\u8349\u7a3f")
             self.apply_button.setObjectName("primaryButton")
             self.apply_button.clicked.connect(self._apply_editor)
-            self.save_button = QPushButton("\u5132\u5b58\u8a2d\u5b9a")
+            self.save_button = QPushButton("\u5132\u5b58\u5230\u8a2d\u5b9a\u6a94")
             self.save_button.setObjectName("secondaryButton")
             self.save_button.clicked.connect(self._save_editor)
-            self.reset_button = QPushButton("\u9084\u539f Session")
+            self.reset_button = QPushButton("\u6e05\u9664\u672c\u6b21\u8349\u7a3f")
             self.reset_button.setObjectName("secondaryButton")
             self.reset_button.clicked.connect(self._reset_editor)
             for button in (
@@ -383,7 +392,7 @@ def launch_placeholder_gui() -> int:
             self.calibration_box = QPlainTextEdit()
             self.calibration_box.setReadOnly(True)
             calibration_layout.addWidget(self.calibration_box)
-            tabs.addTab(calibration_tab, "\u6821\u6b63 / \u64f7\u53d6")
+            tabs.addTab(calibration_tab, "\u6821\u6e96\u5de5\u5177")
 
         def _metric_card(self, layout: QGridLayout, row: int, column: int, title: str) -> QLabel:
             card = QGroupBox(title)
@@ -479,7 +488,8 @@ def launch_placeholder_gui() -> int:
         def _render_claim_rewards(self, state: OperatorConsoleState) -> None:
             claim = state.claim_rewards
             self.claim_header.setText(f"{claim.task_label} | {_zh_status(claim.workflow_status)}")
-            self.claim_overview.setText(f"{claim.active_step_summary}\n{claim.workflow_banner}")
+            overview_lines = [claim.active_step_summary or "-", f"\u4e0b\u4e00\u6b65\uff1a{claim.next_action_summary or '-'}", claim.workflow_banner or "-"]
+            self.claim_overview.setText("\n".join(overview_lines))
             total_steps = max(1, claim.progress_total_count or len(claim.step_rows) or 1)
             self.claim_progress.setMaximum(total_steps)
             self.claim_progress.setValue(min(claim.progress_completed_count, total_steps))
@@ -488,9 +498,11 @@ def launch_placeholder_gui() -> int:
                 "\n".join(
                     [
                         f"目前步驟：{claim.current_step_title or '-'}",
+                        f"視覺檢查：{claim.failure_check_summary or '目前沒有需要人工確認的視覺檢查。'}",
+                        f"下一步建議：{claim.next_action_summary or '-'}",
                         f"執行條件：{claim.runtime_gate_summary or '-'}",
-                        f"最近執行：{_zh_status(claim.last_run_status) if claim.last_run_status else '-'} | {claim.last_run_id or 'n/a'}",
-                        f"失敗原因：{claim.failure_summary or '-'}",
+                        f"最近執行：{claim.last_run_summary or '-'}",
+                        f"失敗原因：{claim.failure_reason or claim.failure_summary or '-'}",
                         f"套用範圍：{claim.selected_scope_summary or '-'}",
                         f"預設配置：{claim.preset_summary or '-'}",
                     ]
@@ -505,7 +517,7 @@ def launch_placeholder_gui() -> int:
                 "skipped": "\u7565\u904e",
             }
             for row in claim.step_rows:
-                prefix = status_labels.get(row.status, row.status)
+                prefix = row.status_text or status_labels.get(row.status, row.status)
                 summary = row.summary or row.success_condition or row.failure_condition
                 self.claim_steps.addItem(QListWidgetItem(f"{prefix} | {row.title}\n{summary}"))
             self.claim_queue_button.setEnabled(claim.can_queue)
@@ -515,8 +527,8 @@ def launch_placeholder_gui() -> int:
             preview = state.vision.preview
             image_path = preview.image_path if preview is not None else ""
             overlay = preview.selected_overlay_summary if preview is not None else ""
-            self.preview_summary.setText(f"image: {image_path or '-'} | overlay: {overlay or '-'}")
-            lines = [f"任務預覽：{state.claim_rewards.preview_summary or '-'}", f"套用範圍：{state.claim_rewards.selected_scope_summary or '-'}"]
+            self.preview_summary.setText(f"畫面來源：{image_path or '-'} | 疊圖焦點：{overlay or '-'}")
+            lines = [f"目前畫面：{state.claim_rewards.preview_summary or '-'}", f"套用範圍：{state.claim_rewards.selected_scope_summary or '-'}"]
             if preview is not None:
                 for key, value in sorted(preview.metadata.items()):
                     lines.append(f"{key}: {value}")
@@ -532,24 +544,23 @@ def launch_placeholder_gui() -> int:
 
         def _render_failure(self, state: OperatorConsoleState) -> None:
             claim_failure = state.vision.failure.claim_rewards
-            self.failure_summary.setText(f"摘要：{state.claim_rewards.failure_summary or '-'} | 步驟：{state.claim_rewards.failure_step_id or '-'}")
+            self.failure_summary.setText(f"摘要：{state.claim_rewards.failure_summary or '-'} | 卡住步驟：{state.claim_rewards.current_step_title or state.claim_rewards.failure_step_id or '-'}")
             if claim_failure is None:
                 self.failure_box.setPlainText("目前沒有失敗快照。")
                 return
             selected = claim_failure.selected_check
             lines = [
-                f"流程摘要：{claim_failure.workflow_summary}",
-                f"目前檢查點：{claim_failure.current_check_id or '-'}",
-                f"選取檢查點：{claim_failure.selected_check_id or '-'}",
-                f"選取摘要：{claim_failure.selected_check_summary or '-'}",
+                f"視覺檢查：{state.claim_rewards.failure_check_summary or '-'}",
+                f"下一步：{state.claim_rewards.next_action_summary or '-'}",
+                f"診斷摘要：{state.claim_rewards.failure_check_summary or state.claim_rewards.failure_summary or '-'}",
+                f"檢查進度：已命中 {claim_failure.matched_check_count} / 缺失 {claim_failure.missing_check_count}",
             ]
             if selected is not None:
                 lines.extend(
                     [
                         f"錨點：{selected.anchor_id}",
-                        f"階段：{selected.stage or '-'}",
-                        f"狀態：{selected.status.value}",
-                        f"訊息：{selected.message or '-'}",
+                        f"階段：{state.claim_rewards.current_step_title or selected.stage or '-'}",
+                        f"狀態：{_zh_match_status(selected.status.value)}",
                         f"門檻：{selected.threshold:.2f}",
                         f"最佳候選：{selected.best_candidate_summary or '-'}",
                         f"命中候選：{selected.matched_candidate_summary or '-'}",
@@ -573,6 +584,7 @@ def launch_placeholder_gui() -> int:
                         f"任務定義：{row.manifest_path}",
                         f"建構狀態：{row.builder_state}",
                         f"執行狀態：{row.implementation_state}",
+                        f"目前可直接執行：{'是' if row.implementation_state == 'ready' else '否'}",
                         f"範圍原因：{', '.join(row.scope_reasons) or '-'}",
                         f"必要錨點：{', '.join(row.required_anchors) or '-'}",
                         f"樣板設定：{', '.join(row.fixture_profile_paths) or '-'}",
@@ -602,6 +614,7 @@ def launch_placeholder_gui() -> int:
                 f"擷取數量：{state.claim_rewards.editor.artifact_count}",
                 f"已套用：{state.claim_rewards.editor.last_applied_summary or '-'}",
                 f"已保存：{state.claim_rewards.editor.persistence_summary or '-'}",
+                f"目前診斷用錨點：{state.claim_rewards.selected_anchor_summary or '-'}",
                 f"目前擷取：{capture.selected_artifact_summary or '-'}",
                 f"校正縮放：{calibration.scale_summary or '-'}",
                 f"校正偏移：{calibration.offset_summary or '-'}",
