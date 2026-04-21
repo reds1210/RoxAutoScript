@@ -200,16 +200,17 @@ class ClaimRewardsEditorView:
     capture_offset_text: str = ""
     artifact_count: int = 0
     last_applied_summary: str = ""
+    persistence_summary: str = ""
 
 
 @dataclass(slots=True)
 class ClaimRewardsPaneView:
     task_id: str = "daily_ui.claim_rewards"
-    task_name: str = "Daily Reward Claim"
+    task_name: str = "每日領獎"
     task_label: str = "每日領獎"
     manifest_path: str = ""
     workflow_status: str = "idle"
-    workflow_banner: str = "Select an instance to inspect the claim rewards workflow."
+    workflow_banner: str = "請先選擇模擬器，再查看每日領獎流程。"
     preset_summary: str = ""
     progress_summary: str = ""
     progress_completed_count: int = 0
@@ -234,6 +235,14 @@ class ClaimRewardsPaneView:
     failure_snapshot_id: str = ""
     step_rows: list[ClaimRewardsStepView] = field(default_factory=list)
     editor: ClaimRewardsEditorView = field(default_factory=ClaimRewardsEditorView)
+
+    def __post_init__(self) -> None:
+        if self.task_id != "daily_ui.claim_rewards":
+            return
+        if not self.task_name.strip() or "?" in self.task_name:
+            self.task_name = "每日領獎"
+        if not self.task_label.strip() or "?" in self.task_label:
+            self.task_label = "每日領獎"
 
 
 @dataclass(slots=True)
@@ -267,59 +276,59 @@ class ManualActionSpec:
 _ACTION_SPECS: dict[str, ManualActionSpec] = {
     "refresh": ManualActionSpec(
         action_key="refresh",
-        label="Refresh",
+        label="重新同步",
         command_type=InstanceCommandType.REFRESH,
         requires_instance=False,
-        help_text="Refresh environment and poll runtime health.",
+        help_text="重新同步環境並輪詢 runtime 健康狀態。",
     ),
     "start_queue": ManualActionSpec(
         action_key="start_queue",
-        label="Start Queue",
+        label="啟動佇列",
         command_type=InstanceCommandType.START_QUEUE,
         requires_instance=True,
-        help_text="Resume queued work on the selected instance.",
+        help_text="在選取的模擬器上恢復佇列工作。",
     ),
     "pause": ManualActionSpec(
         action_key="pause",
-        label="Pause",
+        label="暫停",
         command_type=InstanceCommandType.PAUSE,
         requires_instance=True,
-        help_text="Pause active work on the selected instance.",
+        help_text="暫停選取模擬器上的目前工作。",
     ),
     "stop": ManualActionSpec(
         action_key="stop",
-        label="Stop",
+        label="停止",
         command_type=InstanceCommandType.STOP,
         requires_instance=True,
-        help_text="Stop the current task on the selected instance.",
+        help_text="停止選取模擬器上的目前任務。",
     ),
     "tap": ManualActionSpec(
         action_key="tap",
-        label="Tap",
+        label="點擊",
         command_type=InstanceCommandType.TAP,
         requires_instance=True,
-        help_text="Send one tap to the selected instance.",
+        help_text="對選取的模擬器送出一次點擊。",
     ),
     "swipe": ManualActionSpec(
         action_key="swipe",
-        label="Swipe",
+        label="滑動",
         command_type=InstanceCommandType.SWIPE,
         requires_instance=True,
-        help_text="Send one swipe gesture to the selected instance.",
+        help_text="對選取的模擬器送出一次滑動手勢。",
     ),
     "input_text": ManualActionSpec(
         action_key="input_text",
-        label="Input Text",
+        label="輸入文字",
         command_type=InstanceCommandType.INPUT_TEXT,
         requires_instance=True,
-        help_text="Send text input to the active control.",
+        help_text="對目前控制項送出文字輸入。",
     ),
     "emergency_stop": ManualActionSpec(
         action_key="emergency_stop",
-        label="Emergency Stop",
+        label="全域停止",
         command_type=InstanceCommandType.EMERGENCY_STOP,
         requires_instance=False,
-        help_text="Request a global emergency stop across all instances.",
+        help_text="對所有模擬器要求全域緊急停止。",
     ),
 }
 
@@ -653,11 +662,11 @@ def build_manual_controls(
         for spec in _ACTION_SPECS.values()
     ]
     if global_emergency_stop_active:
-        banner = "Emergency stop requested. Refresh or Start Queue after verification."
+        banner = "已要求全域停止；確認狀態後可重新同步或重新啟動佇列。"
     elif selected_instance_id:
-        banner = f"Manual controls target {selected_instance_label or selected_instance_id}."
+        banner = f"目前手動控制目標：{selected_instance_label or selected_instance_id}。"
     else:
-        banner = "Select an instance to enable queue and interaction controls."
+        banner = "請先選擇模擬器，才能使用佇列與互動控制。"
     return ManualControlsView(
         selected_instance_id=selected_instance_id,
         selected_instance_label=selected_instance_label,
@@ -683,8 +692,8 @@ def _latest_command_feedback(
         return (
             last_queue_result.message
             or (
-                f"start_queue completed for {last_queue_result.instance_id}: "
-                f"{len(last_queue_result.runs)} run(s), remaining={last_queue_result.remaining_queue_depth}"
+                f"{last_queue_result.instance_id} 的啟動佇列已完成："
+                f"{len(last_queue_result.runs)} 次執行，剩餘佇列 {last_queue_result.remaining_queue_depth}"
             ),
             queue_status,
         )
@@ -694,10 +703,10 @@ def _latest_command_feedback(
         or selected_instance_id in last_command_result.instance_ids
     ):
         return (
-            last_command_result.message or f"{last_command_result.command_type.value} completed",
+            last_command_result.message or f"{last_command_result.command_type.value} 已完成",
             last_command_result.status.value,
         )
-    return ("No operator command dispatched yet.", "idle")
+    return ("目前尚未送出任何操作指令。", "idle")
 
 
 def build_console_summary(
@@ -724,15 +733,15 @@ def build_console_summary(
     selected_instance = _instance_lookup(snapshot).get(selected_instance_id)
     selected_snapshot = runtime_snapshot.get_instance_snapshot(selected_instance_id) if selected_instance_id else None
     if not runtime_snapshot.last_sync_ok:
-        status_message = f"Discovery sync failed: {runtime_snapshot.last_sync_error or 'unknown error'}"
+        status_message = f"探索同步失敗：{runtime_snapshot.last_sync_error or '未知錯誤'}"
     elif global_emergency_stop_active:
-        status_message = "Global emergency stop is active."
+        status_message = "全域停止啟用中。"
     elif selected_snapshot is not None and selected_snapshot.context is not None and selected_snapshot.context.stop_requested:
-        status_message = f"{selected_instance.label if selected_instance is not None else selected_instance_id} is stopped."
+        status_message = f"{selected_instance.label if selected_instance is not None else selected_instance_id} 已停止。"
     elif selected_instance is not None:
-        status_message = f"{selected_instance.label} is {selected_instance.status}."
+        status_message = f"{selected_instance.label} 目前為 {selected_instance.status}。"
     else:
-        status_message = "Select an instance to inspect runtime state."
+        status_message = "請先選擇模擬器，查看 runtime 狀態。"
 
     return ConsoleSummaryView(
         total_instances=snapshot.instance_count,

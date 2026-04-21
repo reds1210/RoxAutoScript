@@ -61,6 +61,7 @@ class ProfileStoreTests(unittest.TestCase):
                 calibration_id="calib-main",
                 capture_offset=(12, 24),
                 capture_scale=1.25,
+                crop_box=(0, 0, 1600, 900),
                 anchor_overrides={"daily_panel": {"threshold": 0.92}},
             ),
             instance_overrides={
@@ -83,6 +84,7 @@ class ProfileStoreTests(unittest.TestCase):
         self.assertEqual(binding.calibration_id, "calib-main")
         self.assertEqual(binding.settings["language"], "zh-TW")
         self.assertIn("anchor_overrides", binding.metadata)
+        self.assertEqual(binding.metadata["calibration_crop_box"], (0, 0, 1600, 900))
 
     def test_store_can_resolve_binding_from_disk(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

@@ -119,6 +119,8 @@ class Profile:
             capture_offset = self.calibration.capture_offset
             capture_scale = self.calibration.capture_scale
             metadata["calibration_metadata"] = dict(self.calibration.metadata)
+            if self.calibration.crop_box is not None:
+                metadata["calibration_crop_box"] = tuple(self.calibration.crop_box)
             if self.calibration.anchor_overrides:
                 metadata["anchor_overrides"] = dict(self.calibration.anchor_overrides)
 

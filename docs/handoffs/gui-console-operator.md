@@ -56,6 +56,10 @@
   - capture scale
   - capture offset
   - selected preview/failure source capture
+- The claim-rewards editor can now persist calibration/capture settings into the workspace profile store:
+  - default save path: `profiles/<profile_id>.json`
+  - saved values are rebound into the live runtime session immediately
+  - next app launch will reuse the stored profile when it uniquely matches the instance
 
 ## GUI behavior now
 
@@ -81,6 +85,7 @@
 - Read current step, progress, last run status, failure reason, and scope for `daily_ui.claim_rewards`.
 - Capture preview/failure sources into the claim-rewards editor.
 - Apply/reset the session-scoped claim-rewards editor overrides needed for the first task.
+- Save the current claim-rewards calibration/capture settings into the workspace profile store.
 
 ## Viewer-only now
 
@@ -93,7 +98,7 @@
 
 ## Known limitations
 
-- The editor workflow is still session-scoped operator tooling, not persistent authoring.
+- The editor workflow still includes session-scoped operator aids, but calibration/capture values can now be persisted to the workspace profile store.
 - The workflow-mode control remains an app-side operator aid; it is not a production gameplay setting.
 - No second task is wired into the GUI.
 - The shell still depends on the production environment having working ADB/runtime access when launched outside tests.
@@ -108,4 +113,4 @@
 
 ## Recommended next step
 
-- Keep GUI scope on `daily_ui.claim_rewards`, but replace the remaining session-scoped editor assumptions with runtime-owned production signals once the runtime/task lines expose them.
+- Keep GUI scope on `daily_ui.claim_rewards`, and replace the remaining app-side workflow/editor assumptions with runtime-owned production signals once the runtime/task lines expose them.

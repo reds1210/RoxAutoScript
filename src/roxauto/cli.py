@@ -33,7 +33,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser(
         "gui",
-        help="Launch the placeholder GUI shell if PySide6 is installed",
+        help="Launch the MVP GUI console if PySide6 is installed",
     )
 
     return parser
@@ -54,4 +54,3 @@ def main(argv: list[str] | None = None) -> int:
 
     parser.error(f"Unknown command: {args.command}")
     return 2
-

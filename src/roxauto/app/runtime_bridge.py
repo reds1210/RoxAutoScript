@@ -45,6 +45,12 @@ from roxauto.emulator import (
     LiveRuntimeSnapshot,
     build_adb_live_runtime_session,
 )
+from roxauto.profiles import (
+    CalibrationProfile as StoredCalibrationProfile,
+    InstanceProfileOverride,
+    JsonProfileStore,
+    Profile,
+)
 from roxauto.tasks import TaskBlueprint, TaskFoundationRepository, TaskReadinessReport, TaskRuntimeBuilderInput
 from roxauto.tasks.daily_ui import (
     ClaimRewardsInspection,
@@ -150,6 +156,9 @@ class _ClaimRewardsWorkflowDraft:
     capture_offset: tuple[int, int] | None = None
     artifacts: list[_ClaimRewardsArtifactDraft] = field(default_factory=list)
     last_applied_at: object | None = None
+    last_saved_at: object | None = None
+    last_saved_path: str = ""
+    last_saved_summary: str = ""
 
 
 @dataclass(slots=True)
@@ -195,6 +204,8 @@ class OperatorConsoleRuntimeBridge:
         self,
         *,
         workspace_root: Path | None = None,
+        profiles_root: Path | None = None,
+        profile_store: JsonProfileStore | None = None,
         doctor_report_provider: Callable[[], dict[str, object]] | None = None,
         session: LiveRuntimeSession | None = None,
         adapter: EmulatorActionAdapter | None = None,
@@ -205,6 +216,8 @@ class OperatorConsoleRuntimeBridge:
         self._templates_root = self._workspace_root / "assets" / "templates"
         self._task_foundations_root = self._workspace_root / "src" / "roxauto" / "tasks" / "foundations"
         self._asset_inventory_path = self._task_foundations_root / "asset_inventory.json"
+        self._profiles_root = profiles_root or (self._workspace_root / "profiles")
+        self._profile_store = profile_store or JsonProfileStore(self._profiles_root)
         self._doctor_report_provider = doctor_report_provider or build_doctor_report
         self._task_foundations = TaskFoundationRepository(self._task_foundations_root)
         self._adb_path = "not found"
@@ -258,6 +271,14 @@ class OperatorConsoleRuntimeBridge:
     @property
     def asset_inventory_path(self) -> Path:
         return self._asset_inventory_path
+
+    @property
+    def profiles_root(self) -> Path:
+        return self._profiles_root
+
+    @property
+    def profile_store(self) -> JsonProfileStore:
+        return self._profile_store
 
     def start_live_updates(
         self,
@@ -365,6 +386,9 @@ class OperatorConsoleRuntimeBridge:
     def schedule_claim_rewards_editor_reset(self, instance_id: str) -> None:
         self._enqueue_scheduled_action("claim_rewards.editor_reset", {"instance_id": instance_id})
 
+    def schedule_claim_rewards_editor_save(self, instance_id: str) -> None:
+        self._enqueue_scheduled_action("claim_rewards.editor_save", {"instance_id": instance_id})
+
     def get_live_state(self, selected_instance_id: str = "") -> OperatorConsoleState:
         with self._lock:
             runtime_snapshot = self.snapshot()
@@ -466,6 +490,10 @@ class OperatorConsoleRuntimeBridge:
             return
         if action == "claim_rewards.editor_reset":
             self.reset_claim_rewards_workflow(str(payload.get("instance_id", "")))
+            return
+        if action == "claim_rewards.editor_save":
+            self.save_claim_rewards_editor_profile(str(payload.get("instance_id", "")))
+            return
 
     def refresh(
         self,
@@ -578,6 +606,57 @@ class OperatorConsoleRuntimeBridge:
         with self._lock:
             self._claim_rewards_drafts.pop(instance_id, None)
             self._touch_presentation_state()
+
+    def save_claim_rewards_editor_profile(self, instance_id: str) -> Path:
+        with self._lock:
+            snapshot = self.snapshot()
+            instance_snapshot = snapshot.get_instance_snapshot(instance_id)
+            if instance_snapshot is None:
+                raise ValueError(f"Unknown instance_id: {instance_id}")
+            binding = instance_snapshot.profile_binding or self._fallback_profile_binding(instance_snapshot.instance)
+            calibration_profile = self._build_calibration_profile(instance_snapshot)
+            profile = self._load_or_build_profile(instance_snapshot, binding=binding)
+            if calibration_profile is not None:
+                profile.calibration = self._to_stored_calibration_profile(
+                    calibration_profile,
+                    calibration_id=binding.calibration_id or binding.profile_id,
+                )
+            override = profile.instance_overrides.get(instance_id)
+            if override is None:
+                override = InstanceProfileOverride(
+                    instance_id=instance_id,
+                    adb_serial=instance_snapshot.instance.adb_serial,
+                )
+            override.adb_serial = instance_snapshot.instance.adb_serial
+            override.calibration_id = (
+                profile.calibration.calibration_id if profile.calibration is not None else binding.calibration_id
+            )
+            if calibration_profile is not None:
+                override.capture_offset = (
+                    int(calibration_profile.offset_x),
+                    int(calibration_profile.offset_y),
+                )
+                override.capture_scale = float(calibration_profile.scale_x)
+            else:
+                override.capture_offset = binding.capture_offset
+                override.capture_scale = binding.capture_scale
+            override.notes = binding.notes
+            override.metadata = dict(override.metadata)
+            profile.instance_overrides[instance_id] = override
+            saved_path = self._profile_store.save(profile)
+            rebound = self._profile_store.resolve_binding(
+                profile.profile_id,
+                instance_id,
+                adb_serial=instance_snapshot.instance.adb_serial,
+            )
+            if rebound is not None:
+                self._session.bind_profile(instance_id, rebound)
+            draft = self._claim_rewards_draft(instance_id)
+            draft.last_saved_at = utc_now()
+            draft.last_saved_path = str(saved_path)
+            draft.last_saved_summary = f"已保存到 {self._display_path(saved_path)}"
+            self._touch_presentation_state()
+            return saved_path
 
     def capture_claim_rewards_source(
         self,
@@ -771,9 +850,14 @@ class OperatorConsoleRuntimeBridge:
                 ),
                 artifact_count=len(draft.artifacts) if draft is not None else 0,
                 last_applied_summary=(
-                    "Session-scoped claim rewards editor applied."
+                    "已套用本次工作階段的每日領獎編輯設定。"
                     if draft is not None and draft.last_applied_at is not None
                     else ""
+                ),
+                persistence_summary=self._claim_rewards_persistence_summary(
+                    instance_id,
+                    draft=draft,
+                    profile_binding=selected_snapshot.profile_binding if selected_snapshot is not None else None,
                 ),
             )
             return ClaimRewardsPaneView(
@@ -793,19 +877,19 @@ class OperatorConsoleRuntimeBridge:
                     f"{runtime_input.fixture_profile.locale} | "
                     f"{runtime_input.fixture_profile.resolution[0]}x{runtime_input.fixture_profile.resolution[1]}"
                 ),
-                progress_summary=f"{completed_count}/{len(step_rows)} steps completed",
+                progress_summary=f"已完成 {completed_count}/{len(step_rows)} 個步驟",
                 progress_completed_count=completed_count,
                 progress_total_count=len(step_rows),
                 current_step_title=current_step_title,
                 runtime_gate_summary=(
                     "; ".join(runtime_blockers)
                     if runtime_blockers
-                    else "No blocking runtime readiness requirement recorded."
+                    else "目前沒有阻擋執行的 runtime 條件。"
                 ),
                 queue_summary=(
-                    f"claim_rewards queued={len(queued_items)} | instance queue depth={selected_snapshot.queue_depth}"
+                    f"每日領獎已排入 {len(queued_items)} 筆 | 此模擬器佇列深度 {selected_snapshot.queue_depth}"
                     if selected_snapshot is not None
-                    else "Select an instance to queue claim rewards."
+                    else "請先選擇模擬器，再排入每日領獎。"
                 ),
                 last_run_summary=self._claim_rewards_last_run_summary(last_run),
                 active_step_summary=self._claim_rewards_active_step_summary(
@@ -1567,28 +1651,28 @@ class OperatorConsoleRuntimeBridge:
             if requirement.blocking and not requirement.satisfied
         ]
         if selected_snapshot is None:
-            return "Select an instance to queue or run claim rewards."
-        banner = "App-owned claim rewards operator workflow."
+            return "請先選擇模擬器，再排入或執行每日領獎。"
+        banner = "每日領獎操作流程已就緒。"
         if runtime_blockers:
-            banner += f" Production readiness still blocked by {', '.join(runtime_blockers)}."
+            banner += f" 目前仍受以下 runtime 條件阻擋：{', '.join(runtime_blockers)}。"
         if workflow_status == "queued":
-            banner += f" Queued items: {len(queued_items)}."
+            banner += f" 目前已排入 {len(queued_items)} 筆。"
         elif workflow_status == "running":
-            banner += " Queue execution is currently in progress."
+            banner += " 佇列正在執行中。"
         elif workflow_status in {"failed", "aborted"}:
-            banner += " Last run needs operator review."
+            banner += " 上次執行需要人工檢查。"
         elif workflow_status == "succeeded":
-            banner += " Last run completed successfully."
+            banner += " 上次執行已完成。"
         else:
-            banner += " Queue or run the task from this panel."
+            banner += " 可在此面板排入或直接執行。"
         return banner
 
     def _claim_rewards_last_run_summary(self, last_run: TaskRun | None) -> str:
         if last_run is None:
-            return "No claim rewards run recorded yet."
+            return "目前尚無每日領獎執行紀錄。"
         return (
-            f"{last_run.status.value} | run_id={last_run.run_id} | "
-            f"steps={len(last_run.step_results)}"
+            f"{last_run.status.value} | 執行編號={last_run.run_id} | "
+            f"步驟數={len(last_run.step_results)}"
         )
 
     def _claim_rewards_active_step_summary(
@@ -1599,19 +1683,19 @@ class OperatorConsoleRuntimeBridge:
         last_run: TaskRun | None,
     ) -> str:
         if workflow_status == "queued" and step_rows:
-            return f"Queued before {step_rows[0].step_id}."
+            return f"排隊中，等待步驟 {step_rows[0].step_id}。"
         if last_run is None:
-            return "No step execution recorded yet."
+            return "目前尚無步驟執行紀錄。"
         failed = next((row for row in step_rows if row.status == "failed"), None)
         if failed is not None:
-            return f"Blocked at {failed.step_id}: {failed.summary}"
+            return f"卡在 {failed.step_id}：{failed.summary}"
         completed = [row for row in step_rows if row.status == "succeeded"]
         if len(completed) == len(step_rows):
-            return "All claim rewards steps completed."
+            return "每日領獎全部步驟已完成。"
         pending = next((row for row in step_rows if row.status == "pending"), None)
         if pending is not None:
-            return f"Next step: {pending.step_id}"
-        return "Execution trace available in step rows."
+            return f"下一步：{pending.step_id}"
+        return "可在步驟列表查看完整執行軌跡。"
 
     def _claim_rewards_failure_summary(
         self,
@@ -1620,8 +1704,8 @@ class OperatorConsoleRuntimeBridge:
     ) -> str:
         if failure_snapshot is None:
             if last_run is not None and last_run.status.value == "succeeded":
-                return "No failure snapshot. Last run succeeded."
-            return "No claim rewards failure recorded."
+                return "沒有失敗快照；上次執行成功。"
+            return "目前沒有每日領獎失敗紀錄。"
         return (
             f"{failure_snapshot.reason.value} | "
             f"step={failure_snapshot.step_id or 'n/a'} | "
@@ -1868,6 +1952,81 @@ class OperatorConsoleRuntimeBridge:
     def _touch_presentation_state(self) -> None:
         self._presentation_revision += 1
 
+    def _display_path(self, path: Path) -> str:
+        try:
+            return str(path.relative_to(self._workspace_root))
+        except ValueError:
+            return str(path)
+
+    def _load_or_build_profile(
+        self,
+        instance_snapshot,
+        *,
+        binding: ProfileBinding,
+    ) -> Profile:
+        profile = self._profile_store.load(binding.profile_id)
+        if profile is None:
+            profile = Profile(
+                profile_id=binding.profile_id,
+                display_name=binding.display_name or f"{instance_snapshot.instance.label} Profile",
+                server_name=binding.server_name,
+                character_name=binding.character_name,
+                allowed_tasks=list(binding.allowed_tasks),
+                settings=dict(binding.settings),
+            )
+        else:
+            if not profile.display_name:
+                profile.display_name = binding.display_name or f"{instance_snapshot.instance.label} Profile"
+            if not profile.server_name:
+                profile.server_name = binding.server_name
+            if not profile.character_name:
+                profile.character_name = binding.character_name
+            if not profile.allowed_tasks and binding.allowed_tasks:
+                profile.allowed_tasks = list(binding.allowed_tasks)
+            if not profile.settings and binding.settings:
+                profile.settings = dict(binding.settings)
+        return profile
+
+    def _to_stored_calibration_profile(
+        self,
+        calibration_profile: CalibrationProfile,
+        *,
+        calibration_id: str,
+    ) -> StoredCalibrationProfile:
+        return StoredCalibrationProfile(
+            calibration_id=calibration_id,
+            description="Saved from claim rewards editor",
+            capture_offset=(int(calibration_profile.offset_x), int(calibration_profile.offset_y)),
+            capture_scale=float(calibration_profile.scale_x),
+            crop_box=tuple(calibration_profile.crop_region) if calibration_profile.crop_region is not None else None,
+            anchor_overrides={
+                str(anchor_id): dict(override)
+                for anchor_id, override in calibration_profile.anchor_overrides.items()
+            },
+            metadata={
+                **dict(calibration_profile.metadata),
+                "emulator_name": calibration_profile.emulator_name,
+                "instance_id": calibration_profile.instance_id,
+                "saved_from": "claim_rewards_editor",
+            },
+        )
+
+    def _claim_rewards_persistence_summary(
+        self,
+        instance_id: str,
+        *,
+        draft: _ClaimRewardsWorkflowDraft | None,
+        profile_binding: ProfileBinding | None,
+    ) -> str:
+        if draft is not None and draft.last_saved_summary:
+            return draft.last_saved_summary
+        if profile_binding is None:
+            return ""
+        profile_path = self._profiles_root / f"{profile_binding.profile_id}.json"
+        if profile_path.exists():
+            return f"已綁定設定檔：{self._display_path(profile_path)}"
+        return ""
+
     def _detect_adb_executable(self) -> Path | str | None:
         try:
             report = self._doctor_report_provider()
@@ -1893,7 +2052,7 @@ class OperatorConsoleRuntimeBridge:
             for name, installed in dict(report.get("packages", {})).items()
         }
 
-    def _default_profile_resolver(self, instance: InstanceState) -> ProfileBinding:
+    def _fallback_profile_binding(self, instance: InstanceState) -> ProfileBinding:
         capture_offset = instance.metadata.get("capture_offset") or (0, 0)
         if not isinstance(capture_offset, (list, tuple)) or len(capture_offset) != 2:
             capture_offset = (0, 0)
@@ -1910,6 +2069,17 @@ class OperatorConsoleRuntimeBridge:
             settings=dict(instance.metadata.get("settings", {})),
             metadata=dict(instance.metadata.get("profile_metadata", {})),
         )
+
+    def _default_profile_resolver(self, instance: InstanceState) -> ProfileBinding:
+        preferred_profile_id = instance.metadata.get("profile_id")
+        binding = self._profile_store.resolve_binding_for_instance(
+            instance.instance_id,
+            adb_serial=instance.adb_serial,
+            profile_id=str(preferred_profile_id) if preferred_profile_id else None,
+        )
+        if binding is not None:
+            return binding
+        return self._fallback_profile_binding(instance)
 
     def _refresh_after_command(
         self,
@@ -2019,6 +2189,8 @@ class OperatorConsoleRuntimeBridge:
         failure_snapshot = self._failure_snapshot(instance_snapshot, inspection_result)
         if crop_region is None and failure_snapshot is not None:
             crop_region = failure_snapshot.metadata.get("crop_region")
+        if crop_region is None:
+            crop_region = binding.metadata.get("calibration_crop_box")
         settings = dict(binding.settings)
         anchor_overrides = settings.get("anchor_overrides") or binding.metadata.get("anchor_overrides") or {}
         emulator_name = (

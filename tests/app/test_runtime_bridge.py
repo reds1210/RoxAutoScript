@@ -9,6 +9,7 @@ from roxauto.app.runtime_bridge import OperatorConsoleRuntimeBridge
 from roxauto.core.models import InstanceState, InstanceStatus, ProfileBinding, TaskManifest, TaskSpec
 from roxauto.core.queue import QueuedTask
 from roxauto.core.runtime import TaskStep, step_success
+from roxauto.profiles import JsonProfileStore
 
 
 class FakeAdapter:
@@ -193,7 +194,7 @@ class OperatorConsoleRuntimeBridgeTests(unittest.TestCase):
             self.assertEqual(queued_pane.editor.crop_region_text, "1,2,120,80")
             self.assertEqual(
                 queued_pane.runtime_gate_summary,
-                "No blocking runtime readiness requirement recorded.",
+                "目前沒有阻擋執行的 runtime 條件。",
             )
             self.assertEqual(dispatch.command_type.value, "start_queue")
             self.assertEqual(pane.workflow_status, "succeeded")
@@ -289,6 +290,84 @@ class OperatorConsoleRuntimeBridgeTests(unittest.TestCase):
                 )
             finally:
                 bridge.stop_live_updates()
+
+    def test_save_claim_rewards_editor_profile_persists_profile_file(self) -> None:
+        with TemporaryDirectory() as temp_dir, TemporaryDirectory() as profile_dir:
+            adapter = FakeAdapter(Path(temp_dir), healthy=True)
+            bridge = OperatorConsoleRuntimeBridge(
+                workspace_root=Path(__file__).resolve().parents[2],
+                profiles_root=Path(profile_dir),
+                doctor_report_provider=_doctor_report,
+                adapter=adapter,
+                discovery=lambda: [_instance("mumu-0")],
+                profile_resolver=lambda instance: _profile_binding(instance.instance_id),
+            )
+            bridge.refresh()
+            bridge.update_claim_rewards_workflow(
+                "mumu-0",
+                crop_region=(1, 2, 120, 80),
+                match_region=(10, 20, 240, 120),
+                confidence_threshold=0.96,
+                capture_scale=1.5,
+                capture_offset=(7, 8),
+            )
+
+            saved_path = bridge.save_claim_rewards_editor_profile("mumu-0")
+            saved = JsonProfileStore(Path(profile_dir)).load("profile.mumu-0")
+
+            self.assertEqual(saved_path, Path(profile_dir) / "profile.mumu-0.json")
+            self.assertIsNotNone(saved)
+            assert saved is not None
+            self.assertIsNotNone(saved.calibration)
+            self.assertEqual(saved.calibration.capture_offset, (7, 8))
+            self.assertEqual(saved.calibration.capture_scale, 1.5)
+            self.assertEqual(saved.calibration.crop_box, (1, 2, 120, 80))
+            self.assertEqual(
+                saved.calibration.anchor_overrides["daily_ui.claim_reward"]["match_region"],
+                [10, 20, 240, 120],
+            )
+            pane = bridge.claim_rewards_pane("mumu-0")
+            self.assertIn("profile.mumu-0.json", pane.editor.persistence_summary)
+
+    def test_default_profile_resolver_reloads_saved_claim_rewards_profile(self) -> None:
+        with TemporaryDirectory() as temp_dir, TemporaryDirectory() as profile_dir:
+            adapter = FakeAdapter(Path(temp_dir), healthy=True)
+            bridge = OperatorConsoleRuntimeBridge(
+                workspace_root=Path(__file__).resolve().parents[2],
+                profiles_root=Path(profile_dir),
+                doctor_report_provider=_doctor_report,
+                adapter=adapter,
+                discovery=lambda: [_instance("mumu-0")],
+            )
+            bridge.refresh()
+            bridge.update_claim_rewards_workflow(
+                "mumu-0",
+                crop_region=(2, 4, 90, 60),
+                match_region=(11, 22, 180, 90),
+                confidence_threshold=0.91,
+                capture_scale=1.4,
+                capture_offset=(5, 6),
+            )
+            bridge.save_claim_rewards_editor_profile("mumu-0")
+
+            second_adapter = FakeAdapter(Path(temp_dir), healthy=True)
+            reloaded = OperatorConsoleRuntimeBridge(
+                workspace_root=Path(__file__).resolve().parents[2],
+                profiles_root=Path(profile_dir),
+                doctor_report_provider=_doctor_report,
+                adapter=second_adapter,
+                discovery=lambda: [_instance("mumu-0")],
+            )
+            reloaded.refresh()
+
+            pane = reloaded.claim_rewards_pane("mumu-0")
+            snapshot = reloaded.snapshot().get_instance_snapshot("mumu-0")
+
+            self.assertIsNotNone(snapshot)
+            self.assertEqual(snapshot.profile_binding.capture_scale, 1.4)
+            self.assertEqual(snapshot.profile_binding.capture_offset, (5, 6))
+            self.assertEqual(pane.editor.crop_region_text, "2,4,90,60")
+            self.assertIn("profile.mumu-0.json", pane.editor.persistence_summary)
 
 
 def _instance(instance_id: str) -> InstanceState:

@@ -324,7 +324,7 @@ def launch_placeholder_gui() -> int:
             calibration_tab = QWidget()
             calibration_layout = QVBoxLayout()
             calibration_tab.setLayout(calibration_layout)
-            self.editor_summary = QLabel("\u53ea\u4fdd\u7559\u6bcf\u65e5\u9818\u734e\u9700\u8981\u7684 session-scoped editor")
+            self.editor_summary = QLabel("\u53ef\u5957\u7528\u6216\u5132\u5b58\u6bcf\u65e5\u9818\u734e\u7684\u6821\u6b63/\u64f7\u53d6\u8a2d\u5b9a")
             self.editor_summary.setObjectName("secondaryText")
             self.editor_summary.setWordWrap(True)
             calibration_layout.addWidget(self.editor_summary)
@@ -343,8 +343,8 @@ def launch_placeholder_gui() -> int:
             form.addRow("\u88c1\u5207\u5340\u57df", self.crop_input)
             form.addRow("\u6bd4\u5c0d\u5340\u57df", self.match_input)
             form.addRow("\u4fe1\u5fc3\u9580\u6abb", self.threshold_input)
-            form.addRow("Capture Scale", self.scale_input)
-            form.addRow("Capture Offset", self.offset_input)
+            form.addRow("擷取縮放", self.scale_input)
+            form.addRow("擷取偏移", self.offset_input)
             calibration_layout.addLayout(form)
             self._editor_widgets = [
                 self.mode_combo,
@@ -364,10 +364,19 @@ def launch_placeholder_gui() -> int:
             self.apply_button = QPushButton("\u5957\u7528\u7de8\u8f2f")
             self.apply_button.setObjectName("primaryButton")
             self.apply_button.clicked.connect(self._apply_editor)
+            self.save_button = QPushButton("\u5132\u5b58\u8a2d\u5b9a")
+            self.save_button.setObjectName("secondaryButton")
+            self.save_button.clicked.connect(self._save_editor)
             self.reset_button = QPushButton("\u9084\u539f Session")
             self.reset_button.setObjectName("secondaryButton")
             self.reset_button.clicked.connect(self._reset_editor)
-            for button in (self.capture_preview_button, self.capture_failure_button, self.apply_button, self.reset_button):
+            for button in (
+                self.capture_preview_button,
+                self.capture_failure_button,
+                self.apply_button,
+                self.save_button,
+                self.reset_button,
+            ):
                 editor_actions.addWidget(button)
             editor_actions.addStretch(1)
             calibration_layout.addLayout(editor_actions)
@@ -478,12 +487,12 @@ def launch_placeholder_gui() -> int:
             self.claim_status.setPlainText(
                 "\n".join(
                     [
-                        f"current_step: {claim.current_step_title or '-'}",
-                        f"runtime_gate: {claim.runtime_gate_summary or '-'}",
-                        f"last_run: {_zh_status(claim.last_run_status) if claim.last_run_status else '-'} | {claim.last_run_id or 'n/a'}",
-                        f"failure: {claim.failure_summary or '-'}",
-                        f"scope: {claim.selected_scope_summary or '-'}",
-                        f"preset: {claim.preset_summary or '-'}",
+                        f"目前步驟：{claim.current_step_title or '-'}",
+                        f"執行條件：{claim.runtime_gate_summary or '-'}",
+                        f"最近執行：{_zh_status(claim.last_run_status) if claim.last_run_status else '-'} | {claim.last_run_id or 'n/a'}",
+                        f"失敗原因：{claim.failure_summary or '-'}",
+                        f"套用範圍：{claim.selected_scope_summary or '-'}",
+                        f"預設配置：{claim.preset_summary or '-'}",
                     ]
                 )
             )
@@ -507,7 +516,7 @@ def launch_placeholder_gui() -> int:
             image_path = preview.image_path if preview is not None else ""
             overlay = preview.selected_overlay_summary if preview is not None else ""
             self.preview_summary.setText(f"image: {image_path or '-'} | overlay: {overlay or '-'}")
-            lines = [f"claim_preview: {state.claim_rewards.preview_summary or '-'}", f"scope: {state.claim_rewards.selected_scope_summary or '-'}"]
+            lines = [f"任務預覽：{state.claim_rewards.preview_summary or '-'}", f"套用範圍：{state.claim_rewards.selected_scope_summary or '-'}"]
             if preview is not None:
                 for key, value in sorted(preview.metadata.items()):
                     lines.append(f"{key}: {value}")
@@ -523,28 +532,28 @@ def launch_placeholder_gui() -> int:
 
         def _render_failure(self, state: OperatorConsoleState) -> None:
             claim_failure = state.vision.failure.claim_rewards
-            self.failure_summary.setText(f"summary: {state.claim_rewards.failure_summary or '-'} | step: {state.claim_rewards.failure_step_id or '-'}")
+            self.failure_summary.setText(f"摘要：{state.claim_rewards.failure_summary or '-'} | 步驟：{state.claim_rewards.failure_step_id or '-'}")
             if claim_failure is None:
-                self.failure_box.setPlainText("\u76ee\u524d\u6c92\u6709 failure snapshot\u3002")
+                self.failure_box.setPlainText("目前沒有失敗快照。")
                 return
             selected = claim_failure.selected_check
             lines = [
-                f"workflow: {claim_failure.workflow_summary}",
-                f"current_check: {claim_failure.current_check_id or '-'}",
-                f"selected_check: {claim_failure.selected_check_id or '-'}",
-                f"selected_summary: {claim_failure.selected_check_summary or '-'}",
+                f"流程摘要：{claim_failure.workflow_summary}",
+                f"目前檢查點：{claim_failure.current_check_id or '-'}",
+                f"選取檢查點：{claim_failure.selected_check_id or '-'}",
+                f"選取摘要：{claim_failure.selected_check_summary or '-'}",
             ]
             if selected is not None:
                 lines.extend(
                     [
-                        f"anchor: {selected.anchor_id}",
-                        f"stage: {selected.stage or '-'}",
-                        f"status: {selected.status.value}",
-                        f"message: {selected.message or '-'}",
-                        f"threshold: {selected.threshold:.2f}",
-                        f"best_candidate: {selected.best_candidate_summary or '-'}",
-                        f"matched_candidate: {selected.matched_candidate_summary or '-'}",
-                        f"overlay: {selected.inspection.selected_overlay_summary if selected.inspection is not None else '-'}",
+                        f"錨點：{selected.anchor_id}",
+                        f"階段：{selected.stage or '-'}",
+                        f"狀態：{selected.status.value}",
+                        f"訊息：{selected.message or '-'}",
+                        f"門檻：{selected.threshold:.2f}",
+                        f"最佳候選：{selected.best_candidate_summary or '-'}",
+                        f"命中候選：{selected.matched_candidate_summary or '-'}",
+                        f"疊圖：{selected.inspection.selected_overlay_summary if selected.inspection is not None else '-'}",
                     ]
                 )
             self.failure_box.setPlainText("\n".join(lines))
@@ -552,24 +561,24 @@ def launch_placeholder_gui() -> int:
         def _render_readiness(self, state: OperatorConsoleState) -> None:
             row = _claim_readiness_row(state)
             self.readiness_summary.setText(
-                f"builder_ready: {state.task_readiness.builder_ready_count}/{state.task_readiness.total_tasks} | "
-                f"implementation_ready: {state.task_readiness.implementation_ready_count}/{state.task_readiness.total_tasks}"
+                f"建構就緒：{state.task_readiness.builder_ready_count}/{state.task_readiness.total_tasks} | "
+                f"執行就緒：{state.task_readiness.implementation_ready_count}/{state.task_readiness.total_tasks}"
             )
             if row is None:
-                self.readiness_box.setPlainText("claim rewards readiness row is missing")
+                self.readiness_box.setPlainText("缺少每日領獎的就緒資料。")
                 return
             self.readiness_box.setPlainText(
                 "\n".join(
                     [
-                        f"manifest: {row.manifest_path}",
-                        f"builder_state: {row.builder_state}",
-                        f"implementation_state: {row.implementation_state}",
-                        f"scope_reasons: {', '.join(row.scope_reasons) or '-'}",
-                        f"required_anchors: {', '.join(row.required_anchors) or '-'}",
-                        f"fixture_profiles: {', '.join(row.fixture_profile_paths) or '-'}",
-                        f"runtime_requirements: {', '.join(row.runtime_requirement_ids) or '-'}",
-                        f"warnings: {'; '.join(row.warnings) or '-'}",
-                        f"implementation_blockers: {'; '.join(row.implementation_blockers) or '-'}",
+                        f"任務定義：{row.manifest_path}",
+                        f"建構狀態：{row.builder_state}",
+                        f"執行狀態：{row.implementation_state}",
+                        f"範圍原因：{', '.join(row.scope_reasons) or '-'}",
+                        f"必要錨點：{', '.join(row.required_anchors) or '-'}",
+                        f"樣板設定：{', '.join(row.fixture_profile_paths) or '-'}",
+                        f"Runtime 需求：{', '.join(row.runtime_requirement_ids) or '-'}",
+                        f"警告：{'; '.join(row.warnings) or '-'}",
+                        f"阻擋項：{'; '.join(row.implementation_blockers) or '-'}",
                     ]
                 )
             )
@@ -588,20 +597,22 @@ def launch_placeholder_gui() -> int:
             calibration = state.vision.calibration
             capture = state.vision.capture
             lines = [
-                f"selected_source: {state.claim_rewards.editor.selected_source_kind}",
-                f"selected_image: {state.claim_rewards.editor.selected_source_image or '-'}",
-                f"artifact_count: {state.claim_rewards.editor.artifact_count}",
-                f"capture_selected: {capture.selected_artifact_summary or '-'}",
-                f"calibration_scale: {calibration.scale_summary or '-'}",
-                f"calibration_offset: {calibration.offset_summary or '-'}",
-                f"calibration_crop: {calibration.crop_summary or '-'}",
+                f"選取來源：{state.claim_rewards.editor.selected_source_kind}",
+                f"選取圖片：{state.claim_rewards.editor.selected_source_image or '-'}",
+                f"擷取數量：{state.claim_rewards.editor.artifact_count}",
+                f"已套用：{state.claim_rewards.editor.last_applied_summary or '-'}",
+                f"已保存：{state.claim_rewards.editor.persistence_summary or '-'}",
+                f"目前擷取：{capture.selected_artifact_summary or '-'}",
+                f"校正縮放：{calibration.scale_summary or '-'}",
+                f"校正偏移：{calibration.offset_summary or '-'}",
+                f"校正裁切：{calibration.crop_summary or '-'}",
             ]
             if calibration.selected_resolution is not None:
                 lines.extend(
                     [
-                        f"selected_anchor: {calibration.selected_resolution.anchor_id}",
-                        f"effective_threshold: {calibration.selected_resolution.effective_confidence_threshold:.2f}",
-                        f"effective_match_region: {calibration.selected_resolution.effective_match_region}",
+                        f"選取錨點：{calibration.selected_resolution.anchor_id}",
+                        f"實際門檻：{calibration.selected_resolution.effective_confidence_threshold:.2f}",
+                        f"實際比對區域：{calibration.selected_resolution.effective_match_region}",
                     ]
                 )
             self.calibration_box.setPlainText("\n".join(lines))
@@ -671,6 +682,12 @@ def launch_placeholder_gui() -> int:
             if instance_id is None:
                 return
             self._bridge.schedule_claim_rewards_editor_reset(instance_id)
+
+        def _save_editor(self) -> None:
+            instance_id = self._require_instance()
+            if instance_id is None:
+                return
+            self._bridge.schedule_claim_rewards_editor_save(instance_id)
 
     app.aboutToQuit.connect(bridge.stop_live_updates)
     window = MainWindow(bridge)
