@@ -39,6 +39,22 @@ _INSPECTION_CONTEXT_KEY = "daily_ui.claim_rewards.inspection"
 _INSPECTION_HISTORY_KEY = "daily_ui.claim_rewards.inspection_history"
 _ACTION_DISPATCH_SUCCESS_STATUSES = frozenset({"completed", "partial", "executed", "routed"})
 _STEP_INSPECTION_RETRY_LIMIT = 2
+_SIGNAL_CONTRACT_VERSION = "claim_rewards.v2"
+_RUNTIME_INPUT_BUILDER_PATH = "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_input"
+_RUNTIME_SEAM_BUILDER_PATH = "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_seam"
+_TASK_SPEC_BUILDER_PATH = "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_task_spec"
+_TASK_PRESET_BUILDER_PATH = "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_task_preset"
+_TASK_DISPLAY_BUILDER_PATH = "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_task_display_model"
+_RESULT_SIGNAL_KEYS = (
+    "failure_reason_id",
+    "outcome_code",
+    "expected_panel_states",
+    "inspection_attempts",
+    "signals",
+    "step_outcome",
+    "telemetry",
+    "task_action",
+)
 
 
 class ClaimRewardsPanelState(str, Enum):
@@ -327,6 +343,49 @@ class ClaimRewardsRuntimeInput:
             ],
             "metadata": dict(self.metadata),
         }
+
+
+@dataclass(slots=True)
+class ClaimRewardsRuntimeSeam:
+    task_id: str
+    pack_id: str
+    runtime_input: ClaimRewardsRuntimeInput
+    signal_contract_version: str
+    result_signal_keys: list[str] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "task_id": self.task_id,
+            "pack_id": self.pack_id,
+            "signal_contract_version": self.signal_contract_version,
+            "result_signal_keys": list(self.result_signal_keys),
+            "builder_input": self.runtime_input.builder_input.to_dict(),
+            "runtime_input": self.runtime_input.to_dict(),
+            "metadata": dict(self.metadata),
+        }
+
+    def build_task_spec(
+        self,
+        *,
+        adapter: EmulatorActionAdapter,
+        navigation_plan: ClaimRewardsNavigationPlan,
+        matcher: ClaimRewardsTemplateMatcher | None = None,
+        vision_gateway: ClaimRewardsVisionGateway | None = None,
+    ) -> TaskSpec:
+        return build_claim_rewards_task_spec(
+            adapter=adapter,
+            navigation_plan=navigation_plan,
+            runtime_seam=self,
+            matcher=matcher,
+            vision_gateway=vision_gateway,
+        )
+
+    def build_task_preset(self) -> ClaimRewardsTaskPreset:
+        return build_claim_rewards_task_preset(runtime_seam=self)
+
+    def build_display_model(self, *, run: TaskRun | None = None) -> ClaimRewardsDisplayModel:
+        return build_claim_rewards_task_display_model(run=run, runtime_seam=self)
 
 
 class ClaimRewardsTemplateMatcher(Protocol):
@@ -1082,6 +1141,44 @@ class _ClaimRewardsTaskBridge:
         return str(inspection.metadata.get("workflow_mode", "")) != "ambiguous"
 
 
+def _default_runtime_seam_metadata() -> dict[str, Any]:
+    return {
+        "runtime_input_builder": _RUNTIME_INPUT_BUILDER_PATH,
+        "runtime_seam_builder": _RUNTIME_SEAM_BUILDER_PATH,
+        "task_spec_builder": _TASK_SPEC_BUILDER_PATH,
+        "task_preset_builder": _TASK_PRESET_BUILDER_PATH,
+        "task_display_builder": _TASK_DISPLAY_BUILDER_PATH,
+        "signal_contract_version": _SIGNAL_CONTRACT_VERSION,
+        "result_signal_keys": list(_RESULT_SIGNAL_KEYS),
+    }
+
+
+def _resolve_runtime_seam_metadata(
+    *,
+    builder_input: TaskRuntimeBuilderInput | None = None,
+    blueprint: TaskBlueprint | None = None,
+) -> dict[str, Any]:
+    metadata = _default_runtime_seam_metadata()
+    if blueprint is not None:
+        blueprint_runtime_seam = blueprint.metadata.get("runtime_seam", {})
+        if isinstance(blueprint_runtime_seam, dict):
+            metadata.update(dict(blueprint_runtime_seam))
+    if builder_input is not None:
+        builder_runtime_seam = builder_input.metadata.get("runtime_seam", {})
+        if isinstance(builder_runtime_seam, dict):
+            metadata.update(dict(builder_runtime_seam))
+    result_signal_keys = metadata.get("result_signal_keys", [])
+    metadata["result_signal_keys"] = (
+        [str(item) for item in result_signal_keys]
+        if isinstance(result_signal_keys, list)
+        else list(_RESULT_SIGNAL_KEYS)
+    )
+    metadata["signal_contract_version"] = str(
+        metadata.get("signal_contract_version", _SIGNAL_CONTRACT_VERSION)
+    )
+    return metadata
+
+
 def load_claim_rewards_blueprint(
     repository: TaskFoundationRepository | None = None,
 ) -> TaskBlueprint:
@@ -1136,6 +1233,10 @@ def build_claim_rewards_runtime_input(
 
     blueprint = load_claim_rewards_blueprint(repo)
     display_metadata = load_claim_rewards_display_metadata(repo)
+    runtime_seam_metadata = _resolve_runtime_seam_metadata(
+        builder_input=resolved_builder_input,
+        blueprint=blueprint,
+    )
     fixture_profile_path = _select_fixture_profile_path(resolved_builder_input)
     fixture_profile = repo.load_fixture_profile(repo.root / fixture_profile_path)
     discovered_anchor_specs = load_claim_rewards_anchor_specs(templates_root)
@@ -1165,18 +1266,66 @@ def build_claim_rewards_runtime_input(
             "golden_screen_slugs": [case.screen_slug for case in blueprint.golden_cases],
             "display_name": display_metadata.display_name,
             "preset_id": display_metadata.preset_id,
+            "asset_state": str(blueprint.metadata.get("asset_state", "")),
+            "signal_contract_version": str(
+                runtime_seam_metadata.get("signal_contract_version", _SIGNAL_CONTRACT_VERSION)
+            ),
+            "result_signal_keys": list(runtime_seam_metadata.get("result_signal_keys", list(_RESULT_SIGNAL_KEYS))),
+            "runtime_seam": dict(runtime_seam_metadata),
+        },
+    )
+
+
+def build_claim_rewards_runtime_seam(
+    *,
+    runtime_input: ClaimRewardsRuntimeInput | None = None,
+    builder_input: TaskRuntimeBuilderInput | None = None,
+    readiness_report: TaskReadinessReport | None = None,
+    foundation_repository: TaskFoundationRepository | None = None,
+    templates_root: Path | str | None = None,
+) -> ClaimRewardsRuntimeSeam:
+    resolved_runtime_input = runtime_input or build_claim_rewards_runtime_input(
+        builder_input=builder_input,
+        readiness_report=readiness_report,
+        foundation_repository=foundation_repository,
+        templates_root=templates_root,
+    )
+    runtime_seam_metadata = dict(
+        resolved_runtime_input.metadata.get("runtime_seam", _default_runtime_seam_metadata())
+    )
+    result_signal_keys = runtime_seam_metadata.get("result_signal_keys", list(_RESULT_SIGNAL_KEYS))
+    return ClaimRewardsRuntimeSeam(
+        task_id=resolved_runtime_input.task_id,
+        pack_id=resolved_runtime_input.pack_id,
+        runtime_input=resolved_runtime_input,
+        signal_contract_version=str(
+            runtime_seam_metadata.get("signal_contract_version", _SIGNAL_CONTRACT_VERSION)
+        ),
+        result_signal_keys=(
+            [str(item) for item in result_signal_keys]
+            if isinstance(result_signal_keys, list)
+            else list(_RESULT_SIGNAL_KEYS)
+        ),
+        metadata={
+            **runtime_seam_metadata,
+            "asset_state": str(resolved_runtime_input.metadata.get("asset_state", "")),
+            "implementation_state": str(resolved_runtime_input.metadata.get("implementation_state", "")),
+            "required_anchor_ids": list(resolved_runtime_input.required_anchor_ids),
         },
     )
 
 
 def build_claim_rewards_task_preset(
     *,
+    runtime_seam: ClaimRewardsRuntimeSeam | None = None,
     runtime_input: ClaimRewardsRuntimeInput | None = None,
     readiness_report: TaskReadinessReport | None = None,
     foundation_repository: TaskFoundationRepository | None = None,
     templates_root: Path | str | None = None,
 ) -> ClaimRewardsTaskPreset:
-    resolved_runtime_input = runtime_input or build_claim_rewards_runtime_input(
+    resolved_runtime_input = runtime_input or (
+        runtime_seam.runtime_input if runtime_seam is not None else None
+    ) or build_claim_rewards_runtime_input(
         foundation_repository=foundation_repository,
         templates_root=templates_root,
     )
@@ -1224,6 +1373,17 @@ def build_claim_rewards_step_telemetry(
     step_outcome = result_data.get("step_outcome", {})
     signals = result_data.get("signals", {})
     resolved_failure_reason_id = str(result_data.get("failure_reason_id", step_spec.failure_reason_id))
+    result_expected_panel_states = result_data.get("expected_panel_states")
+    resolved_expected_panel_states = (
+        [str(state) for state in result_expected_panel_states]
+        if isinstance(result_expected_panel_states, list)
+        else [state.value for state in step_spec.expected_panel_states]
+    )
+    resolved_observed_panel_state = ""
+    if isinstance(step_outcome, dict):
+        resolved_observed_panel_state = str(step_outcome.get("observed_panel_state", "")).strip()
+    if not resolved_observed_panel_state:
+        resolved_observed_panel_state = str(result_data.get("state", "")).strip()
     return ClaimRewardsStepTelemetry(
         step_id=step_spec.step_id,
         display_name=step_spec.display_name,
@@ -1236,7 +1396,8 @@ def build_claim_rewards_step_telemetry(
         metadata={
             "action": step_spec.action,
             "failure_reason_id": resolved_failure_reason_id,
-            "expected_panel_states": [state.value for state in step_spec.expected_panel_states],
+            "expected_panel_states": resolved_expected_panel_states,
+            "observed_panel_state": resolved_observed_panel_state,
             "outcome_code": str(result_data.get("outcome_code", "")),
             "signal_anchor_ids": list(step_spec.metadata.get("signal_anchor_ids", [])),
             "step_outcome": dict(step_outcome) if isinstance(step_outcome, dict) else {},
@@ -1249,11 +1410,14 @@ def build_claim_rewards_step_telemetry(
 def build_claim_rewards_task_display_model(
     *,
     run: TaskRun | None = None,
+    runtime_seam: ClaimRewardsRuntimeSeam | None = None,
     runtime_input: ClaimRewardsRuntimeInput | None = None,
     foundation_repository: TaskFoundationRepository | None = None,
     templates_root: Path | str | None = None,
 ) -> ClaimRewardsDisplayModel:
-    resolved_runtime_input = runtime_input or build_claim_rewards_runtime_input(
+    resolved_runtime_input = runtime_input or (
+        runtime_seam.runtime_input if runtime_seam is not None else None
+    ) or build_claim_rewards_runtime_input(
         foundation_repository=foundation_repository,
         templates_root=templates_root,
     )
@@ -1278,6 +1442,9 @@ def build_claim_rewards_task_display_model(
             "manifest_path": resolved_runtime_input.manifest_path,
             "fixture_id": resolved_runtime_input.fixture_profile.fixture_id,
             "readiness_state": resolved_runtime_input.readiness_report.implementation_readiness_state.value,
+            "signal_contract_version": str(
+                resolved_runtime_input.metadata.get("signal_contract_version", _SIGNAL_CONTRACT_VERSION)
+            ),
         },
     )
 
@@ -1286,6 +1453,7 @@ def build_claim_rewards_task_spec(
     *,
     adapter: EmulatorActionAdapter,
     navigation_plan: ClaimRewardsNavigationPlan,
+    runtime_seam: ClaimRewardsRuntimeSeam | None = None,
     runtime_input: ClaimRewardsRuntimeInput | None = None,
     matcher: ClaimRewardsTemplateMatcher | None = None,
     vision_gateway: ClaimRewardsVisionGateway | None = None,
@@ -1295,9 +1463,14 @@ def build_claim_rewards_task_spec(
     if matcher is None and vision_gateway is None:
         raise ValueError("build_claim_rewards_task_spec requires matcher or vision_gateway")
 
-    resolved_runtime_input = runtime_input or build_claim_rewards_runtime_input(
+    resolved_runtime_input = runtime_input or (
+        runtime_seam.runtime_input if runtime_seam is not None else None
+    ) or build_claim_rewards_runtime_input(
         foundation_repository=foundation_repository,
         templates_root=templates_root,
+    )
+    resolved_runtime_seam = runtime_seam or build_claim_rewards_runtime_seam(
+        runtime_input=resolved_runtime_input,
     )
     gateway = vision_gateway or TemplateMatcherClaimRewardsVisionGateway(matcher)
     bridge = _ClaimRewardsTaskBridge(
@@ -1332,6 +1505,7 @@ def build_claim_rewards_task_spec(
             "runtime_bridge": "roxauto.tasks.daily_ui.claim_rewards",
             "builder_input": resolved_runtime_input.builder_input.to_dict(),
             "runtime_input": resolved_runtime_input.to_dict(),
+            "runtime_seam": resolved_runtime_seam.to_dict(),
             "product_display": resolved_runtime_input.display_metadata.to_dict(),
             "task_preset": build_claim_rewards_task_preset(runtime_input=resolved_runtime_input).to_dict(),
             "implementation_readiness_state": (
@@ -1482,7 +1656,8 @@ def _classify_panel_state(
 ) -> ClaimRewardsPanelState:
     signals = _inspection_signals(match_results)
     # Confirmation modal takes precedence over the underlying panel because both layers can be visible together.
-    if signals["confirm_state_visible"] or signals["confirm_button_visible"]:
+    # A shared confirm button alone is not enough to prove the claim-rewards modal is visible.
+    if _confirm_modal_visible(signals):
         return ClaimRewardsPanelState.CONFIRM_REQUIRED
     if signals["reward_panel_visible"] and signals["claim_button_visible"]:
         return ClaimRewardsPanelState.CLAIMABLE
@@ -1608,6 +1783,12 @@ def _inspection_signals(
         "confirm_button_visible": match_results[_CONFIRM_BUTTON_ANCHOR_ID].is_match(),
         "close_button_visible": match_results[_CLOSE_BUTTON_ANCHOR_ID].is_match(),
     }
+
+
+def _confirm_modal_visible(signals: dict[str, bool]) -> bool:
+    if signals["confirm_state_visible"]:
+        return True
+    return signals["reward_panel_visible"] and signals["confirm_button_visible"]
 
 
 def _normalize_inspection_signals(

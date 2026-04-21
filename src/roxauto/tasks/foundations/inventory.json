@@ -15,7 +15,28 @@
         "runtime.daily_ui.dispatch_bridge"
       ],
       "metadata": {
-        "source": "curated_inventory"
+        "source": "curated_inventory",
+        "asset_state": "curated",
+        "signal_contract_version": "claim_rewards.v2",
+        "preset_id": "daily_ui.claim_rewards.mvp",
+        "runtime_seam": {
+          "runtime_input_builder": "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_input",
+          "runtime_seam_builder": "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_seam",
+          "task_spec_builder": "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_task_spec",
+          "task_preset_builder": "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_task_preset",
+          "task_display_builder": "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_task_display_model",
+          "signal_contract_version": "claim_rewards.v2",
+          "result_signal_keys": [
+            "failure_reason_id",
+            "outcome_code",
+            "expected_panel_states",
+            "inspection_attempts",
+            "signals",
+            "step_outcome",
+            "telemetry",
+            "task_action"
+          ]
+        }
       },
       "pack_id": "daily_ui",
       "required_anchors": [

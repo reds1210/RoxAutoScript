@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from json import loads
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Self
 
 from roxauto.tasks.models import (
@@ -34,6 +34,15 @@ class _RequirementSpec:
     builder_blocking: bool = False
     implementation_blocking: bool = False
     asset_anchor_id: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class _DiscoveredTemplateAsset:
+    source_path: str
+    status: TaskAssetStatus
+    template_path: str = ""
+    placeholder: bool = False
+    curation_status: str = ""
 
 
 _REQUIREMENT_SPECS: dict[str, _RequirementSpec] = {
@@ -134,7 +143,7 @@ class TaskFoundationRepository:
                     runtime_requirement_ids=self._requirement_ids(blueprint, "runtime_requirement_ids"),
                     calibration_requirement_ids=self._requirement_ids(blueprint, "calibration_requirement_ids"),
                     foundation_requirement_ids=self._requirement_ids(blueprint, "foundation_requirement_ids"),
-                    metadata={"source": "build_task_inventory"},
+                    metadata=self._inventory_metadata(blueprint),
                 )
             )
         return TaskInventory(
@@ -167,14 +176,18 @@ class TaskFoundationRepository:
             runtime_requirement_ids=list(record.runtime_requirement_ids),
             calibration_requirement_ids=list(record.calibration_requirement_ids),
             foundation_requirement_ids=list(record.foundation_requirement_ids),
-            metadata={"source": "task_foundations"},
+            metadata={
+                **dict(record.metadata),
+                "inventory_source": str(record.metadata.get("source", "")),
+                "source": "task_foundations",
+            },
         )
 
     def build_runtime_builder_inputs(self) -> list[TaskRuntimeBuilderInput]:
         return [self.build_runtime_builder_input(record.task_id) for record in self.load_inventory().records]
 
     def build_asset_inventory(self) -> TaskAssetInventory:
-        anchor_sources = self._discover_template_anchor_sources()
+        anchor_sources = self._discover_template_anchor_assets()
         records: list[TaskAssetRecord] = []
         for blueprint in self.discover_blueprints():
             for fixture_profile_path in blueprint.fixture_profile_paths:
@@ -191,34 +204,42 @@ class TaskFoundationRepository:
                     )
                 )
             for anchor_id in blueprint.required_anchors:
-                source_path = anchor_sources.get(anchor_id, "")
+                anchor_source = anchor_sources.get(anchor_id)
                 records.append(
                     TaskAssetRecord(
                         asset_id=f"{blueprint.task_id}:template:{anchor_id}",
                         pack_id=blueprint.pack_id,
                         task_id=blueprint.task_id,
                         asset_kind=TaskAssetKind.TEMPLATE,
-                        status=TaskAssetStatus.PLACEHOLDER if source_path else TaskAssetStatus.MISSING,
-                        source_path=source_path,
-                        metadata={"anchor_id": anchor_id, "source": "template_manifest"},
+                        status=anchor_source.status if anchor_source is not None else TaskAssetStatus.MISSING,
+                        source_path=anchor_source.source_path if anchor_source is not None else "",
+                        metadata={
+                            "anchor_id": anchor_id,
+                            "source": "template_manifest",
+                            "template_path": anchor_source.template_path if anchor_source is not None else "",
+                            "placeholder": anchor_source.placeholder if anchor_source is not None else False,
+                            "curation_status": (
+                                anchor_source.curation_status if anchor_source is not None else ""
+                            ),
+                        },
                     )
                 )
             convention = self.load_golden_convention()
             for case in blueprint.golden_cases:
+                golden_asset = self._resolve_golden_asset(blueprint, case.screen_slug, convention)
                 records.append(
                     TaskAssetRecord(
                         asset_id=f"{blueprint.task_id}:golden:{case.screen_slug}",
                         pack_id=blueprint.pack_id,
                         task_id=blueprint.task_id,
                         asset_kind=TaskAssetKind.GOLDEN_SCREENSHOT,
-                        status=TaskAssetStatus.PLANNED,
-                        source_path=convention.render_path(
-                            pack_id=blueprint.pack_id,
-                            task_id=blueprint.task_id,
-                            screen_slug=case.screen_slug,
-                            variant=convention.required_variants[0],
-                        ).as_posix(),
-                        metadata={"variants": list(case.variants), "source": "golden_convention"},
+                        status=golden_asset["status"],
+                        source_path=golden_asset["source_path"],
+                        metadata={
+                            "variants": list(case.variants),
+                            "source": golden_asset["source"],
+                            "variant": golden_asset["variant"],
+                        },
                     )
                 )
         return TaskAssetInventory(
@@ -308,15 +329,38 @@ class TaskFoundationRepository:
             metadata={"source": "task_foundations"},
         )
 
-    def _discover_template_anchor_sources(self) -> dict[str, str]:
-        sources: dict[str, str] = {}
+    def _discover_template_anchor_assets(self) -> dict[str, _DiscoveredTemplateAsset]:
+        sources: dict[str, _DiscoveredTemplateAsset] = {}
         for manifest_path in sorted((self.repo_root / "assets" / "templates").glob("*/manifest.json")):
             payload = loads(manifest_path.read_text(encoding="utf-8"))
             relative_path = manifest_path.relative_to(self.repo_root).as_posix()
             for anchor in payload.get("anchors", []):
                 anchor_id = str(anchor.get("anchor_id", ""))
                 if anchor_id:
-                    sources[anchor_id] = f"{relative_path}#{anchor_id}"
+                    metadata = dict(anchor.get("metadata", {}))
+                    template_path = str(anchor.get("template_path", ""))
+                    resolved_template_path = manifest_path.parent / template_path if template_path else None
+                    template_exists = bool(resolved_template_path and resolved_template_path.exists())
+                    curation = metadata.get("curation", {})
+                    curation_status = (
+                        str(curation.get("status", "")).strip().lower()
+                        if isinstance(curation, dict)
+                        else ""
+                    )
+                    status = TaskAssetStatus.MISSING
+                    if template_exists:
+                        status = (
+                            TaskAssetStatus.PLACEHOLDER
+                            if bool(metadata.get("placeholder", False))
+                            else TaskAssetStatus.PRESENT
+                        )
+                    sources[anchor_id] = _DiscoveredTemplateAsset(
+                        source_path=f"{relative_path}#{anchor_id}",
+                        status=status,
+                        template_path=template_path,
+                        placeholder=bool(metadata.get("placeholder", False)),
+                        curation_status=curation_status,
+                    )
         return sources
 
     def _inventory_record_by_task_id(self) -> dict[str, TaskInventoryRecord]:
@@ -324,7 +368,7 @@ class TaskFoundationRepository:
 
     def _asset_records_by_task_id(self) -> dict[str, list[TaskAssetRecord]]:
         grouped: dict[str, list[TaskAssetRecord]] = {}
-        for record in self.load_asset_inventory().records:
+        for record in self.build_asset_inventory().records:
             grouped.setdefault(record.task_id, []).append(record)
         return grouped
 
@@ -406,9 +450,86 @@ class TaskFoundationRepository:
                 "runtime_bridge="
                 f"{status} "
                 "runtime_input_builder=roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_input "
+                "runtime_seam_builder=roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_seam "
                 "task_spec_builder=roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_task_spec"
             )
         return "Requirement is not yet satisfied by current task foundations."
+
+    def _inventory_metadata(self, blueprint: TaskBlueprint) -> dict[str, object]:
+        blueprint_metadata = dict(blueprint.metadata)
+        product_display = dict(blueprint_metadata.get("product_display", {}))
+        metadata: dict[str, object] = {"source": "build_task_inventory"}
+        if "phase" in blueprint_metadata:
+            metadata["phase"] = str(blueprint_metadata.get("phase", ""))
+        if "asset_state" in blueprint_metadata:
+            metadata["asset_state"] = str(blueprint_metadata.get("asset_state", ""))
+        if isinstance(blueprint_metadata.get("runtime_seam"), dict):
+            metadata["runtime_seam"] = dict(blueprint_metadata.get("runtime_seam", {}))
+        signal_contract_version = self._signal_contract_version(blueprint)
+        if signal_contract_version:
+            metadata["signal_contract_version"] = signal_contract_version
+        if product_display.get("preset_id"):
+            metadata["preset_id"] = str(product_display.get("preset_id", ""))
+        if product_display.get("display_name"):
+            metadata["product_display_name"] = str(product_display.get("display_name", ""))
+        return metadata
+
+    def _signal_contract_version(self, blueprint: TaskBlueprint) -> str:
+        runtime_seam = blueprint.metadata.get("runtime_seam", {})
+        if isinstance(runtime_seam, dict):
+            value = str(runtime_seam.get("signal_contract_version", "")).strip()
+            if value:
+                return value
+        product_display = blueprint.metadata.get("product_display", {})
+        if isinstance(product_display, dict):
+            display_metadata = product_display.get("metadata", {})
+            if isinstance(display_metadata, dict):
+                value = str(display_metadata.get("signal_contract_version", "")).strip()
+                if value:
+                    return value
+        return str(blueprint.manifest.metadata.get("signal_contract_version", "")).strip()
+
+    def _resolve_golden_asset(
+        self,
+        blueprint: TaskBlueprint,
+        screen_slug: str,
+        convention: GoldenScreenshotConvention,
+    ) -> dict[str, object]:
+        configured_sources = blueprint.metadata.get("golden_asset_sources", {})
+        configured_source = (
+            dict(configured_sources.get(screen_slug, {}))
+            if isinstance(configured_sources, dict) and isinstance(configured_sources.get(screen_slug), dict)
+            else {}
+        )
+        if configured_source:
+            source_path = str(configured_source.get("source_path", ""))
+            variant = str(configured_source.get("variant", convention.required_variants[0] if convention.required_variants else "baseline"))
+            status = (
+                TaskAssetStatus.PRESENT
+                if source_path and self._repo_relative_path(source_path).exists()
+                else TaskAssetStatus.MISSING
+            )
+            return {
+                "source": "golden_asset_sources",
+                "source_path": source_path,
+                "status": status,
+                "variant": variant,
+            }
+        variant = convention.required_variants[0] if convention.required_variants else "baseline"
+        return {
+            "source": "golden_convention",
+            "source_path": convention.render_path(
+                pack_id=blueprint.pack_id,
+                task_id=blueprint.task_id,
+                screen_slug=screen_slug,
+                variant=variant,
+            ).as_posix(),
+            "status": TaskAssetStatus.PLANNED,
+            "variant": variant,
+        }
+
+    def _repo_relative_path(self, relative_path: str) -> Path:
+        return self.repo_root.joinpath(*PurePosixPath(relative_path).parts)
 
     def _warning_requirements(
         self,

@@ -57,6 +57,12 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
         )
         self.assertEqual(curated.records[0].manifest_path, "packs/daily_ui/daily_claim_rewards.task.json")
         self.assertIn("{screen_slug}", built.records[0].golden_root)
+        self.assertEqual(curated.records[0].metadata["asset_state"], "curated")
+        self.assertEqual(
+            curated.records[0].metadata["runtime_seam"]["runtime_seam_builder"],
+            "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_seam",
+        )
+        self.assertEqual(built.records[0].metadata["signal_contract_version"], "claim_rewards.v2")
 
     def test_discovers_pack_catalogs(self) -> None:
         catalogs = self.repository.discover_pack_catalogs()
@@ -81,15 +87,31 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
 
         self.assertEqual(
             records["daily_ui.claim_rewards:template:daily_ui.claim_reward"].status.value,
-            "placeholder",
+            "present",
         )
         self.assertEqual(
             records["daily_ui.claim_rewards:template:daily_ui.reward_panel"].status.value,
-            "placeholder",
+            "present",
         )
         self.assertEqual(
             records["daily_ui.claim_rewards:template:daily_ui.reward_confirm_state"].status.value,
-            "placeholder",
+            "present",
+        )
+        self.assertEqual(
+            records["daily_ui.claim_rewards:template:common.confirm_button"].status.value,
+            "present",
+        )
+        self.assertEqual(
+            records["daily_ui.claim_rewards:golden:claim_button"].status.value,
+            "present",
+        )
+        self.assertEqual(
+            records["daily_ui.claim_rewards:golden:confirm_state"].status.value,
+            "present",
+        )
+        self.assertEqual(
+            records["daily_ui.claim_rewards:golden:reward_panel"].status.value,
+            "present",
         )
         self.assertEqual(
             records["daily_ui.guild_check_in:template:daily_ui.guild_check_in_button"].status.value,
@@ -107,6 +129,23 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
         self.assertEqual(
             by_task["daily_ui.claim_rewards"].runtime_requirement_ids,
             ["runtime.daily_ui.dispatch_bridge"],
+        )
+        self.assertEqual(
+            by_task["daily_ui.claim_rewards"].metadata["runtime_seam"]["task_spec_builder"],
+            "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_task_spec",
+        )
+        self.assertEqual(
+            by_task["daily_ui.claim_rewards"].metadata["runtime_seam"]["result_signal_keys"],
+            [
+                "failure_reason_id",
+                "outcome_code",
+                "expected_panel_states",
+                "inspection_attempts",
+                "signals",
+                "step_outcome",
+                "telemetry",
+                "task_action",
+            ],
         )
         self.assertEqual(
             by_task["daily_ui.claim_rewards"].required_anchors,
@@ -142,9 +181,10 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
             by_task["daily_ui.claim_rewards"].implementation_requirements[0].details,
         )
         self.assertIn(
-            "warning.daily_ui.claim_rewards:template:daily_ui.claim_reward",
-            [item.requirement_id for item in by_task["daily_ui.claim_rewards"].warning_requirements],
+            "runtime_seam_builder=roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_seam",
+            by_task["daily_ui.claim_rewards"].implementation_requirements[0].details,
         )
+        self.assertEqual(by_task["daily_ui.claim_rewards"].warning_requirements, [])
         self.assertEqual(by_task["daily_ui.guild_check_in"].builder_readiness_state.value, "blocked_by_asset")
         self.assertEqual(
             by_task["daily_ui.guild_check_in"].implementation_readiness_state.value,
@@ -163,3 +203,4 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
         self.assertEqual(len(readiness.reports), 3)
         claim_rewards = next(report for report in readiness.reports if report.task_id == "daily_ui.claim_rewards")
         self.assertEqual(claim_rewards.implementation_readiness_state.value, "ready")
+        self.assertEqual(claim_rewards.warning_requirements, [])
