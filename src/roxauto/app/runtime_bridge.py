@@ -30,9 +30,13 @@ from roxauto.core.models import (
     InstanceStatus,
     PreviewFrame,
     ProfileBinding,
+    StepStatus,
     TaskManifest,
     TaskRun,
+    TaskRunTelemetry,
     TaskSpec,
+    TaskStepResult,
+    TaskStepTelemetryStatus,
     VisionMatch,
 )
 from roxauto.core.queue import QueuedTask
@@ -776,12 +780,30 @@ class OperatorConsoleRuntimeBridge:
             ] if instance_id else []
             record = self._claim_rewards_records.get(instance_id)
             draft = self._claim_rewards_drafts.get(instance_id)
+            active_run = self._claim_rewards_active_run(selected_snapshot)
+            last_run = self._claim_rewards_last_run(
+                selected_snapshot,
+                record=record,
+            )
             workflow_status = self._claim_rewards_workflow_status(
                 selected_snapshot,
                 queued_items=queued_items,
+                active_run=active_run,
+                last_run=last_run,
+            )
+            failure_snapshot = self._claim_rewards_failure_snapshot(
+                selected_snapshot,
+                inspection_result=inspection_result,
                 record=record,
             )
-            failure_snapshot = record.last_run.failure_snapshot if record is not None and record.last_run is not None else None
+            self._ensure_claim_rewards_failure_payload(
+                instance_id,
+                instance_snapshot=selected_snapshot,
+                inspection_result=inspection_result,
+                failure_snapshot=failure_snapshot,
+                record=record,
+            )
+            display_run = active_run or last_run
             source_image = self._resolve_claim_rewards_source_image(
                 selected_snapshot,
                 inspection_result=inspection_result,
@@ -811,14 +833,20 @@ class OperatorConsoleRuntimeBridge:
                 for requirement in readiness.implementation_requirements
                 if requirement.blocking and not requirement.satisfied
             ]
-            last_run = record.last_run if record is not None else None
             display_model = build_claim_rewards_task_display_model(
-                run=last_run,
+                run=display_run,
                 runtime_input=runtime_input,
             )
             step_rows = self._claim_rewards_step_rows(
                 runtime_input,
-                record,
+                display_run,
+                active_step_id=(
+                    selected_snapshot.active_task_run.current_step_id
+                    if selected_snapshot is not None
+                    and selected_snapshot.active_task_run is not None
+                    and selected_snapshot.active_task_run.task_id == _CLAIM_REWARDS_TASK_ID
+                    else ""
+                ),
                 display_model=display_model,
             )
             completed_count = sum(1 for row in step_rows if row.status == "succeeded")
@@ -908,12 +936,12 @@ class OperatorConsoleRuntimeBridge:
                 active_step_summary=self._claim_rewards_active_step_summary(
                     workflow_status,
                     step_rows=step_rows,
-                    last_run=last_run,
+                    last_run=display_run,
                     display_model=display_model,
                 ),
                 failure_summary=self._claim_rewards_failure_summary(
                     failure_snapshot,
-                    last_run,
+                    display_run,
                     display_model=display_model,
                     step_rows=step_rows,
                 ),
@@ -940,6 +968,7 @@ class OperatorConsoleRuntimeBridge:
                 selected_anchor_summary=self._claim_rewards_anchor_summary(
                     selected_anchor_id,
                     selected_resolution=selected_resolution,
+                    claim_failure=claim_failure,
                 ),
                 selected_scope_summary=self._claim_rewards_scope_summary(
                     selected_snapshot,
@@ -1004,6 +1033,7 @@ class OperatorConsoleRuntimeBridge:
         runtime_snapshot = self.snapshot()
         instance_snapshot = runtime_snapshot.get_instance_snapshot(instance_id) if instance_id else None
         inspection_result = self.selected_inspection_result(instance_id) if instance_id else None
+        record = self._claim_rewards_records.get(instance_id) if instance_id else None
         selected_repository_id = self._resolve_repository_id(instance_snapshot, inspection_result)
         catalog = self.vision_workspace_catalog(selected_repository_id=selected_repository_id)
         readiness = self.vision_workspace_readiness()
@@ -1019,9 +1049,25 @@ class OperatorConsoleRuntimeBridge:
             instance_snapshot,
             inspection_result=inspection_result,
         ) if instance_id else None
+        failure_snapshot = self._failure_snapshot(instance_snapshot, inspection_result)
+        if selected_repository_id == "daily_ui":
+            failure_snapshot = self._claim_rewards_failure_snapshot(
+                instance_snapshot,
+                inspection_result=inspection_result,
+                record=record,
+            )
+            self._ensure_claim_rewards_failure_payload(
+                instance_id,
+                instance_snapshot=instance_snapshot,
+                inspection_result=inspection_result,
+                failure_snapshot=failure_snapshot,
+                record=record,
+            )
+            selected_anchor_id = self._resolve_anchor_id(instance_snapshot, inspection_result)
         failure_record = self._build_failure_record(
             instance_snapshot,
             inspection_result=inspection_result,
+            failure_snapshot=failure_snapshot,
             selected_anchor_id=selected_anchor_id,
             match_result=match_result,
         )
@@ -1043,7 +1089,7 @@ class OperatorConsoleRuntimeBridge:
             selected_anchor_id=selected_anchor_id,
             source_image=source_image,
             failure_message=self._failure_message(
-                self._failure_snapshot(instance_snapshot, inspection_result),
+                failure_snapshot,
                 inspection_result=inspection_result,
             ),
         )
@@ -1076,6 +1122,169 @@ class OperatorConsoleRuntimeBridge:
 
     def _claim_rewards_record(self, instance_id: str) -> _ClaimRewardsExecutionRecord:
         return self._claim_rewards_records.setdefault(instance_id, _ClaimRewardsExecutionRecord())
+
+    def _claim_rewards_active_run(self, selected_snapshot) -> TaskRun | None:
+        if selected_snapshot is None:
+            return None
+        telemetry = selected_snapshot.active_task_run
+        if telemetry is None or telemetry.task_id != _CLAIM_REWARDS_TASK_ID:
+            return None
+        return self._task_run_from_telemetry(selected_snapshot.instance_id, telemetry)
+
+    def _claim_rewards_last_run(
+        self,
+        selected_snapshot,
+        *,
+        record: _ClaimRewardsExecutionRecord | None = None,
+    ) -> TaskRun | None:
+        if selected_snapshot is not None:
+            telemetry = selected_snapshot.last_task_run
+            if telemetry is not None and telemetry.task_id == _CLAIM_REWARDS_TASK_ID:
+                return self._task_run_from_telemetry(selected_snapshot.instance_id, telemetry)
+        if record is not None and record.last_run is not None:
+            return record.last_run
+        return None
+
+    def _task_run_from_telemetry(
+        self,
+        instance_id: str,
+        telemetry: TaskRunTelemetry,
+    ) -> TaskRun:
+        return TaskRun(
+            run_id=telemetry.run_id,
+            instance_id=instance_id,
+            task_id=telemetry.task_id,
+            status=telemetry.status,
+            started_at=telemetry.started_at,
+            finished_at=telemetry.finished_at,
+            step_results=[
+                result
+                for step in telemetry.steps
+                if (result := self._task_step_result_from_telemetry(step)) is not None
+            ],
+            stop_condition=telemetry.stop_condition,
+            failure_snapshot=telemetry.failure_snapshot,
+            preview_frame=telemetry.preview_frame,
+        )
+
+    def _task_step_result_from_telemetry(self, step_telemetry) -> TaskStepResult | None:
+        status = self._step_status_from_telemetry(step_telemetry.status)
+        if status is None:
+            return None
+        return TaskStepResult(
+            step_id=step_telemetry.step_id,
+            status=status,
+            message=step_telemetry.message,
+            screenshot_path=step_telemetry.screenshot_path,
+            data=dict(step_telemetry.data),
+        )
+
+    def _step_status_from_telemetry(
+        self,
+        status: TaskStepTelemetryStatus,
+    ) -> StepStatus | None:
+        if status == TaskStepTelemetryStatus.SUCCEEDED:
+            return StepStatus.SUCCEEDED
+        if status == TaskStepTelemetryStatus.FAILED:
+            return StepStatus.FAILED
+        if status == TaskStepTelemetryStatus.SKIPPED:
+            return StepStatus.SKIPPED
+        return None
+
+    def _claim_rewards_failure_snapshot(
+        self,
+        instance_snapshot,
+        *,
+        inspection_result: RuntimeInspectionResult | None = None,
+        record: _ClaimRewardsExecutionRecord | None = None,
+    ) -> FailureSnapshotMetadata | None:
+        if (
+            inspection_result is not None
+            and inspection_result.failure_snapshot is not None
+            and inspection_result.failure_snapshot.task_id == _CLAIM_REWARDS_TASK_ID
+        ):
+            return inspection_result.failure_snapshot
+        if instance_snapshot is not None:
+            current = instance_snapshot.failure_snapshot
+            if current is not None and current.task_id == _CLAIM_REWARDS_TASK_ID:
+                return current
+            sticky = instance_snapshot.last_failure_snapshot
+            if sticky is not None and sticky.task_id == _CLAIM_REWARDS_TASK_ID:
+                return sticky
+        if (
+            record is not None
+            and record.last_run is not None
+            and record.last_run.failure_snapshot is not None
+            and record.last_run.failure_snapshot.task_id == _CLAIM_REWARDS_TASK_ID
+        ):
+            return record.last_run.failure_snapshot
+        return None
+
+    def _claim_rewards_run_for_failure_snapshot(
+        self,
+        instance_snapshot,
+        *,
+        failure_snapshot: FailureSnapshotMetadata | None,
+        record: _ClaimRewardsExecutionRecord | None = None,
+    ) -> TaskRun | None:
+        if failure_snapshot is None:
+            return None
+        if instance_snapshot is not None:
+            active = instance_snapshot.active_task_run
+            if active is not None and active.run_id == failure_snapshot.run_id:
+                return self._task_run_from_telemetry(instance_snapshot.instance_id, active)
+            last = instance_snapshot.last_task_run
+            if last is not None and last.run_id == failure_snapshot.run_id:
+                return self._task_run_from_telemetry(instance_snapshot.instance_id, last)
+        if record is not None and record.last_run is not None and record.last_run.run_id == failure_snapshot.run_id:
+            return record.last_run
+        return None
+
+    def _ensure_claim_rewards_failure_payload(
+        self,
+        instance_id: str,
+        *,
+        instance_snapshot,
+        inspection_result: RuntimeInspectionResult | None = None,
+        failure_snapshot: FailureSnapshotMetadata | None = None,
+        record: _ClaimRewardsExecutionRecord | None = None,
+    ) -> None:
+        if failure_snapshot is None or failure_snapshot.task_id != _CLAIM_REWARDS_TASK_ID:
+            return
+        claim_rewards = failure_snapshot.metadata.get("claim_rewards")
+        if isinstance(claim_rewards, dict) and claim_rewards:
+            return
+        run = self._claim_rewards_run_for_failure_snapshot(
+            instance_snapshot,
+            failure_snapshot=failure_snapshot,
+            record=record,
+        )
+        payload = self._claim_rewards_failure_payload(
+            instance_id,
+            failure_step_id=failure_snapshot.step_id or "",
+            source_image=str(
+                failure_snapshot.metadata.get("source_image")
+                or failure_snapshot.screenshot_path
+                or ""
+            ),
+            inspection_history=(
+                list(record.inspection_history)
+                if record is not None and record.last_run is run
+                else []
+            ),
+            last_run=run,
+        )
+        if not payload:
+            return
+        failure_snapshot.metadata["claim_rewards"] = payload
+        anchor_id = self._claim_rewards_anchor_id_for_check_id(str(payload.get("current_check_id", "")))
+        if anchor_id:
+            failure_snapshot.metadata.setdefault("anchor_id", anchor_id)
+            failure_snapshot.metadata.setdefault("expected_anchor_id", anchor_id)
+        failure_snapshot.metadata.setdefault("source_image", str(payload.get("source_image", "")))
+        workflow_mode = str(payload.get("workflow_mode", "")).strip()
+        if workflow_mode:
+            failure_snapshot.metadata.setdefault("workflow_mode", workflow_mode)
 
     def _claim_rewards_blueprint(self) -> TaskBlueprint:
         if self._claim_rewards_blueprint_cache is None:
@@ -1610,38 +1819,40 @@ class OperatorConsoleRuntimeBridge:
         selected_snapshot,
         *,
         queued_items: list[QueuedTask],
-        record: _ClaimRewardsExecutionRecord | None,
+        active_run: TaskRun | None,
+        last_run: TaskRun | None,
     ) -> str:
         if selected_snapshot is None:
             return "idle"
-        if selected_snapshot.context is not None and selected_snapshot.context.active_task_id == _CLAIM_REWARDS_TASK_ID:
+        if active_run is not None or (
+            selected_snapshot.context is not None and selected_snapshot.context.active_task_id == _CLAIM_REWARDS_TASK_ID
+        ):
             return "running"
         if queued_items:
             return "queued"
-        if record is not None and record.last_run is not None:
-            return record.last_run.status.value
+        if last_run is not None:
+            return last_run.status.value
         return "idle"
 
     def _claim_rewards_step_rows(
         self,
         runtime_input,
-        record: _ClaimRewardsExecutionRecord | None,
+        run: TaskRun | None,
         *,
+        active_step_id: str = "",
         display_model,
     ) -> list[ClaimRewardsStepView]:
         display_steps = {step.step_id: step for step in display_model.steps}
         results_by_step = {
             result.step_id: result
-            for result in (record.last_run.step_results if record is not None and record.last_run is not None else [])
+            for result in (run.step_results if run is not None else [])
         }
         failure_step_id = (
-            record.last_run.failure_snapshot.step_id
-            if record is not None
-            and record.last_run is not None
-            and record.last_run.failure_snapshot is not None
+            run.failure_snapshot.step_id
+            if run is not None and run.failure_snapshot is not None
             else ""
         )
-        current_step_id = failure_step_id or next(
+        current_step_id = failure_step_id or active_step_id or next(
             (
                 step.step_id
                 for step in runtime_input.step_specs
@@ -1855,7 +2066,7 @@ class OperatorConsoleRuntimeBridge:
                     return "若要繼續，重新排入佇列後再執行。"
             selected_check = claim_failure.selected_check if claim_failure is not None else None
             if selected_check is not None:
-                guidance = self._claim_rewards_check_guidance(selected_check.check_id)
+                guidance = self._claim_rewards_check_guidance(selected_check)
                 if guidance:
                     return guidance
             return "先到「卡關診斷」確認失敗步驟與視覺檢查，再決定是否重新擷取或直接重跑。"
@@ -1866,7 +2077,19 @@ class OperatorConsoleRuntimeBridge:
         anchor_id: str,
         *,
         selected_resolution,
+        claim_failure=None,
     ) -> str:
+        selected_check = claim_failure.selected_check if claim_failure is not None else None
+        if selected_check is not None:
+            resolution = selected_check.calibration_resolution or selected_resolution
+            label = selected_check.anchor_label or selected_check.label or self._claim_rewards_check_label(selected_check.check_id)
+            parts = [f"{label} ({selected_check.anchor_id})"]
+            if resolution is not None:
+                parts.append(f"門檻={resolution.effective_confidence_threshold:.2f}")
+                parts.append(f"區域={self._format_region(resolution.effective_match_region)}")
+            else:
+                parts.append(f"門檻={selected_check.threshold:.2f}")
+            return " | ".join(part for part in parts if part)
         if selected_resolution is None:
             return anchor_id or _CLAIM_REWARDS_ANCHOR_ID
         return (
@@ -1907,6 +2130,10 @@ class OperatorConsoleRuntimeBridge:
         failed = next((row for row in step_rows if row.status == "failed"), None)
         if failed is not None:
             return failed.title or failed.step_id
+        if workflow_status == "running":
+            current = next((row for row in step_rows if row.is_current or row.status == "running"), None)
+            if current is not None:
+                return current.title or current.step_id
         pending = next((row for row in step_rows if row.status == "pending"), None)
         if pending is not None:
             return pending.title or pending.step_id
@@ -1952,13 +2179,43 @@ class OperatorConsoleRuntimeBridge:
         }
         return messages.get(check_id, {}).get(status, "視覺訊號仍不穩定。")
 
-    def _claim_rewards_check_guidance(self, check_id: str) -> str:
+    def _claim_rewards_check_guidance(self, selected_check) -> str:
+        if selected_check is None:
+            return ""
+        target = self._claim_rewards_selected_check_target(selected_check)
+        tuning = self._claim_rewards_selected_check_tuning(selected_check)
         mapping = {
-            "reward_panel": "先確認遊戲回到主畫面且每日獎勵入口可見，再重新執行。",
-            "claim_reward_button": "先重新擷取目前畫面，確認領獎按鈕的比對區域與門檻；必要時到「校準工具」調整後再執行。",
-            "confirm_state": "先確認是否真的出現確認彈窗；若有，重擷取失敗畫面並檢查確認按鈕的比對區域後再執行。",
+            "reward_panel": (
+                "先確認遊戲回到主畫面且每日獎勵入口可見；"
+                f"再檢查「{target}」的{tuning}。"
+            ),
+            "claim_reward_button": (
+                "先重新擷取目前畫面，"
+                f"確認「{target}」的{tuning}；必要時到「校準工具」調整後再執行。"
+            ),
+            "confirm_state": (
+                "先確認是否真的出現確認彈窗；若有，"
+                f"檢查「{target}」的{tuning}後再執行。"
+            ),
         }
-        return mapping.get(check_id, "")
+        return mapping.get(selected_check.check_id, "")
+
+    def _claim_rewards_selected_check_target(self, selected_check) -> str:
+        label = selected_check.anchor_label or selected_check.label or self._claim_rewards_check_label(selected_check.check_id)
+        return f"{label} ({selected_check.anchor_id})"
+
+    def _claim_rewards_selected_check_tuning(self, selected_check) -> str:
+        resolution = selected_check.calibration_resolution
+        threshold = (
+            resolution.effective_confidence_threshold
+            if resolution is not None
+            else selected_check.threshold
+        )
+        region = resolution.effective_match_region if resolution is not None else None
+        parts = [f"門檻 {threshold:.2f}"]
+        if region is not None:
+            parts.insert(0, f"比對區域 {self._format_region(region)}")
+        return " 與 ".join(parts)
 
     def _claim_rewards_failure_payload(
         self,
@@ -1967,20 +2224,104 @@ class OperatorConsoleRuntimeBridge:
         failure_step_id: str,
         source_image: str,
         inspection_history: list[tuple[str, ClaimRewardsInspection]],
+        last_run: TaskRun | None = None,
     ) -> dict[str, object]:
-        if not inspection_history:
+        if inspection_history:
+            reason, inspection = inspection_history[-1]
+            workflow_mode = str(inspection.metadata.get("workflow_mode", "")).strip()
+            return self._claim_rewards_failure_payload_from_state(
+                instance_id,
+                failure_step_id=failure_step_id,
+                source_image=source_image or inspection.screenshot_path,
+                state=inspection.state,
+                inspection_reason=reason,
+                workflow_mode=workflow_mode,
+                claim_result=inspection.match_results.get("daily_ui.claim_reward"),
+            )
+        if last_run is None:
             return {}
-        reason, inspection = inspection_history[-1]
-        repository = self._claim_rewards_repository()
-        if repository is None:
+        return self._claim_rewards_failure_payload_from_run(
+            instance_id,
+            failure_step_id=failure_step_id,
+            source_image=source_image,
+            last_run=last_run,
+        )
+
+    def _claim_rewards_failure_payload_from_run(
+        self,
+        instance_id: str,
+        *,
+        failure_step_id: str,
+        source_image: str,
+        last_run: TaskRun,
+    ) -> dict[str, object]:
+        step_result = self._claim_rewards_failure_step_result(
+            last_run,
+            failure_step_id=failure_step_id,
+        )
+        if step_result is None or not isinstance(step_result.data, dict):
             return {}
-        state = inspection.state
+        result_data = dict(step_result.data)
+        attempts = result_data.get("inspection_attempts")
+        latest_attempt = next(
+            (
+                item
+                for item in reversed(attempts)
+                if isinstance(item, dict)
+            ),
+            None,
+        ) if isinstance(attempts, list) else None
+        latest = latest_attempt or result_data
+        metadata = dict(latest.get("metadata", {})) if isinstance(latest.get("metadata", {}), dict) else {}
+        state = self._claim_rewards_panel_state(
+            latest.get("state")
+            or result_data.get("state")
+            or (
+                result_data.get("step_outcome", {}).get("observed_panel_state")
+                if isinstance(result_data.get("step_outcome", {}), dict)
+                else ""
+            )
+        )
+        if state is None:
+            return {}
+        return self._claim_rewards_failure_payload_from_state(
+            instance_id,
+            failure_step_id=failure_step_id or step_result.step_id,
+            source_image=str(
+                latest.get("screenshot_path")
+                or source_image
+                or step_result.screenshot_path
+                or (last_run.failure_snapshot.screenshot_path if last_run.failure_snapshot is not None else "")
+            ),
+            state=state,
+            inspection_reason=str(metadata.get("reason", "") or step_result.step_id),
+            workflow_mode=str(
+                metadata.get("workflow_mode")
+                or (
+                    last_run.failure_snapshot.metadata.get("workflow_mode", "")
+                    if last_run.failure_snapshot is not None
+                    else ""
+                )
+            ).strip(),
+        )
+
+    def _claim_rewards_failure_payload_from_state(
+        self,
+        instance_id: str,
+        *,
+        failure_step_id: str,
+        source_image: str,
+        state: ClaimRewardsPanelState,
+        inspection_reason: str,
+        workflow_mode: str,
+        claim_result: TemplateMatchResult | None = None,
+    ) -> dict[str, object]:
         draft = self._claim_rewards_draft(instance_id)
-        claim_result = inspection.match_results.get("daily_ui.claim_reward")
+        resolved_workflow_mode = workflow_mode or draft.workflow_mode.value
         reward_panel_result = self._claim_rewards_repository_result(
             instance_id=instance_id,
             anchor_id="daily_ui.reward_panel",
-            source_image=source_image or inspection.screenshot_path,
+            source_image=source_image,
             matched=state is not ClaimRewardsPanelState.UNAVAILABLE,
             message=(
                 "Reward panel detected."
@@ -1988,10 +2329,21 @@ class OperatorConsoleRuntimeBridge:
                 else "Reward panel is not visible."
             ),
         )
+        if claim_result is None:
+            claim_result = self._claim_rewards_repository_result(
+                instance_id=instance_id,
+                anchor_id="daily_ui.claim_reward",
+                source_image=source_image,
+                matched=state in {
+                    ClaimRewardsPanelState.CLAIMABLE,
+                    ClaimRewardsPanelState.CONFIRM_REQUIRED,
+                },
+                message=self._claim_rewards_claim_button_message(state),
+            )
         confirm_result = self._claim_rewards_repository_result(
             instance_id=instance_id,
             anchor_id="daily_ui.reward_confirm_state",
-            source_image=source_image or inspection.screenshot_path,
+            source_image=source_image,
             matched=state is ClaimRewardsPanelState.CONFIRM_REQUIRED,
             message=(
                 "Confirmation modal detected."
@@ -2002,49 +2354,77 @@ class OperatorConsoleRuntimeBridge:
         checks = {
             "reward_panel": self._claim_rewards_check_payload(
                 reward_panel_result,
-                source_image=source_image or inspection.screenshot_path,
+                source_image=source_image,
                 message=reward_panel_result.message if reward_panel_result is not None else "",
                 metadata={
-                    "workflow_mode": draft.workflow_mode.value,
+                    "workflow_mode": resolved_workflow_mode,
                     "panel_state": state.value,
-                    "inspection_reason": reason,
+                    "inspection_reason": inspection_reason,
                 },
             ),
             "claim_reward_button": self._claim_rewards_check_payload(
                 claim_result,
-                source_image=source_image or inspection.screenshot_path,
+                source_image=source_image,
                 message=self._claim_rewards_claim_button_message(state),
                 metadata={
-                    "workflow_mode": draft.workflow_mode.value,
+                    "workflow_mode": resolved_workflow_mode,
                     "panel_state": state.value,
-                    "inspection_reason": reason,
+                    "inspection_reason": inspection_reason,
                 },
             ),
             "confirm_state": self._claim_rewards_check_payload(
                 confirm_result,
-                source_image=source_image or inspection.screenshot_path,
+                source_image=source_image,
                 message=confirm_result.message if confirm_result is not None else "",
                 metadata={
-                    "workflow_mode": draft.workflow_mode.value,
+                    "workflow_mode": resolved_workflow_mode,
                     "panel_state": state.value,
-                    "inspection_reason": reason,
+                    "inspection_reason": inspection_reason,
                 },
             ),
         }
         current_check_id = self._claim_rewards_check_id_for_step(failure_step_id)
         if not current_check_id:
-            current_check_id = self._claim_rewards_check_id_for_reason(reason)
+            current_check_id = self._claim_rewards_check_id_for_reason(inspection_reason)
         if failure_step_id == "verify_claim_affordance" and state is ClaimRewardsPanelState.CONFIRM_REQUIRED:
             current_check_id = "confirm_state"
         return {
             "task_id": _CLAIM_REWARDS_TASK_ID,
-            "workflow_mode": draft.workflow_mode.value,
+            "workflow_mode": resolved_workflow_mode,
             "panel_state": state.value,
-            "inspection_reason": reason,
+            "inspection_reason": inspection_reason,
             "current_check_id": current_check_id,
             "selected_check_id": current_check_id,
             "checks": checks,
+            "source_image": source_image,
         }
+
+    def _claim_rewards_failure_step_result(
+        self,
+        run: TaskRun,
+        *,
+        failure_step_id: str,
+    ) -> TaskStepResult | None:
+        if failure_step_id:
+            matched = next(
+                (result for result in reversed(run.step_results) if result.step_id == failure_step_id),
+                None,
+            )
+            if matched is not None:
+                return matched
+        return next(
+            (result for result in reversed(run.step_results) if result.status == StepStatus.FAILED),
+            None,
+        )
+
+    def _claim_rewards_panel_state(self, value: object) -> ClaimRewardsPanelState | None:
+        text = str(value or "").strip()
+        if not text:
+            return None
+        try:
+            return ClaimRewardsPanelState(text)
+        except ValueError:
+            return None
 
     def _claim_rewards_repository_result(
         self,
@@ -2120,6 +2500,14 @@ class OperatorConsoleRuntimeBridge:
             "verify_claimed": "reward_panel",
         }
         return mapping.get(reason, "")
+
+    def _claim_rewards_anchor_id_for_check_id(self, check_id: str) -> str:
+        mapping = {
+            "reward_panel": "daily_ui.reward_panel",
+            "claim_reward_button": "daily_ui.claim_reward",
+            "confirm_state": "daily_ui.reward_confirm_state",
+        }
+        return mapping.get(check_id, "")
 
     def _format_region(
         self,
@@ -2321,10 +2709,26 @@ class OperatorConsoleRuntimeBridge:
                 and instance_snapshot.context.active_task_id == _CLAIM_REWARDS_TASK_ID
             )
             or any(item.task_id == _CLAIM_REWARDS_TASK_ID for item in instance_snapshot.queue_items)
+            or (
+                instance_snapshot.last_task_run is not None
+                and instance_snapshot.last_task_run.task_id == _CLAIM_REWARDS_TASK_ID
+            )
+            or (
+                instance_snapshot.last_failure_snapshot is not None
+                and instance_snapshot.last_failure_snapshot.task_id == _CLAIM_REWARDS_TASK_ID
+            )
             or instance_snapshot.instance_id in self._claim_rewards_drafts
         ):
             candidates.append("daily_ui")
-        failure_snapshot = self._failure_snapshot(instance_snapshot, inspection_result)
+        failure_snapshot = self._claim_rewards_failure_snapshot(
+            instance_snapshot,
+            inspection_result=inspection_result,
+            record=(
+                self._claim_rewards_records.get(instance_snapshot.instance_id)
+                if instance_snapshot is not None
+                else None
+            ),
+        ) or self._failure_snapshot(instance_snapshot, inspection_result)
         if failure_snapshot is not None:
             anchor_id = self._anchor_id_from_failure(failure_snapshot)
             if anchor_id and "." in anchor_id:
@@ -2357,7 +2761,15 @@ class OperatorConsoleRuntimeBridge:
     ) -> str:
         if instance_snapshot is not None and instance_snapshot.instance_id in self._claim_rewards_drafts:
             return self._claim_rewards_drafts[instance_snapshot.instance_id].selected_anchor_id
-        failure_snapshot = self._failure_snapshot(instance_snapshot, inspection_result)
+        failure_snapshot = self._claim_rewards_failure_snapshot(
+            instance_snapshot,
+            inspection_result=inspection_result,
+            record=(
+                self._claim_rewards_records.get(instance_snapshot.instance_id)
+                if instance_snapshot is not None
+                else None
+            ),
+        ) or self._failure_snapshot(instance_snapshot, inspection_result)
         if failure_snapshot is None:
             return ""
         return self._anchor_id_from_failure(failure_snapshot)
@@ -2448,7 +2860,11 @@ class OperatorConsoleRuntimeBridge:
             return None
         draft = self._claim_rewards_drafts.get(instance_snapshot.instance_id)
         preview_frame = self._preview_frame(instance_snapshot, inspection_result)
-        failure_snapshot = self._failure_snapshot(instance_snapshot, inspection_result)
+        failure_snapshot = self._claim_rewards_failure_snapshot(
+            instance_snapshot,
+            inspection_result=inspection_result,
+            record=self._claim_rewards_records.get(instance_snapshot.instance_id),
+        ) or self._failure_snapshot(instance_snapshot, inspection_result)
         source_image = self._resolve_claim_rewards_source_image(
             instance_snapshot,
             inspection_result=inspection_result,
@@ -2526,12 +2942,13 @@ class OperatorConsoleRuntimeBridge:
         instance_snapshot,
         *,
         inspection_result: RuntimeInspectionResult | None = None,
+        failure_snapshot: FailureSnapshotMetadata | None = None,
         selected_anchor_id: str,
         match_result: TemplateMatchResult | None = None,
     ):
         if instance_snapshot is None:
             return None
-        failure_snapshot = self._failure_snapshot(instance_snapshot, inspection_result)
+        failure_snapshot = failure_snapshot or self._failure_snapshot(instance_snapshot, inspection_result)
         if failure_snapshot is None:
             return None
         preview_frame = self._preview_frame(instance_snapshot, inspection_result)

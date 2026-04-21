@@ -74,6 +74,23 @@
   - 哪個視覺檢查是目前焦點
   - 下一步應該先檢查什麼
 - Scope, last-run, and tab copy were rewritten into Traditional Chinese product wording so the single-task surface reads less like an internal debugger.
+- A second 2026-04-21 pass moved the claim-rewards pane closer to the Engine A runtime contract:
+  - the bridge now prefers runtime-owned `active_task_run` / `last_task_run` over bridge-local `_claim_rewards_record` when projecting the main pane
+  - `current_step_title` now follows the runtime-marked active step instead of falling through to the next pending row
+  - runtime-owned `last_failure_snapshot` is now consumed as the sticky failure source for claim-rewards diagnostics when the current failure slot is empty
+  - repository / anchor selection now recognizes claim-rewards `last_task_run` and `last_failure_snapshot`, so the failure tab stays on the `daily_ui` workspace even when bridge-local claim state is empty
+- A third 2026-04-21 pass tightened operator guidance without adding new app-owned workflow state:
+  - `next_action_summary` now names the selected anchor and reuses vision-provided effective match region / confidence threshold, so operators can see which anchor, area, and threshold to adjust
+  - `selected_anchor_summary` now prefers the claim-failure selected check, which keeps the diagnosis focus aligned with the current failed visual check
+  - the failure pane now shows template path, reference image path, effective threshold, and effective match region as viewer-first diagnostics
+  - the failure pane explicitly labels those tuning details as viewer-first/operator aid, not runtime-owned task state
+- The bridge can now rebuild `failure_snapshot.metadata["claim_rewards"]` from task-side step telemetry when:
+  - the bridge-local inspection history cache is empty
+  - the last failed run is still available from runtime-owned telemetry
+- Added regression coverage for:
+  - runtime-owned last-run projection after the bridge-local record cache is cleared
+  - runtime-owned active-run projection while a claim-rewards run is in progress
+  - rebuilding claim-rewards failure diagnostics from runtime `last_task_run` after the cached failure payload is removed
 
 ## Runtime-owned signal now visible in GUI
 
@@ -90,6 +107,7 @@
 - App projection only:
   - mapping normalized failure-check ids into operator guidance text such as `先確認是否真的出現確認彈窗`
   - translating normalized scope and diagnosis summaries into product-facing zh-TW copy
+  - composing viewer-first operator guidance that points to the currently selected anchor plus vision-owned effective region / threshold
 
 ## Viewer-only and operator-aid surfaces
 
@@ -98,6 +116,7 @@
 - `卡關診斷`
   - viewer-only diagnosis surface built from runtime failure snapshot + vision claim-rewards inspector state
   - it explains the active visual check and candidate details, but does not change runtime behavior
+  - template/reference path and effective tuning values shown here are operator aids derived from vision/calibration state, not a new runtime-owned workflow signal
 - `執行條件`
   - viewer-only readiness projection from foundations/runtime requirements
 - `校準工具`
@@ -144,6 +163,7 @@
 - The editor workflow still includes session-scoped operator aids, but calibration/capture values can now be persisted to the workspace profile store.
 - The workflow-mode control remains an app-side operator aid; it is not a production gameplay setting.
 - The secondary failure pane still depends on app-side projection of normalized check ids into operator guidance copy; it is no longer inventing task state, but the wording layer is still owned by Engine B.
+- Sticky claim-rewards failure snapshots only keep the full check-by-check diagnostics when the failure snapshot metadata already carries `claim_rewards`; runtime currently preserves the sticky snapshot, but not a separate historical failed-run telemetry archive after a later successful retry.
 - No second task is wired into the GUI.
 - The shell still depends on the production environment having working ADB/runtime access when launched outside tests.
 
@@ -155,7 +175,14 @@
 - `python -m unittest discover -s tests -t .`
 - Result: `135` tests passed
 - Follow-up result on `2026-04-21`: `142` tests passed
+- Runtime-owned telemetry follow-up on `2026-04-21`:
+  - `python -m py_compile src/roxauto/app/runtime_bridge.py tests/app/test_runtime_bridge.py`
+  - `python -m unittest tests.app.test_runtime_bridge`
+  - `python -m unittest discover -s tests/app -t .`
+  - `python -m unittest discover -s tests -t .`
+  - Result: `161` tests passed
 
 ## Recommended next step
 
-- Keep GUI scope on `daily_ui.claim_rewards`, and replace the remaining app-side workflow/editor assumptions with runtime-owned production signals once the runtime/task lines expose them.
+- Keep GUI scope on `daily_ui.claim_rewards` only.
+- If the project wants sticky failure diagnostics to survive a later successful retry without relying on previously enriched snapshot metadata, Engine A will need a runtime-owned history surface for the latest failed claim-rewards run, not only `last_failure_snapshot`.
