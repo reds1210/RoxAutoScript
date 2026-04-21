@@ -5,7 +5,7 @@
     {
       "task_id": "daily_ui.claim_rewards",
       "blueprint_path": "packs/daily_ui/daily_claim_rewards.task.json",
-      "display_name": "Daily Reward Claim",
+      "display_name": "每日領獎",
       "fixture_profile_paths": [
         "fixture_profiles/default_tw_daily.fixture.json"
       ],
@@ -15,7 +15,9 @@
         "daily_ui.claim_reward"
       ],
       "metadata": {
-        "phase": "pre_gate_3"
+        "phase": "pre_gate_3",
+        "product_display_name": "每日領獎",
+        "preset_id": "daily_ui.claim_rewards.mvp"
       }
     },
     {

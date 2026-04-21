@@ -9,6 +9,8 @@ from roxauto.core.models import InstanceState, InstanceStatus, TaskRunStatus, Vi
 from roxauto.core.runtime import TaskExecutionContext, TaskRunner
 from roxauto.tasks import TaskFoundationRepository
 from roxauto.tasks.daily_ui import (
+    build_claim_rewards_task_display_model,
+    build_claim_rewards_task_preset,
     ClaimRewardsInspection,
     ClaimRewardsNavigationPlan,
     ClaimRewardsPanelState,
@@ -16,6 +18,7 @@ from roxauto.tasks.daily_ui import (
     TemplateMatcherClaimRewardsVisionGateway,
     build_claim_rewards_task_spec,
     load_claim_rewards_anchor_specs,
+    load_claim_rewards_display_metadata,
 )
 
 
@@ -105,6 +108,8 @@ class ClaimRewardsTaskBuilderTests(unittest.TestCase):
         self.assertEqual(runtime_input.builder_input.task_id, "daily_ui.claim_rewards")
         self.assertEqual(runtime_input.readiness_report.implementation_readiness_state.value, "ready")
         self.assertEqual(runtime_input.fixture_profile.fixture_id, "fixture.tw.daily_ui.default")
+        self.assertEqual(runtime_input.display_metadata.locale, "zh-TW")
+        self.assertEqual(runtime_input.display_metadata.display_name, "每日領獎")
         self.assertEqual(
             runtime_input.required_anchor_ids,
             ["common.close_button", "common.confirm_button", "daily_ui.claim_reward"],
@@ -121,6 +126,8 @@ class ClaimRewardsTaskBuilderTests(unittest.TestCase):
         )
         self.assertEqual(runtime_input.step_specs[2].anchor_id, "daily_ui.claim_reward")
         self.assertEqual(runtime_input.step_specs[3].anchor_id, "common.confirm_button")
+        self.assertEqual(runtime_input.step_specs[0].display_name, "開啟每日獎勵")
+        self.assertEqual(runtime_input.step_specs[2].status_texts["running"], "正在點擊領獎")
 
     def test_task_spec_builder_embeds_runtime_input_metadata(self) -> None:
         adapter = FakeAdapter()
@@ -142,10 +149,61 @@ class ClaimRewardsTaskBuilderTests(unittest.TestCase):
         self.assertEqual(spec.metadata["implementation_readiness_state"], "ready")
         self.assertEqual(spec.metadata["builder_input"]["task_id"], "daily_ui.claim_rewards")
         self.assertEqual(spec.metadata["runtime_input"]["fixture_id"], "fixture.tw.daily_ui.default")
+        self.assertEqual(spec.metadata["product_display"]["display_name"], "每日領獎")
+        self.assertEqual(spec.metadata["task_preset"]["display_name"], "每日領獎")
+        self.assertEqual(spec.name, "每日領獎")
         self.assertEqual(
             [step.step_id for step in spec.steps],
             [step.step_id for step in runtime_input.step_specs],
         )
+        self.assertEqual(spec.steps[0].description, "開啟固定的每日獎勵面板。")
+
+    def test_load_display_metadata_and_task_preset_for_gui(self) -> None:
+        display_metadata = load_claim_rewards_display_metadata(self.repository)
+        runtime_input = build_claim_rewards_runtime_input(foundation_repository=self.repository)
+        preset = build_claim_rewards_task_preset(runtime_input=runtime_input)
+
+        self.assertEqual(display_metadata.display_name, "每日領獎")
+        self.assertEqual(display_metadata.description, "開啟固定每日獎勵面板並完成領獎，必要時確認彈窗。")
+        self.assertEqual(display_metadata.status_texts["ready"], "可執行")
+        self.assertEqual(display_metadata.failure_reason_map()["claim_tap_no_effect"].title, "領獎點擊沒有生效")
+        self.assertEqual(preset.display_name, "每日領獎")
+        self.assertEqual(preset.category_label, "每日任務")
+        self.assertEqual(preset.readiness_state, "ready")
+        self.assertEqual(preset.status_text, "可執行")
+
+    def test_build_display_model_projects_gui_labels_and_failure_reason(self) -> None:
+        adapter = FakeAdapter()
+        gateway = ScriptedVisionGateway(
+            [
+                _inspection(ClaimRewardsPanelState.CLAIMABLE, claim_point=(640, 360)),
+                _inspection(ClaimRewardsPanelState.CLAIMABLE, claim_point=(640, 360)),
+            ]
+        )
+        runtime_input = build_claim_rewards_runtime_input(foundation_repository=self.repository)
+        spec = build_claim_rewards_task_spec(
+            adapter=adapter,
+            navigation_plan=self.navigation_plan,
+            runtime_input=runtime_input,
+            vision_gateway=gateway,
+        )
+        run = TaskRunner().run_task(
+            spec=spec,
+            context=TaskExecutionContext(instance=self.instance),
+        )
+
+        display_model = build_claim_rewards_task_display_model(run=run, runtime_input=runtime_input)
+
+        self.assertEqual(display_model.display_name, "每日領獎")
+        self.assertEqual(display_model.status, "failed")
+        self.assertEqual(display_model.status_text, "執行失敗")
+        self.assertEqual(display_model.failure_reason.reason_id, "claim_tap_no_effect")
+        self.assertEqual(display_model.failure_reason.title, "領獎點擊沒有生效")
+        self.assertEqual(display_model.steps[0].display_name, "開啟每日獎勵")
+        self.assertEqual(display_model.steps[0].status_text, "已開啟獎勵面板")
+        self.assertEqual(display_model.steps[2].status_text, "領獎點擊失敗")
+        self.assertEqual(display_model.steps[2].failure_reason.reason_id, "claim_tap_no_effect")
+        self.assertIn("畫面沒有進入已領取或待確認狀態", display_model.status_summary)
 
     def test_template_match_gateway_classifies_reward_panel_states(self) -> None:
         anchors = load_claim_rewards_anchor_specs()
