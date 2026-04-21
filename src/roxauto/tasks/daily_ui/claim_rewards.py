@@ -30,11 +30,15 @@ from roxauto.tasks.models import (
 )
 from roxauto.vision import AnchorRepository, AnchorSpec, TemplateMatchResult, build_match_result
 
+_REWARD_PANEL_ANCHOR_ID = "daily_ui.reward_panel"
 _CLAIM_REWARD_ANCHOR_ID = "daily_ui.claim_reward"
+_REWARD_CONFIRM_STATE_ANCHOR_ID = "daily_ui.reward_confirm_state"
 _CLOSE_BUTTON_ANCHOR_ID = "common.close_button"
 _CONFIRM_BUTTON_ANCHOR_ID = "common.confirm_button"
 _INSPECTION_CONTEXT_KEY = "daily_ui.claim_rewards.inspection"
 _INSPECTION_HISTORY_KEY = "daily_ui.claim_rewards.inspection_history"
+_ACTION_DISPATCH_SUCCESS_STATUSES = frozenset({"completed", "partial", "executed", "routed"})
+_STEP_INSPECTION_RETRY_LIMIT = 2
 
 
 class ClaimRewardsPanelState(str, Enum):
@@ -42,6 +46,17 @@ class ClaimRewardsPanelState(str, Enum):
     CLAIMED = "claimed"
     CONFIRM_REQUIRED = "confirm_required"
     UNAVAILABLE = "unavailable"
+
+
+_VISIBLE_PANEL_STATES = (
+    ClaimRewardsPanelState.CLAIMABLE,
+    ClaimRewardsPanelState.CLAIMED,
+    ClaimRewardsPanelState.CONFIRM_REQUIRED,
+)
+_POST_CLAIM_STATES = (
+    ClaimRewardsPanelState.CLAIMED,
+    ClaimRewardsPanelState.CONFIRM_REQUIRED,
+)
 
 
 @dataclass(slots=True)
@@ -58,6 +73,7 @@ class ClaimRewardsInspection:
     screenshot_path: str
     message: str = ""
     match_results: dict[str, TemplateMatchResult] = field(default_factory=dict)
+    signals: dict[str, bool] = field(default_factory=dict)
     claim_point: tuple[int, int] | None = None
     confirm_point: tuple[int, int] | None = None
     close_point: tuple[int, int] | None = None
@@ -68,6 +84,7 @@ class ClaimRewardsInspection:
             "state": self.state.value,
             "screenshot_path": self.screenshot_path,
             "message": self.message,
+            "signals": {str(key): bool(value) for key, value in self.signals.items()},
             "claim_point": self.claim_point,
             "confirm_point": self.confirm_point,
             "close_point": self.close_point,
@@ -356,17 +373,21 @@ class TemplateMatcherClaimRewardsVisionGateway:
                 metadata=metadata,
             )
             for anchor_id in (
+                _REWARD_PANEL_ANCHOR_ID,
                 _CLAIM_REWARD_ANCHOR_ID,
+                _REWARD_CONFIRM_STATE_ANCHOR_ID,
                 _CONFIRM_BUTTON_ANCHOR_ID,
                 _CLOSE_BUTTON_ANCHOR_ID,
             )
         }
+        signals = _inspection_signals(match_results)
         state = _classify_panel_state(match_results)
         return ClaimRewardsInspection(
             state=state,
             screenshot_path=str(screenshot_path),
             message=_inspection_message(state),
             match_results=match_results,
+            signals=signals,
             claim_point=_matched_point(match_results[_CLAIM_REWARD_ANCHOR_ID]),
             confirm_point=_matched_point(match_results[_CONFIRM_BUTTON_ANCHOR_ID]),
             close_point=_matched_point(match_results[_CLOSE_BUTTON_ANCHOR_ID]),
@@ -408,139 +429,410 @@ class _ClaimRewardsTaskBridge:
         self._anchor_specs = dict(anchor_specs)
 
     def open_reward_panel(self, context: TaskExecutionContext):
-        self._adapter.tap(context.instance, self._navigation_plan.open_panel_point)
-        inspection = self._capture_inspection(context, reason="open_reward_panel")
+        precheck, precheck_attempts = self._inspect_until(
+            context,
+            step_id="open_reward_panel",
+            reason="open_reward_panel.precheck",
+            accepted_states=_VISIBLE_PANEL_STATES,
+            max_attempts=1,
+        )
+        if precheck.state in _VISIBLE_PANEL_STATES:
+            return step_success(
+                "open_reward_panel",
+                f"Reward panel was already open in {precheck.state.value} state.",
+                screenshot_path=precheck.screenshot_path,
+                data=self._step_data(
+                    precheck,
+                    step_id="open_reward_panel",
+                    outcome_code=f"open_panel_already_{precheck.state.value}",
+                    expected_panel_states=_VISIBLE_PANEL_STATES,
+                    inspection_attempts=precheck_attempts,
+                    open_panel_point=self._navigation_plan.open_panel_point,
+                ),
+            )
+
+        task_action = self._tap(
+            context,
+            step_id="open_reward_panel",
+            point=self._navigation_plan.open_panel_point,
+            reason="open_reward_panel",
+        )
+        if self._dispatch_failed(task_action):
+            return step_failure(
+                "open_reward_panel",
+                self._dispatch_failure_message(
+                    action_name="reward panel navigation tap",
+                    task_action=task_action,
+                ),
+                data={
+                    **self._step_data(
+                        precheck,
+                        step_id="open_reward_panel",
+                        outcome_code="open_panel_dispatch_failed",
+                        failure_reason_id="runtime_dispatch_failed",
+                        expected_panel_states=_VISIBLE_PANEL_STATES,
+                        inspection_attempts=precheck_attempts,
+                        task_action=task_action,
+                        open_panel_point=self._navigation_plan.open_panel_point,
+                    ),
+                },
+            )
+        inspection, inspection_attempts = self._inspect_until(
+            context,
+            step_id="open_reward_panel",
+            reason="open_reward_panel",
+            accepted_states=_VISIBLE_PANEL_STATES,
+            max_attempts=_STEP_INSPECTION_RETRY_LIMIT,
+        )
         if inspection.state is ClaimRewardsPanelState.UNAVAILABLE:
             return step_failure(
                 "open_reward_panel",
                 "Reward panel could not be confirmed after deterministic navigation.",
                 screenshot_path=inspection.screenshot_path,
-                data={
-                    **inspection.to_dict(),
-                    "open_panel_point": self._navigation_plan.open_panel_point,
-                },
+                data=self._step_data(
+                    inspection,
+                    step_id="open_reward_panel",
+                    outcome_code="open_panel_unverified",
+                    failure_reason_id="reward_panel_unavailable",
+                    expected_panel_states=_VISIBLE_PANEL_STATES,
+                    inspection_attempts=inspection_attempts,
+                    task_action=task_action,
+                    open_panel_point=self._navigation_plan.open_panel_point,
+                    pre_action_inspection=precheck.to_dict(),
+                ),
             )
         return step_success(
             "open_reward_panel",
             f"Reward panel detected in {inspection.state.value} state.",
             screenshot_path=inspection.screenshot_path,
-            data={
-                **inspection.to_dict(),
-                "open_panel_point": self._navigation_plan.open_panel_point,
-            },
+            data=self._step_data(
+                inspection,
+                step_id="open_reward_panel",
+                outcome_code=f"open_panel_verified_{inspection.state.value}",
+                expected_panel_states=_VISIBLE_PANEL_STATES,
+                inspection_attempts=inspection_attempts,
+                task_action=task_action,
+                open_panel_point=self._navigation_plan.open_panel_point,
+                pre_action_inspection=precheck.to_dict(),
+            ),
         )
 
     def verify_claim_affordance(self, context: TaskExecutionContext):
-        inspection = self._current_inspection(context) or self._capture_inspection(
+        inspection, inspection_attempts = self._inspect_until(
             context,
+            step_id="verify_claim_affordance",
             reason="verify_claim_affordance",
+            accepted_states=_VISIBLE_PANEL_STATES,
+            initial_inspection=self._current_inspection(context),
+            max_attempts=_STEP_INSPECTION_RETRY_LIMIT,
         )
-        if inspection.state in {
-            ClaimRewardsPanelState.CLAIMABLE,
-            ClaimRewardsPanelState.CLAIMED,
-        }:
+        if (
+            inspection.state is ClaimRewardsPanelState.CONFIRM_REQUIRED
+            and not self._supports_confirmation_recovery(inspection)
+        ):
+            return step_failure(
+                "verify_claim_affordance",
+                "Claim button state remains ambiguous.",
+                screenshot_path=inspection.screenshot_path,
+                data=self._step_data(
+                    inspection,
+                    step_id="verify_claim_affordance",
+                    outcome_code="claim_state_ambiguous",
+                    failure_reason_id="claim_state_ambiguous",
+                    expected_panel_states=_VISIBLE_PANEL_STATES,
+                    inspection_attempts=inspection_attempts,
+                ),
+            )
+        if inspection.state in _VISIBLE_PANEL_STATES:
+            message = (
+                "Reward panel is already waiting for claim confirmation."
+                if inspection.state is ClaimRewardsPanelState.CONFIRM_REQUIRED
+                else f"Reward panel classified as {inspection.state.value}."
+            )
             return step_success(
                 "verify_claim_affordance",
-                f"Reward panel classified as {inspection.state.value}.",
+                message,
                 screenshot_path=inspection.screenshot_path,
-                data=inspection.to_dict(),
+                data=self._step_data(
+                    inspection,
+                    step_id="verify_claim_affordance",
+                    outcome_code=f"claim_state_{inspection.state.value}",
+                    expected_panel_states=_VISIBLE_PANEL_STATES,
+                    inspection_attempts=inspection_attempts,
+                ),
             )
         return step_failure(
             "verify_claim_affordance",
             "Claim button state remains ambiguous.",
             screenshot_path=inspection.screenshot_path,
-            data=inspection.to_dict(),
+            data=self._step_data(
+                inspection,
+                step_id="verify_claim_affordance",
+                outcome_code="claim_state_ambiguous",
+                failure_reason_id="claim_state_ambiguous",
+                expected_panel_states=_VISIBLE_PANEL_STATES,
+                inspection_attempts=inspection_attempts,
+            ),
         )
 
     def claim_reward(self, context: TaskExecutionContext):
-        inspection = self._current_inspection(context) or self._capture_inspection(
+        inspection, inspection_attempts = self._inspect_until(
             context,
+            step_id="claim_reward",
             reason="claim_reward.precheck",
+            accepted_states=_VISIBLE_PANEL_STATES,
+            initial_inspection=self._current_inspection(context),
+            max_attempts=_STEP_INSPECTION_RETRY_LIMIT,
         )
         if inspection.state is ClaimRewardsPanelState.CLAIMED:
             return step_success(
                 "claim_reward",
                 "Reward is already claimed; tap is not required.",
                 screenshot_path=inspection.screenshot_path,
-                data=inspection.to_dict(),
+                data=self._step_data(
+                    inspection,
+                    step_id="claim_reward",
+                    outcome_code="claim_already_claimed",
+                    expected_panel_states=_POST_CLAIM_STATES,
+                    inspection_attempts=inspection_attempts,
+                ),
+            )
+        if inspection.state is ClaimRewardsPanelState.CONFIRM_REQUIRED:
+            if not self._supports_confirmation_recovery(inspection):
+                return step_failure(
+                    "claim_reward",
+                    "Reward panel does not expose a tappable claim affordance.",
+                    screenshot_path=inspection.screenshot_path,
+                    data=self._step_data(
+                        inspection,
+                        step_id="claim_reward",
+                        outcome_code="claim_affordance_missing",
+                        failure_reason_id="claim_affordance_missing",
+                        expected_panel_states=_POST_CLAIM_STATES,
+                        inspection_attempts=inspection_attempts,
+                    ),
+                )
+            return step_success(
+                "claim_reward",
+                "Claim action already advanced to the confirmation modal; tap is not required.",
+                screenshot_path=inspection.screenshot_path,
+                data=self._step_data(
+                    inspection,
+                    step_id="claim_reward",
+                    outcome_code="claim_already_confirm_required",
+                    expected_panel_states=_POST_CLAIM_STATES,
+                    inspection_attempts=inspection_attempts,
+                ),
             )
         if inspection.state is not ClaimRewardsPanelState.CLAIMABLE or inspection.claim_point is None:
             return step_failure(
                 "claim_reward",
                 "Reward panel does not expose a tappable claim affordance.",
                 screenshot_path=inspection.screenshot_path,
-                data=inspection.to_dict(),
+                data=self._step_data(
+                    inspection,
+                    step_id="claim_reward",
+                    outcome_code="claim_affordance_missing",
+                    failure_reason_id="claim_affordance_missing",
+                    expected_panel_states=_POST_CLAIM_STATES,
+                    inspection_attempts=inspection_attempts,
+                ),
             )
 
-        self._adapter.tap(context.instance, inspection.claim_point)
-        follow_up = self._capture_inspection(context, reason="claim_reward.post_tap")
-        if follow_up.state in {
-            ClaimRewardsPanelState.CLAIMED,
-            ClaimRewardsPanelState.CONFIRM_REQUIRED,
-        }:
+        task_action = self._tap(
+            context,
+            step_id="claim_reward",
+            point=inspection.claim_point,
+            reason="claim_reward.tap",
+        )
+        if self._dispatch_failed(task_action):
+            return step_failure(
+                "claim_reward",
+                self._dispatch_failure_message(
+                    action_name="claim tap",
+                    task_action=task_action,
+                ),
+                screenshot_path=inspection.screenshot_path,
+                data=self._step_data(
+                    inspection,
+                    step_id="claim_reward",
+                    outcome_code="claim_dispatch_failed",
+                    failure_reason_id="runtime_dispatch_failed",
+                    expected_panel_states=_POST_CLAIM_STATES,
+                    inspection_attempts=inspection_attempts,
+                    task_action=task_action,
+                ),
+            )
+        follow_up, follow_up_attempts = self._inspect_until(
+            context,
+            step_id="claim_reward",
+            reason="claim_reward.post_tap",
+            accepted_states=_POST_CLAIM_STATES,
+            max_attempts=_STEP_INSPECTION_RETRY_LIMIT,
+        )
+        if follow_up.state in _POST_CLAIM_STATES:
             return step_success(
                 "claim_reward",
                 f"Claim tap advanced panel to {follow_up.state.value}.",
                 screenshot_path=follow_up.screenshot_path,
-                data=follow_up.to_dict(),
+                data=self._step_data(
+                    follow_up,
+                    step_id="claim_reward",
+                    outcome_code=f"claim_tap_advanced_to_{follow_up.state.value}",
+                    expected_panel_states=_POST_CLAIM_STATES,
+                    inspection_attempts=follow_up_attempts,
+                    task_action=task_action,
+                    pre_action_inspection=inspection.to_dict(),
+                ),
             )
         return step_failure(
             "claim_reward",
             "Claim tap did not advance the reward panel.",
             screenshot_path=follow_up.screenshot_path,
-            data=follow_up.to_dict(),
+            data=self._step_data(
+                follow_up,
+                step_id="claim_reward",
+                outcome_code="claim_tap_no_effect",
+                failure_reason_id="claim_tap_no_effect",
+                expected_panel_states=_POST_CLAIM_STATES,
+                inspection_attempts=follow_up_attempts,
+                task_action=task_action,
+                pre_action_inspection=inspection.to_dict(),
+            ),
         )
 
     def confirm_reward_claim(self, context: TaskExecutionContext):
-        inspection = self._current_inspection(context) or self._capture_inspection(
+        inspection, inspection_attempts = self._inspect_until(
             context,
+            step_id="confirm_reward_claim",
             reason="confirm_reward_claim.precheck",
+            accepted_states=_POST_CLAIM_STATES,
+            initial_inspection=self._current_inspection(context),
+            max_attempts=_STEP_INSPECTION_RETRY_LIMIT,
         )
         if inspection.state is ClaimRewardsPanelState.CLAIMED:
             return step_success(
                 "confirm_reward_claim",
                 "Confirmation modal is not required.",
                 screenshot_path=inspection.screenshot_path,
-                data=inspection.to_dict(),
+                data=self._step_data(
+                    inspection,
+                    step_id="confirm_reward_claim",
+                    outcome_code="confirm_not_required",
+                    expected_panel_states=(ClaimRewardsPanelState.CLAIMED,),
+                    inspection_attempts=inspection_attempts,
+                ),
             )
         if inspection.state is not ClaimRewardsPanelState.CONFIRM_REQUIRED or inspection.confirm_point is None:
             return step_failure(
                 "confirm_reward_claim",
                 "Claim confirmation modal could not be verified.",
                 screenshot_path=inspection.screenshot_path,
-                data=inspection.to_dict(),
+                data=self._step_data(
+                    inspection,
+                    step_id="confirm_reward_claim",
+                    outcome_code="confirm_modal_unavailable",
+                    failure_reason_id="confirm_modal_unavailable",
+                    expected_panel_states=(ClaimRewardsPanelState.CLAIMED,),
+                    inspection_attempts=inspection_attempts,
+                ),
             )
 
-        self._adapter.tap(context.instance, inspection.confirm_point)
-        follow_up = self._capture_inspection(context, reason="confirm_reward_claim.post_tap")
+        task_action = self._tap(
+            context,
+            step_id="confirm_reward_claim",
+            point=inspection.confirm_point,
+            reason="confirm_reward_claim.tap",
+        )
+        if self._dispatch_failed(task_action):
+            return step_failure(
+                "confirm_reward_claim",
+                self._dispatch_failure_message(
+                    action_name="claim confirmation tap",
+                    task_action=task_action,
+                ),
+                screenshot_path=inspection.screenshot_path,
+                data=self._step_data(
+                    inspection,
+                    step_id="confirm_reward_claim",
+                    outcome_code="confirm_dispatch_failed",
+                    failure_reason_id="runtime_dispatch_failed",
+                    expected_panel_states=(ClaimRewardsPanelState.CLAIMED,),
+                    inspection_attempts=inspection_attempts,
+                    task_action=task_action,
+                ),
+            )
+        follow_up, follow_up_attempts = self._inspect_until(
+            context,
+            step_id="confirm_reward_claim",
+            reason="confirm_reward_claim.post_tap",
+            accepted_states=(ClaimRewardsPanelState.CLAIMED,),
+            max_attempts=_STEP_INSPECTION_RETRY_LIMIT,
+        )
         if follow_up.state is ClaimRewardsPanelState.CLAIMED:
             return step_success(
                 "confirm_reward_claim",
                 "Claim confirmation completed.",
                 screenshot_path=follow_up.screenshot_path,
-                data=follow_up.to_dict(),
+                data=self._step_data(
+                    follow_up,
+                    step_id="confirm_reward_claim",
+                    outcome_code="confirm_completed",
+                    expected_panel_states=(ClaimRewardsPanelState.CLAIMED,),
+                    inspection_attempts=follow_up_attempts,
+                    task_action=task_action,
+                    pre_action_inspection=inspection.to_dict(),
+                ),
             )
         return step_failure(
             "confirm_reward_claim",
             "Confirmation tap did not produce a claimed reward state.",
             screenshot_path=follow_up.screenshot_path,
-            data=follow_up.to_dict(),
+            data=self._step_data(
+                follow_up,
+                step_id="confirm_reward_claim",
+                outcome_code="confirm_tap_no_effect",
+                failure_reason_id="confirm_tap_no_effect",
+                expected_panel_states=(ClaimRewardsPanelState.CLAIMED,),
+                inspection_attempts=follow_up_attempts,
+                task_action=task_action,
+                pre_action_inspection=inspection.to_dict(),
+            ),
         )
 
     def verify_claimed(self, context: TaskExecutionContext):
-        inspection = self._capture_inspection(context, reason="verify_claimed")
+        inspection, inspection_attempts = self._inspect_until(
+            context,
+            step_id="verify_claimed",
+            reason="verify_claimed",
+            accepted_states=(ClaimRewardsPanelState.CLAIMED,),
+            max_attempts=_STEP_INSPECTION_RETRY_LIMIT,
+        )
         if inspection.state is ClaimRewardsPanelState.CLAIMED:
             return step_success(
                 "verify_claimed",
                 "Claimed reward state verified.",
                 screenshot_path=inspection.screenshot_path,
-                data=inspection.to_dict(),
+                data=self._step_data(
+                    inspection,
+                    step_id="verify_claimed",
+                    outcome_code="claimed_verified",
+                    expected_panel_states=(ClaimRewardsPanelState.CLAIMED,),
+                    inspection_attempts=inspection_attempts,
+                ),
             )
         return step_failure(
             "verify_claimed",
             "Claimed reward state could not be verified.",
             screenshot_path=inspection.screenshot_path,
-            data=inspection.to_dict(),
+            data=self._step_data(
+                inspection,
+                step_id="verify_claimed",
+                outcome_code="claimed_unverified",
+                failure_reason_id="claimed_state_unverified",
+                expected_panel_states=(ClaimRewardsPanelState.CLAIMED,),
+                inspection_attempts=inspection_attempts,
+            ),
         )
 
     def _capture_inspection(
@@ -548,8 +840,13 @@ class _ClaimRewardsTaskBridge:
         context: TaskExecutionContext,
         *,
         reason: str,
+        step_id: str,
     ) -> ClaimRewardsInspection:
-        screenshot_path = self._adapter.capture_screenshot(context.instance)
+        screenshot_path, capture = self._capture_screenshot(
+            context,
+            step_id=step_id,
+            reason=reason,
+        )
         inspection = self._vision_gateway.inspect(
             instance=context.instance,
             screenshot_path=screenshot_path,
@@ -557,17 +854,57 @@ class _ClaimRewardsTaskBridge:
             metadata={
                 "reason": reason,
                 "task_id": "daily_ui.claim_rewards",
+                "step_id": step_id,
+                "capture": capture,
             },
         )
         if not inspection.screenshot_path:
             inspection = replace(inspection, screenshot_path=str(screenshot_path))
+        inspection_metadata = dict(inspection.metadata)
+        inspection_metadata.setdefault("capture", capture)
+        inspection_metadata.setdefault("signal_contract_version", "claim_rewards.v2")
+        inspection = self._normalize_inspection(
+            replace(inspection, metadata=inspection_metadata),
+        )
         self._store_inspection(context, inspection, reason=reason)
         return inspection
+
+    def _inspect_until(
+        self,
+        context: TaskExecutionContext,
+        *,
+        step_id: str,
+        reason: str,
+        accepted_states: tuple[ClaimRewardsPanelState, ...],
+        initial_inspection: ClaimRewardsInspection | None = None,
+        max_attempts: int = _STEP_INSPECTION_RETRY_LIMIT,
+    ) -> tuple[ClaimRewardsInspection, list[ClaimRewardsInspection]]:
+        attempts: list[ClaimRewardsInspection] = []
+        if initial_inspection is not None:
+            inspection = self._normalize_inspection(initial_inspection)
+            attempts.append(inspection)
+            if inspection.state in accepted_states:
+                return inspection, attempts
+
+        while len(attempts) < max_attempts:
+            attempt_reason = reason if not attempts else f"{reason}.retry_{len(attempts)}"
+            inspection = self._capture_inspection(
+                context,
+                reason=attempt_reason,
+                step_id=step_id,
+            )
+            attempts.append(inspection)
+            if inspection.state in accepted_states:
+                return inspection, attempts
+
+        if not attempts:
+            raise RuntimeError(f"No inspection attempts were captured for {step_id}")
+        return attempts[-1], attempts
 
     def _current_inspection(self, context: TaskExecutionContext) -> ClaimRewardsInspection | None:
         inspection = context.metadata.get(_INSPECTION_CONTEXT_KEY)
         if isinstance(inspection, ClaimRewardsInspection):
-            return inspection
+            return self._normalize_inspection(inspection)
         return None
 
     def _store_inspection(
@@ -586,6 +923,163 @@ class _ClaimRewardsTaskBridge:
                     **inspection.to_dict(),
                 }
             )
+
+    def _normalize_inspection(self, inspection: ClaimRewardsInspection) -> ClaimRewardsInspection:
+        metadata = dict(inspection.metadata)
+        metadata.setdefault("signal_contract_version", "claim_rewards.v2")
+        return replace(
+            inspection,
+            signals=_normalize_inspection_signals(inspection),
+            metadata=metadata,
+        )
+
+    def _capture_screenshot(
+        self,
+        context: TaskExecutionContext,
+        *,
+        step_id: str,
+        reason: str,
+    ) -> tuple[Path, dict[str, Any]]:
+        bridge = self._runtime_action_bridge(context)
+        if bridge is not None:
+            preview_frame = bridge.capture_preview(
+                step_id=step_id,
+                metadata=self._bridge_metadata(reason),
+            )
+            if preview_frame is not None and preview_frame.image_path:
+                return Path(preview_frame.image_path), {
+                    "source": "task_action_bridge",
+                    "preview_frame_id": preview_frame.frame_id,
+                    "preview_source": preview_frame.source,
+                    "image_path": preview_frame.image_path,
+                }
+        screenshot_path = self._adapter.capture_screenshot(context.instance)
+        return screenshot_path, {
+            "source": "adapter_capture",
+            "image_path": str(screenshot_path),
+        }
+
+    def _tap(
+        self,
+        context: TaskExecutionContext,
+        *,
+        step_id: str,
+        point: tuple[int, int],
+        reason: str,
+    ) -> dict[str, Any]:
+        bridge = self._runtime_action_bridge(context)
+        if bridge is None:
+            self._adapter.tap(context.instance, point)
+            return {
+                "source": "adapter",
+                "status": "adapter_direct",
+                "message": "",
+                "point": point,
+            }
+        result = bridge.tap(
+            point,
+            step_id=step_id,
+            metadata=self._bridge_metadata(reason),
+        )
+        return {
+            "source": "task_action_bridge",
+            "status": result.status,
+            "message": result.message,
+            "command_id": result.command_id,
+            "command_type": result.command_type.value,
+            "point": point,
+            "payload": dict(result.payload),
+            "metadata": dict(result.metadata),
+        }
+
+    def _runtime_action_bridge(self, context: TaskExecutionContext):
+        try:
+            return context.require_action_bridge()
+        except RuntimeError:
+            return None
+
+    def _bridge_metadata(self, reason: str) -> dict[str, Any]:
+        return {
+            "reason": reason,
+            "workflow": "claim_rewards",
+        }
+
+    def _dispatch_failed(self, task_action: dict[str, Any]) -> bool:
+        if str(task_action.get("source", "")) != "task_action_bridge":
+            return False
+        return str(task_action.get("status", "")) not in _ACTION_DISPATCH_SUCCESS_STATUSES
+
+    def _dispatch_failure_message(
+        self,
+        *,
+        action_name: str,
+        task_action: dict[str, Any],
+    ) -> str:
+        message = str(task_action.get("message", "")).strip()
+        if message:
+            return f"{action_name.capitalize()} could not be dispatched through the runtime bridge: {message}"
+        return f"{action_name.capitalize()} could not be dispatched through the runtime bridge."
+
+    def _step_data(
+        self,
+        inspection: ClaimRewardsInspection,
+        *,
+        step_id: str,
+        outcome_code: str,
+        failure_reason_id: str = "",
+        expected_panel_states: tuple[ClaimRewardsPanelState, ...] = (),
+        inspection_attempts: list[ClaimRewardsInspection] | None = None,
+        task_action: dict[str, Any] | None = None,
+        **extra: Any,
+    ) -> dict[str, Any]:
+        data = inspection.to_dict()
+        attempt_payloads = self._inspection_attempts_payload(inspection_attempts or [inspection])
+        expected_states = [state.value for state in expected_panel_states]
+        data["outcome_code"] = outcome_code
+        data["failure_reason_id"] = failure_reason_id
+        data["expected_panel_states"] = expected_states
+        data["inspection_attempts"] = attempt_payloads
+        data["step_outcome"] = {
+            "step_id": step_id,
+            "outcome_code": outcome_code,
+            "failure_reason_id": failure_reason_id,
+            "expected_panel_states": expected_states,
+            "observed_panel_state": inspection.state.value,
+            "attempt_count": len(attempt_payloads),
+            "satisfied": not expected_states or inspection.state.value in expected_states,
+        }
+        data["telemetry"] = {
+            "step_id": step_id,
+            "outcome_code": outcome_code,
+            "failure_reason_id": failure_reason_id,
+            "inspection": {
+                "panel_state": inspection.state.value,
+                "signals": dict(inspection.signals),
+                "matched_anchor_ids": list(data["matched_anchor_ids"]),
+                "attempt_count": len(attempt_payloads),
+                "attempts": attempt_payloads,
+            },
+        }
+        if task_action is not None:
+            data["task_action"] = dict(task_action)
+            data["telemetry"]["task_action"] = dict(task_action)
+        data.update(extra)
+        return data
+
+    def _inspection_attempts_payload(
+        self,
+        inspections: list[ClaimRewardsInspection],
+    ) -> list[dict[str, Any]]:
+        return [
+            {
+                "attempt": index + 1,
+                **inspection.to_dict(),
+            }
+            for index, inspection in enumerate(inspections)
+        ]
+
+    def _supports_confirmation_recovery(self, inspection: ClaimRewardsInspection) -> bool:
+        return str(inspection.metadata.get("workflow_mode", "")) != "ambiguous"
 
 
 def load_claim_rewards_blueprint(
@@ -606,9 +1100,11 @@ def load_claim_rewards_anchor_specs(
     common_repository = AnchorRepository.load(root / "common")
     daily_ui_repository = AnchorRepository.load(root / "daily_ui")
     return {
-        _CLOSE_BUTTON_ANCHOR_ID: common_repository.get_anchor(_CLOSE_BUTTON_ANCHOR_ID),
-        _CONFIRM_BUTTON_ANCHOR_ID: common_repository.get_anchor(_CONFIRM_BUTTON_ANCHOR_ID),
+        _REWARD_PANEL_ANCHOR_ID: daily_ui_repository.get_anchor(_REWARD_PANEL_ANCHOR_ID),
         _CLAIM_REWARD_ANCHOR_ID: daily_ui_repository.get_anchor(_CLAIM_REWARD_ANCHOR_ID),
+        _REWARD_CONFIRM_STATE_ANCHOR_ID: daily_ui_repository.get_anchor(_REWARD_CONFIRM_STATE_ANCHOR_ID),
+        _CONFIRM_BUTTON_ANCHOR_ID: common_repository.get_anchor(_CONFIRM_BUTTON_ANCHOR_ID),
+        _CLOSE_BUTTON_ANCHOR_ID: common_repository.get_anchor(_CLOSE_BUTTON_ANCHOR_ID),
     }
 
 
@@ -723,6 +1219,11 @@ def build_claim_rewards_step_telemetry(
         status = "pending"
     status_text = step_spec.status_texts.get(status, display_metadata.status_texts.get(status, status))
     summary = step_result.message if step_result is not None and step_result.message else step_spec.summary
+    result_data = step_result.data if step_result is not None and isinstance(step_result.data, dict) else {}
+    task_action = result_data.get("task_action", {})
+    step_outcome = result_data.get("step_outcome", {})
+    signals = result_data.get("signals", {})
+    resolved_failure_reason_id = str(result_data.get("failure_reason_id", step_spec.failure_reason_id))
     return ClaimRewardsStepTelemetry(
         step_id=step_spec.step_id,
         display_name=step_spec.display_name,
@@ -734,7 +1235,13 @@ def build_claim_rewards_step_telemetry(
         failure_reason=failure_reason,
         metadata={
             "action": step_spec.action,
-            "failure_reason_id": step_spec.failure_reason_id,
+            "failure_reason_id": resolved_failure_reason_id,
+            "expected_panel_states": [state.value for state in step_spec.expected_panel_states],
+            "outcome_code": str(result_data.get("outcome_code", "")),
+            "signal_anchor_ids": list(step_spec.metadata.get("signal_anchor_ids", [])),
+            "step_outcome": dict(step_outcome) if isinstance(step_outcome, dict) else {},
+            "signals": dict(signals) if isinstance(signals, dict) else {},
+            "task_action_status": str(task_action.get("status", "")) if isinstance(task_action, dict) else "",
         },
     )
 
@@ -869,10 +1376,43 @@ def _build_runtime_step_specs(
         "verify_claimed": "確認已領取",
     }
     anchor_ids = {
-        "verify_claim_affordance": _CLAIM_REWARD_ANCHOR_ID,
+        "open_reward_panel": _REWARD_PANEL_ANCHOR_ID,
+        "verify_claim_affordance": _REWARD_PANEL_ANCHOR_ID,
         "claim_reward": _CLAIM_REWARD_ANCHOR_ID,
         "confirm_reward_claim": _CONFIRM_BUTTON_ANCHOR_ID,
-        "verify_claimed": _CLOSE_BUTTON_ANCHOR_ID,
+        "verify_claimed": _REWARD_PANEL_ANCHOR_ID,
+    }
+    signal_anchor_ids = {
+        "open_reward_panel": [
+            _REWARD_PANEL_ANCHOR_ID,
+            _CLAIM_REWARD_ANCHOR_ID,
+            _REWARD_CONFIRM_STATE_ANCHOR_ID,
+            _CONFIRM_BUTTON_ANCHOR_ID,
+            _CLOSE_BUTTON_ANCHOR_ID,
+        ],
+        "verify_claim_affordance": [
+            _REWARD_PANEL_ANCHOR_ID,
+            _CLAIM_REWARD_ANCHOR_ID,
+            _REWARD_CONFIRM_STATE_ANCHOR_ID,
+            _CONFIRM_BUTTON_ANCHOR_ID,
+            _CLOSE_BUTTON_ANCHOR_ID,
+        ],
+        "claim_reward": [
+            _REWARD_PANEL_ANCHOR_ID,
+            _CLAIM_REWARD_ANCHOR_ID,
+            _REWARD_CONFIRM_STATE_ANCHOR_ID,
+        ],
+        "confirm_reward_claim": [
+            _REWARD_PANEL_ANCHOR_ID,
+            _REWARD_CONFIRM_STATE_ANCHOR_ID,
+            _CONFIRM_BUTTON_ANCHOR_ID,
+        ],
+        "verify_claimed": [
+            _REWARD_PANEL_ANCHOR_ID,
+            _CLAIM_REWARD_ANCHOR_ID,
+            _REWARD_CONFIRM_STATE_ANCHOR_ID,
+            _CLOSE_BUTTON_ANCHOR_ID,
+        ],
     }
     expected_panel_states = {
         "open_reward_panel": (
@@ -883,6 +1423,7 @@ def _build_runtime_step_specs(
         "verify_claim_affordance": (
             ClaimRewardsPanelState.CLAIMABLE,
             ClaimRewardsPanelState.CLAIMED,
+            ClaimRewardsPanelState.CONFIRM_REQUIRED,
         ),
         "claim_reward": (
             ClaimRewardsPanelState.CLAIMED,
@@ -908,7 +1449,11 @@ def _build_runtime_step_specs(
             status_texts={str(key): str(value) for key, value in dict(step.metadata.get("status_texts", {})).items()},
             failure_reason_id=str(step.metadata.get("failure_reason_id", "")),
             expected_panel_states=expected_panel_states.get(step.step_id, ()),
-            metadata=dict(step.metadata),
+            metadata={
+                **dict(step.metadata),
+                "signal_anchor_ids": list(signal_anchor_ids.get(step.step_id, [])),
+                "inspection_retry_limit": _STEP_INSPECTION_RETRY_LIMIT,
+            },
         )
         for step in steps
     ]
@@ -935,12 +1480,13 @@ def _matched_point(result: TemplateMatchResult) -> tuple[int, int] | None:
 def _classify_panel_state(
     match_results: dict[str, TemplateMatchResult],
 ) -> ClaimRewardsPanelState:
+    signals = _inspection_signals(match_results)
     # Confirmation modal takes precedence over the underlying panel because both layers can be visible together.
-    if match_results[_CONFIRM_BUTTON_ANCHOR_ID].is_match():
+    if signals["confirm_state_visible"] or signals["confirm_button_visible"]:
         return ClaimRewardsPanelState.CONFIRM_REQUIRED
-    if match_results[_CLAIM_REWARD_ANCHOR_ID].is_match():
+    if signals["reward_panel_visible"] and signals["claim_button_visible"]:
         return ClaimRewardsPanelState.CLAIMABLE
-    if match_results[_CLOSE_BUTTON_ANCHOR_ID].is_match():
+    if signals["reward_panel_visible"]:
         return ClaimRewardsPanelState.CLAIMED
     return ClaimRewardsPanelState.UNAVAILABLE
 
@@ -1041,8 +1587,45 @@ def _resolve_failure_reason(
     )
     if step_spec is None:
         return None
-    if step_spec.step_id == "claim_reward" and "does not expose a tappable claim affordance" in failed_result.message:
-        return reason_map.get("claim_affordance_missing")
-    if step_spec.step_id == "confirm_reward_claim" and "could not be verified" in failed_result.message:
-        return reason_map.get("confirm_modal_unavailable")
+    if isinstance(failed_result.data, dict):
+        failure_reason_id = str(failed_result.data.get("failure_reason_id", "")).strip()
+        if not failure_reason_id:
+            step_outcome = failed_result.data.get("step_outcome")
+            if isinstance(step_outcome, dict):
+                failure_reason_id = str(step_outcome.get("failure_reason_id", "")).strip()
+        if failure_reason_id:
+            return reason_map.get(failure_reason_id)
     return reason_map.get(step_spec.failure_reason_id)
+
+
+def _inspection_signals(
+    match_results: dict[str, TemplateMatchResult],
+) -> dict[str, bool]:
+    return {
+        "reward_panel_visible": match_results[_REWARD_PANEL_ANCHOR_ID].is_match(),
+        "claim_button_visible": match_results[_CLAIM_REWARD_ANCHOR_ID].is_match(),
+        "confirm_state_visible": match_results[_REWARD_CONFIRM_STATE_ANCHOR_ID].is_match(),
+        "confirm_button_visible": match_results[_CONFIRM_BUTTON_ANCHOR_ID].is_match(),
+        "close_button_visible": match_results[_CLOSE_BUTTON_ANCHOR_ID].is_match(),
+    }
+
+
+def _normalize_inspection_signals(
+    inspection: ClaimRewardsInspection,
+) -> dict[str, bool]:
+    derived = {
+        "reward_panel_visible": inspection.state is not ClaimRewardsPanelState.UNAVAILABLE,
+        "claim_button_visible": (
+            inspection.state is ClaimRewardsPanelState.CLAIMABLE or inspection.claim_point is not None
+        ),
+        "confirm_state_visible": inspection.state is ClaimRewardsPanelState.CONFIRM_REQUIRED,
+        "confirm_button_visible": (
+            inspection.state is ClaimRewardsPanelState.CONFIRM_REQUIRED or inspection.confirm_point is not None
+        ),
+        "close_button_visible": (
+            inspection.state is ClaimRewardsPanelState.CLAIMED or inspection.close_point is not None
+        ),
+    }
+    for key, value in inspection.signals.items():
+        derived[str(key)] = bool(value)
+    return derived

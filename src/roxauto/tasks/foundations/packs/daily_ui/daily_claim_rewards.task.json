@@ -166,6 +166,12 @@
           "title": "無法確認已領取狀態"
         },
         {
+          "reason_id": "runtime_dispatch_failed",
+          "retryable": true,
+          "summary": "Runtime bridge 沒有成功派送這一步需要的 tap 或 preview 動作。",
+          "title": "Runtime bridge 派送失敗"
+        },
+        {
           "reason_id": "operator_stop",
           "retryable": true,
           "summary": "操作員主動停止了每日領獎任務。",
@@ -201,6 +207,16 @@
         "skipped": "已略過",
         "succeeded": "已完成",
         "unavailable": "狀態未確認"
+      },
+      "metadata": {
+        "required_anchor_ids": [
+          "daily_ui.reward_panel",
+          "daily_ui.claim_reward",
+          "daily_ui.reward_confirm_state",
+          "common.confirm_button",
+          "common.close_button"
+        ],
+        "signal_contract_version": "claim_rewards.v2"
       }
     },
     "runtime_requirement_ids": [
@@ -211,9 +227,11 @@
   "notes": "Fixtured fixed-UI reward claim task with a headless runtime bridge and deterministic panel flow.",
   "pack_id": "daily_ui",
   "required_anchors": [
-    "common.close_button",
+    "daily_ui.reward_panel",
+    "daily_ui.claim_reward",
+    "daily_ui.reward_confirm_state",
     "common.confirm_button",
-    "daily_ui.claim_reward"
+    "common.close_button"
   ],
   "task_manifest": {
     "entry_condition": "Home HUD is visible and the fixed reward panel can be opened through deterministic UI navigation.",
@@ -222,13 +240,17 @@
       "description_zh_tw": "開啟每日獎勵面板、領取獎勵並完成必要的確認步驟。",
       "display_name_zh_tw": "每日領獎",
       "implementation_state": "fixtured",
-      "phase": "pre_gate_3"
+      "phase": "pre_gate_3",
+      "signal_contract_version": "claim_rewards.v2"
     },
     "name": "每日領獎",
     "recovery_policy": "abort",
     "requires": [
-      "common.close_button",
-      "daily_ui.claim_reward"
+      "daily_ui.reward_panel",
+      "daily_ui.claim_reward",
+      "daily_ui.reward_confirm_state",
+      "common.confirm_button",
+      "common.close_button"
     ],
     "stop_conditions": [
       {

@@ -23,12 +23,30 @@
       ],
       "warning_requirements": [
         {
+          "requirement_id": "warning.daily_ui.claim_rewards:template:daily_ui.reward_panel",
+          "domain": "asset",
+          "summary": "Template asset is still placeholder scaffolding.",
+          "satisfied": false,
+          "blocking": false,
+          "details": "asset_status=placeholder source_path=assets/templates/daily_ui/manifest.json#daily_ui.reward_panel",
+          "metadata": {}
+        },
+        {
           "requirement_id": "warning.daily_ui.claim_rewards:template:daily_ui.claim_reward",
           "domain": "asset",
           "summary": "Template asset is still placeholder scaffolding.",
           "satisfied": false,
           "blocking": false,
           "details": "asset_status=placeholder source_path=assets/templates/daily_ui/manifest.json#daily_ui.claim_reward",
+          "metadata": {}
+        },
+        {
+          "requirement_id": "warning.daily_ui.claim_rewards:template:daily_ui.reward_confirm_state",
+          "domain": "asset",
+          "summary": "Template asset is still placeholder scaffolding.",
+          "satisfied": false,
+          "blocking": false,
+          "details": "asset_status=placeholder source_path=assets/templates/daily_ui/manifest.json#daily_ui.reward_confirm_state",
           "metadata": {}
         },
         {

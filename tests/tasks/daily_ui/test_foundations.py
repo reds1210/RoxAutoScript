@@ -14,6 +14,16 @@ class DailyUiFoundationsTests(unittest.TestCase):
         self.assertEqual(catalog.pack_id, "daily_ui")
         self.assertEqual(len(catalog.entries), 2)
         self.assertEqual(catalog.entries[0].display_name, "每日領獎")
+        self.assertEqual(
+            catalog.entries[0].required_anchors,
+            [
+                "daily_ui.reward_panel",
+                "daily_ui.claim_reward",
+                "daily_ui.reward_confirm_state",
+                "common.confirm_button",
+                "common.close_button",
+            ],
+        )
 
     def test_loads_daily_ui_blueprints(self) -> None:
         blueprints = load_daily_ui_blueprints()
@@ -21,6 +31,16 @@ class DailyUiFoundationsTests(unittest.TestCase):
         self.assertEqual(
             [blueprint.task_id for blueprint in blueprints],
             ["daily_ui.claim_rewards", "daily_ui.guild_check_in"],
+        )
+        self.assertEqual(
+            blueprints[0].required_anchors,
+            [
+                "daily_ui.reward_panel",
+                "daily_ui.claim_reward",
+                "daily_ui.reward_confirm_state",
+                "common.confirm_button",
+                "common.close_button",
+            ],
         )
 
     def test_daily_ui_readiness_states(self) -> None:
