@@ -12,7 +12,13 @@
           "claim_reward_button",
           "confirm_state"
         ],
-        "workflow": "daily-ui-claim-rewards"
+        "workflow": "daily-ui-claim-rewards",
+        "golden_catalog_path": "goldens/claim_rewards/catalog.json",
+        "live_capture_coverage": {
+          "reward_panel": "canonical_live_capture",
+          "claim_reward_button": "curated_stand_in_only",
+          "confirm_state": "curated_stand_in_only"
+        }
       }
     }
   },
@@ -23,7 +29,7 @@
       "template_path": "anchors/daily_reward_panel.png",
       "confidence_threshold": 0.93,
       "match_region": [420, 120, 1080, 840],
-      "description": "Curated raster crop for the opened daily reward panel frame before the claim button state is checked.",
+      "description": "Raster crop for the opened daily reward panel frame, paired with a live zh-TW ROX panel-open golden before the claim button state is checked.",
       "tags": ["daily", "reward", "panel", "claim_rewards"],
       "metadata": {
         "workflow": "daily-ui",
@@ -35,19 +41,26 @@
           "status": "curated",
           "intent_id": "claim_rewards_reward_panel",
           "scene_id": "reward_panel_open",
-          "variant_id": "tw_baseline",
-          "notes": "Curated from the baseline reward-panel capture so failure inspection can show the real panel frame instead of an SVG scaffold.",
+          "variant_id": "zh_tw_live_emulator_5560",
+          "notes": "Paired with a live zh-TW ROX daily-sign-in capture so failure inspection can show the real panel-open frame before claim-state checks begin.",
           "references": [
             {
               "reference_id": "reward_panel_baseline_v1",
               "image_path": "goldens/claim_rewards/daily_ui_claim_rewards__reward_panel__baseline__v1.png",
               "kind": "golden_screenshot",
-              "notes": "Baseline opened reward panel scene used to crop the stable frame anchor."
+              "notes": "Canonical live reward-panel-open golden captured from a real zh-TW ROX daily sign-in screen."
             }
           ],
           "metadata": {
             "capture_path": "goldens/claim_rewards/daily_ui_claim_rewards__reward_panel__baseline__v1.png",
-            "source_image_role": "reward_panel_open"
+            "source_image_role": "reward_panel_open",
+            "golden_catalog_path": "goldens/claim_rewards/catalog.json",
+            "golden_id": "reward_panel_open_baseline_v1",
+            "source_kind": "live_zh_tw_rox_capture",
+            "live_capture": true,
+            "replacement_target": "none",
+            "proof_summary": "Live zh-TW ROX daily sign-in panel-open state used to verify the reward panel is visible before claim-state checks.",
+            "failure_case": "reward_panel_missing_or_wrong_reward_subpage"
           }
         }
       }
@@ -71,18 +84,25 @@
           "intent_id": "claim_rewards_claim_button",
           "scene_id": "reward_panel_claimable",
           "variant_id": "tw_baseline",
-          "notes": "Curated from the claimable panel screenshot so the tappable button state uses a raster template and a named baseline scene.",
+          "notes": "Still paired with a curated stand-in because no approved live zh-TW claimable panel was available on the reachable accounts during this round.",
           "references": [
             {
               "reference_id": "claim_button_baseline_v1",
               "image_path": "goldens/claim_rewards/daily_ui_claim_rewards__claim_button__baseline__v1.png",
               "kind": "golden_screenshot",
-              "notes": "Baseline claimable panel used to crop the enabled claim button."
+              "notes": "Curated stand-in for the claimable panel used to crop the enabled claim button."
             }
           ],
           "metadata": {
             "capture_path": "goldens/claim_rewards/daily_ui_claim_rewards__claim_button__baseline__v1.png",
-            "source_image_role": "reward_panel_claimable"
+            "source_image_role": "reward_panel_claimable",
+            "golden_catalog_path": "goldens/claim_rewards/catalog.json",
+            "golden_id": "reward_panel_claimable_baseline_v1",
+            "source_kind": "repo_curated_screenshot_style",
+            "live_capture": false,
+            "replacement_target": "approved_live_zh_tw_claimable_panel_capture",
+            "proof_summary": "Curated claimable panel state used to verify the enabled claim button before the tap step.",
+            "failure_case": "claim_button_missing_or_not_claimable"
           }
         }
       }
@@ -106,18 +126,25 @@
           "intent_id": "claim_rewards_confirm_modal",
           "scene_id": "reward_confirm_modal",
           "variant_id": "tw_baseline",
-          "notes": "Curated from the confirmation modal baseline so failure panes can compare against a screenshot-style modal instead of a vector scaffold.",
+          "notes": "Still paired with a curated stand-in because no approved live zh-TW confirmation modal was available on the reachable accounts during this round.",
           "references": [
             {
               "reference_id": "confirm_state_baseline_v1",
               "image_path": "goldens/claim_rewards/daily_ui_claim_rewards__confirm_state__baseline__v1.png",
               "kind": "golden_screenshot",
-              "notes": "Baseline confirmation modal used to crop the confirm-state anchor."
+              "notes": "Curated stand-in confirmation modal used to crop the confirm-state anchor."
             }
           ],
           "metadata": {
             "capture_path": "goldens/claim_rewards/daily_ui_claim_rewards__confirm_state__baseline__v1.png",
-            "source_image_role": "reward_confirm_modal"
+            "source_image_role": "reward_confirm_modal",
+            "golden_catalog_path": "goldens/claim_rewards/catalog.json",
+            "golden_id": "reward_confirm_modal_baseline_v1",
+            "source_kind": "repo_curated_screenshot_style",
+            "live_capture": false,
+            "replacement_target": "approved_live_zh_tw_confirm_modal_capture",
+            "proof_summary": "Curated confirmation modal state used to verify the post-claim confirm step.",
+            "failure_case": "confirm_modal_missing_after_claim_tap"
           }
         }
       }
