@@ -5,15 +5,19 @@ from pathlib import Path
 from typing import Callable
 
 from roxauto.app.viewmodels import ConsoleSnapshot, build_console_snapshot_from_runtime, build_manual_control_command
-from roxauto.core.commands import CommandDispatchResult
-from roxauto.core.models import FailureSnapshotMetadata, InstanceState, InstanceStatus, ProfileBinding
+from roxauto.core.commands import CommandDispatchResult, InstanceCommandType
+from roxauto.core.models import FailureSnapshotMetadata, InstanceState, InstanceStatus, PreviewFrame, ProfileBinding
+from roxauto.core.runtime import RuntimeInspectionResult
 from roxauto.doctor import build_doctor_report
 from roxauto.emulator import EmulatorActionAdapter, LiveRuntimeSession, LiveRuntimeSnapshot
+from roxauto.tasks import TaskFoundationRepository, TaskReadinessReport, TaskRuntimeBuilderInput
 from roxauto.vision import (
     CalibrationProfile,
     CaptureArtifactKind,
+    ImageInspectionState,
     VisionToolingState,
     build_failure_inspection,
+    build_image_inspection_state,
     build_template_workspace_catalog,
     build_vision_tooling_state,
     build_vision_workspace_readiness_report,
@@ -76,10 +80,10 @@ class OperatorConsoleRuntimeBridge:
     ) -> None:
         self._workspace_root = workspace_root or Path(__file__).resolve().parents[3]
         self._templates_root = self._workspace_root / "assets" / "templates"
-        self._asset_inventory_path = (
-            self._workspace_root / "src" / "roxauto" / "tasks" / "foundations" / "asset_inventory.json"
-        )
+        self._task_foundations_root = self._workspace_root / "src" / "roxauto" / "tasks" / "foundations"
+        self._asset_inventory_path = self._task_foundations_root / "asset_inventory.json"
         self._doctor_report_provider = doctor_report_provider or build_doctor_report
+        self._task_foundations = TaskFoundationRepository(self._task_foundations_root)
         self._adb_path = "not found"
         self._packages: dict[str, bool] = {}
         self._session = session or LiveRuntimeSession(
@@ -108,11 +112,34 @@ class OperatorConsoleRuntimeBridge:
     def asset_inventory_path(self) -> Path:
         return self._asset_inventory_path
 
-    def refresh(self) -> LiveRuntimeSnapshot:
+    def refresh(
+        self,
+        *,
+        instance_id: str | None = None,
+        run_health_check: bool = True,
+        capture_preview: bool = True,
+    ) -> LiveRuntimeSnapshot:
         self._load_environment_report()
-        snapshot = self._session.poll()
-        for instance_snapshot in snapshot.instance_snapshots:
-            self._session.refresh(instance_snapshot.instance_id)
+        return self._session.poll(
+            instance_id=instance_id,
+            refresh_runtime=True,
+            run_health_check=run_health_check,
+            capture_preview=capture_preview,
+        )
+
+    def refresh_runtime_contexts(
+        self,
+        *,
+        instance_id: str | None = None,
+        run_health_check: bool = True,
+        capture_preview: bool = True,
+    ) -> LiveRuntimeSnapshot:
+        self._load_environment_report()
+        self._session.refresh_runtime_contexts(
+            instance_id=instance_id,
+            run_health_check=run_health_check,
+            capture_preview=capture_preview,
+        )
         return self.snapshot()
 
     def snapshot(self) -> LiveRuntimeSnapshot:
@@ -131,6 +158,28 @@ class OperatorConsoleRuntimeBridge:
         instance_snapshot = self._session.last_snapshot.get_instance_snapshot(instance_id)
         return list(instance_snapshot.queue_items) if instance_snapshot is not None else []
 
+    def inspection_results(self, instance_id: str | None = None) -> list[RuntimeInspectionResult]:
+        snapshot = self.snapshot()
+        if instance_id is None:
+            return list(snapshot.last_inspection_results)
+        return [
+            result
+            for result in snapshot.last_inspection_results
+            if result.instance_id == instance_id
+        ]
+
+    def selected_inspection_result(self, instance_id: str) -> RuntimeInspectionResult | None:
+        for result in self.snapshot().last_inspection_results:
+            if result.instance_id == instance_id:
+                return result
+        return None
+
+    def task_runtime_builder_inputs(self) -> list[TaskRuntimeBuilderInput]:
+        return self._task_foundations.build_runtime_builder_inputs()
+
+    def task_readiness_reports(self) -> list[TaskReadinessReport]:
+        return self._task_foundations.evaluate_task_readinesses()
+
     def global_emergency_stop_active(self) -> bool:
         snapshots = self.snapshot().instance_snapshots
         return bool(snapshots) and all(item.context is not None and item.context.stop_requested for item in snapshots)
@@ -147,7 +196,9 @@ class OperatorConsoleRuntimeBridge:
             instance_id=instance_id,
             payload=payload,
         )
-        return self._session.dispatch_command(command)
+        result = self._session.dispatch_command(command)
+        self._refresh_after_command(command.command_type, instance_id=instance_id)
+        return result
 
     def vision_workspace_catalog(self, *, selected_repository_id: str = ""):
         return build_template_workspace_catalog(
@@ -165,19 +216,28 @@ class OperatorConsoleRuntimeBridge:
     def vision_tooling_state(self, instance_id: str = "") -> VisionToolingState:
         runtime_snapshot = self.snapshot()
         instance_snapshot = runtime_snapshot.get_instance_snapshot(instance_id) if instance_id else None
-        catalog = self.vision_workspace_catalog(
-            selected_repository_id=self._resolve_repository_id(instance_snapshot),
-        )
+        inspection_result = self.selected_inspection_result(instance_id) if instance_id else None
+        selected_repository_id = self._resolve_repository_id(instance_snapshot, inspection_result)
+        catalog = self.vision_workspace_catalog(selected_repository_id=selected_repository_id)
         readiness = self.vision_workspace_readiness()
-        selected_anchor_id = self._resolve_anchor_id(instance_snapshot)
-        calibration_profile = self._build_calibration_profile(instance_snapshot)
-        capture_session = self._build_capture_session(instance_snapshot, selected_anchor_id=selected_anchor_id)
-        failure_record = self._build_failure_record(
+        selected_anchor_id = self._resolve_anchor_id(instance_snapshot, inspection_result)
+        calibration_profile = self._build_calibration_profile(instance_snapshot, inspection_result)
+        capture_session = self._build_capture_session(
             instance_snapshot,
+            inspection_result=inspection_result,
             selected_anchor_id=selected_anchor_id,
         )
-        source_image = capture_session.source_image if capture_session is not None else ""
-        failure_message = failure_record.message if failure_record is not None else ""
+        failure_record = self._build_failure_record(
+            instance_snapshot,
+            inspection_result=inspection_result,
+            selected_anchor_id=selected_anchor_id,
+        )
+        source_image = self._resolve_source_image(
+            instance_snapshot,
+            inspection_result=inspection_result,
+            capture_session=capture_session,
+            failure_screenshot_path=failure_record.screenshot_path if failure_record is not None else "",
+        )
 
         state = build_vision_tooling_state(
             templates_root=self._templates_root,
@@ -188,11 +248,33 @@ class OperatorConsoleRuntimeBridge:
             selected_repository_id=catalog.selected_repository_id,
             selected_anchor_id=selected_anchor_id,
             source_image=source_image,
-            failure_message=failure_message,
+            failure_message=self._failure_message(
+                self._failure_snapshot(instance_snapshot, inspection_result),
+                inspection_result=inspection_result,
+            ),
         )
         state.workspace = catalog
         state.readiness = readiness
-        state.metadata["workspace_ready_blocking_count"] = readiness.blocking_count if readiness is not None else 0
+        state.preview = self._build_preview_inspection(
+            instance_snapshot,
+            inspection_result=inspection_result,
+            capture_session=capture_session,
+            selected_anchor_id=selected_anchor_id,
+            vision_state=state,
+        )
+        state.metadata.update(
+            {
+                "inspection_status": (
+                    inspection_result.status.value if inspection_result is not None else ""
+                ),
+                "inspection_health_message": (
+                    inspection_result.health_check_message if inspection_result is not None else ""
+                ),
+                "workspace_ready_blocking_count": (
+                    readiness.blocking_count if readiness is not None else 0
+                ),
+            }
+        )
         return state
 
     def _load_environment_report(self) -> None:
@@ -227,10 +309,47 @@ class OperatorConsoleRuntimeBridge:
             metadata=dict(instance.metadata.get("profile_metadata", {})),
         )
 
-    def _resolve_repository_id(self, instance_snapshot) -> str:
+    def _refresh_after_command(
+        self,
+        command_type: InstanceCommandType,
+        *,
+        instance_id: str | None,
+    ) -> None:
+        if command_type == InstanceCommandType.REFRESH:
+            return
+        if command_type == InstanceCommandType.EMERGENCY_STOP:
+            self._session.refresh_runtime_contexts(
+                run_health_check=True,
+                capture_preview=True,
+            )
+            return
+        if command_type in {InstanceCommandType.TAP, InstanceCommandType.SWIPE, InstanceCommandType.INPUT_TEXT}:
+            self._session.refresh_runtime_contexts(
+                instance_id=instance_id,
+                run_health_check=False,
+                capture_preview=True,
+            )
+            return
+        if command_type in {
+            InstanceCommandType.START_QUEUE,
+            InstanceCommandType.PAUSE,
+            InstanceCommandType.STOP,
+        }:
+            self._session.refresh_runtime_contexts(
+                instance_id=instance_id,
+                run_health_check=True,
+                capture_preview=True,
+            )
+
+    def _resolve_repository_id(
+        self,
+        instance_snapshot,
+        inspection_result: RuntimeInspectionResult | None = None,
+    ) -> str:
         candidates: list[str] = []
-        if instance_snapshot is not None and instance_snapshot.failure_snapshot is not None:
-            anchor_id = self._resolve_anchor_id(instance_snapshot)
+        failure_snapshot = self._failure_snapshot(instance_snapshot, inspection_result)
+        if failure_snapshot is not None:
+            anchor_id = self._anchor_id_from_failure(failure_snapshot)
             if anchor_id and "." in anchor_id:
                 candidates.append(anchor_id.split(".", maxsplit=1)[0])
         context = instance_snapshot.context if instance_snapshot is not None else None
@@ -254,14 +373,26 @@ class OperatorConsoleRuntimeBridge:
             return "common"
         return workspace.selected_repository_id
 
-    def _resolve_anchor_id(self, instance_snapshot) -> str:
-        if instance_snapshot is None or instance_snapshot.failure_snapshot is None:
+    def _resolve_anchor_id(
+        self,
+        instance_snapshot,
+        inspection_result: RuntimeInspectionResult | None = None,
+    ) -> str:
+        failure_snapshot = self._failure_snapshot(instance_snapshot, inspection_result)
+        if failure_snapshot is None:
             return ""
-        metadata = dict(instance_snapshot.failure_snapshot.metadata)
+        return self._anchor_id_from_failure(failure_snapshot)
+
+    def _anchor_id_from_failure(self, failure_snapshot: FailureSnapshotMetadata) -> str:
+        metadata = dict(failure_snapshot.metadata)
         anchor_id = metadata.get("anchor_id") or metadata.get("expected_anchor_id")
         return str(anchor_id or "")
 
-    def _build_calibration_profile(self, instance_snapshot) -> CalibrationProfile | None:
+    def _build_calibration_profile(
+        self,
+        instance_snapshot,
+        inspection_result: RuntimeInspectionResult | None = None,
+    ) -> CalibrationProfile | None:
         if instance_snapshot is None:
             return None
         binding = instance_snapshot.profile_binding
@@ -269,9 +400,12 @@ class OperatorConsoleRuntimeBridge:
             return None
         offset_x, offset_y = binding.capture_offset
         crop_region = None
-        preview_frame = instance_snapshot.preview_frame
+        preview_frame = self._preview_frame(instance_snapshot, inspection_result)
         if preview_frame is not None:
             crop_region = preview_frame.metadata.get("crop_region")
+        failure_snapshot = self._failure_snapshot(instance_snapshot, inspection_result)
+        if crop_region is None and failure_snapshot is not None:
+            crop_region = failure_snapshot.metadata.get("crop_region")
         settings = dict(binding.settings)
         anchor_overrides = settings.get("anchor_overrides") or binding.metadata.get("anchor_overrides") or {}
         emulator_name = (
@@ -296,11 +430,17 @@ class OperatorConsoleRuntimeBridge:
             },
         )
 
-    def _build_capture_session(self, instance_snapshot, *, selected_anchor_id: str):
+    def _build_capture_session(
+        self,
+        instance_snapshot,
+        *,
+        inspection_result: RuntimeInspectionResult | None = None,
+        selected_anchor_id: str,
+    ):
         if instance_snapshot is None:
             return None
-        preview_frame = instance_snapshot.preview_frame
-        failure_snapshot = instance_snapshot.failure_snapshot
+        preview_frame = self._preview_frame(instance_snapshot, inspection_result)
+        failure_snapshot = self._failure_snapshot(instance_snapshot, inspection_result)
         source_image = ""
         if preview_frame is not None:
             source_image = preview_frame.image_path
@@ -315,7 +455,11 @@ class OperatorConsoleRuntimeBridge:
         elif failure_snapshot is not None:
             crop_region = failure_snapshot.metadata.get("crop_region")
         session = create_capture_session(
-            session_id=(preview_frame.frame_id if preview_frame is not None else failure_snapshot.snapshot_id),
+            session_id=(
+                preview_frame.frame_id
+                if preview_frame is not None
+                else failure_snapshot.snapshot_id
+            ),
             instance_id=instance_snapshot.instance_id,
             source_image=source_image,
             crop_region=crop_region,
@@ -354,18 +498,20 @@ class OperatorConsoleRuntimeBridge:
         self,
         instance_snapshot,
         *,
+        inspection_result: RuntimeInspectionResult | None = None,
         selected_anchor_id: str,
     ):
         if instance_snapshot is None:
             return None
-        failure_snapshot = instance_snapshot.failure_snapshot
+        failure_snapshot = self._failure_snapshot(instance_snapshot, inspection_result)
         if failure_snapshot is None:
             return None
+        preview_frame = self._preview_frame(instance_snapshot, inspection_result)
         preview_image_path = ""
         if failure_snapshot.preview_frame is not None:
             preview_image_path = failure_snapshot.preview_frame.image_path
-        elif instance_snapshot.preview_frame is not None:
-            preview_image_path = instance_snapshot.preview_frame.image_path
+        elif preview_frame is not None:
+            preview_image_path = preview_frame.image_path
         screenshot_path = str(failure_snapshot.screenshot_path or preview_image_path)
         return build_failure_inspection(
             failure_id=failure_snapshot.snapshot_id,
@@ -373,9 +519,99 @@ class OperatorConsoleRuntimeBridge:
             screenshot_path=screenshot_path,
             anchor_id=selected_anchor_id,
             preview_image_path=preview_image_path,
-            message=self._failure_message(failure_snapshot),
+            message=self._failure_message(failure_snapshot, inspection_result=inspection_result),
             metadata=dict(failure_snapshot.metadata),
         )
 
-    def _failure_message(self, failure_snapshot: FailureSnapshotMetadata) -> str:
-        return str(failure_snapshot.metadata.get("message") or failure_snapshot.reason.value)
+    def _build_preview_inspection(
+        self,
+        instance_snapshot,
+        *,
+        inspection_result: RuntimeInspectionResult | None = None,
+        capture_session,
+        selected_anchor_id: str,
+        vision_state: VisionToolingState,
+    ) -> ImageInspectionState | None:
+        image_path = self._resolve_source_image(
+            instance_snapshot,
+            inspection_result=inspection_result,
+            capture_session=capture_session,
+            failure_screenshot_path=vision_state.failure.screenshot_path,
+        )
+        if not image_path:
+            return None
+        selected_overlay_id = ""
+        if capture_session is not None and capture_session.crop_region is not None:
+            selected_overlay_id = f"{capture_session.session_id}:crop"
+        elif selected_anchor_id:
+            selected_overlay_id = f"{selected_anchor_id}:expected"
+        return build_image_inspection_state(
+            inspection_id=f"preview:{instance_snapshot.instance_id if instance_snapshot is not None else 'global'}",
+            image_path=image_path,
+            source_image=image_path,
+            capture_session=capture_session,
+            calibration=vision_state.calibration.selected_resolution,
+            selected_overlay_id=selected_overlay_id,
+            metadata={
+                "kind": "runtime_preview",
+                "instance_id": instance_snapshot.instance_id if instance_snapshot is not None else "",
+                "inspection_status": inspection_result.status.value if inspection_result is not None else "",
+                "health_check_ok": inspection_result.health_check_ok if inspection_result is not None else None,
+            },
+        )
+
+    def _resolve_source_image(
+        self,
+        instance_snapshot,
+        *,
+        inspection_result: RuntimeInspectionResult | None = None,
+        capture_session=None,
+        failure_screenshot_path: str = "",
+    ) -> str:
+        preview_frame = self._preview_frame(instance_snapshot, inspection_result)
+        if preview_frame is not None:
+            return preview_frame.image_path
+        if capture_session is not None:
+            return capture_session.source_image
+        if failure_screenshot_path:
+            return failure_screenshot_path
+        failure_snapshot = self._failure_snapshot(instance_snapshot, inspection_result)
+        if failure_snapshot is not None and failure_snapshot.screenshot_path:
+            return str(failure_snapshot.screenshot_path)
+        return ""
+
+    def _preview_frame(
+        self,
+        instance_snapshot,
+        inspection_result: RuntimeInspectionResult | None = None,
+    ) -> PreviewFrame | None:
+        if inspection_result is not None and inspection_result.preview_frame is not None:
+            return inspection_result.preview_frame
+        if instance_snapshot is None:
+            return None
+        return instance_snapshot.preview_frame
+
+    def _failure_snapshot(
+        self,
+        instance_snapshot,
+        inspection_result: RuntimeInspectionResult | None = None,
+    ) -> FailureSnapshotMetadata | None:
+        if inspection_result is not None and inspection_result.failure_snapshot is not None:
+            return inspection_result.failure_snapshot
+        if instance_snapshot is None:
+            return None
+        return instance_snapshot.failure_snapshot
+
+    def _failure_message(
+        self,
+        failure_snapshot: FailureSnapshotMetadata | None,
+        *,
+        inspection_result: RuntimeInspectionResult | None = None,
+    ) -> str:
+        if failure_snapshot is None:
+            return inspection_result.health_check_message if inspection_result is not None else ""
+        return str(
+            failure_snapshot.metadata.get("message")
+            or (inspection_result.health_check_message if inspection_result is not None else "")
+            or failure_snapshot.reason.value
+        )

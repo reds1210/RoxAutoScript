@@ -10,6 +10,7 @@ from roxauto.app.viewmodels import (
     build_log_pane,
     build_manual_control_command,
     build_operator_console_state,
+    build_task_readiness_pane,
 )
 from roxauto.core.commands import CommandDispatchResult, CommandDispatchStatus, CommandRouter, InstanceCommandType
 from roxauto.core.models import (
@@ -25,9 +26,10 @@ from roxauto.core.models import (
     VisionMatch,
 )
 from roxauto.core.queue import QueuedTask
-from roxauto.core.runtime import QueueRunResult, TaskStep, step_success
+from roxauto.core.runtime import QueueRunResult, RuntimeInspectionResult, TaskStep, step_success
 from roxauto.core.time import utc_now
 from roxauto.emulator import LiveRuntimeEventRecord, LiveRuntimeInstanceSnapshot, LiveRuntimeSnapshot
+from roxauto.tasks import TaskFoundationRepository
 from roxauto.vision import (
     AnchorRepository,
     CalibrationProfile,
@@ -75,17 +77,23 @@ class ConsoleSnapshotTests(unittest.TestCase):
             _build_vision_state(),
             selected_instance_id="mumu-9",
             global_emergency_stop_active=False,
+            task_readiness_reports=_task_foundations().evaluate_task_readinesses(),
+            task_runtime_builder_inputs=_task_foundations().build_runtime_builder_inputs(),
         )
 
         self.assertEqual(snapshot.instances[0].metadata["queue_depth"], 2)
         self.assertEqual(snapshot.instances[0].metadata["profile_id"], "profile.mumu-9")
         self.assertEqual(state.detail.queue_depth, 2)
-        self.assertIn("active_task_id: sample.mumu-9.0", state.detail.metadata_lines)
+        self.assertIn("active_task_id: daily_ui.claim_rewards", state.detail.metadata_lines)
+        self.assertIn("inspection.health_check_message: healthy", state.detail.metadata_lines)
         self.assertIn("preview_frame: runtime_logs/previews/mumu-9-1.png", state.detail.metadata_lines)
         self.assertEqual(state.summary.selected_queue_depth, 2)
         self.assertEqual(state.instance_rows[0].profile_summary, "MuMu 9 Profile")
         self.assertEqual(state.manual_controls.last_command_status, "completed")
         self.assertIn("pause routed", state.manual_controls.last_command_summary)
+        self.assertIsNotNone(state.selected_inspection_result)
+        self.assertEqual(state.task_readiness.blocked_by_runtime_count, 1)
+        self.assertEqual(state.task_readiness.blocked_by_asset_count, 1)
         self.assertEqual(state.vision.workspace.selected_repository_id, "common")
         self.assertIsNotNone(state.vision.readiness)
 
@@ -139,6 +147,22 @@ class ConsoleSnapshotTests(unittest.TestCase):
         self.assertEqual(stop_route.command_type, InstanceCommandType.EMERGENCY_STOP)
         self.assertEqual(stop_route.kind.value, "global_control")
 
+    def test_task_readiness_pane_projects_foundation_gaps(self) -> None:
+        repository = _task_foundations()
+        pane = build_task_readiness_pane(
+            repository.evaluate_task_readinesses(),
+            repository.build_runtime_builder_inputs(),
+            selected_instance_snapshot=_runtime_snapshot().get_instance_snapshot("mumu-9"),
+        )
+
+        self.assertEqual(pane.total_tasks, 3)
+        self.assertEqual(pane.builder_ready_count, 2)
+        self.assertEqual(pane.blocked_by_asset_count, 1)
+        self.assertEqual(pane.blocked_by_runtime_count, 1)
+        self.assertEqual(pane.blocked_by_calibration_count, 1)
+        self.assertIn("daily_ui.claim_rewards", pane.selected_task_ids)
+        self.assertTrue(any(row.is_related_to_selected_instance for row in pane.rows))
+
 
 def _runtime_snapshot() -> LiveRuntimeSnapshot:
     instance = InstanceState(
@@ -152,7 +176,7 @@ def _runtime_snapshot() -> LiveRuntimeSnapshot:
         instance_id="mumu-9",
         status=InstanceStatus.READY,
         queue_depth=2,
-        active_task_id="sample.mumu-9.0",
+        active_task_id="daily_ui.claim_rewards",
         active_run_id="run-9",
         stop_requested=False,
         health_check_ok=True,
@@ -162,6 +186,7 @@ def _runtime_snapshot() -> LiveRuntimeSnapshot:
             server_name="TW-9",
             character_name="Knight",
             calibration_id="calibration.mumu-9",
+            allowed_tasks=["daily_ui.claim_rewards", "odin.preset_entry"],
         ),
         preview_frame=PreviewFrame(
             frame_id="frame-9",
@@ -182,6 +207,16 @@ def _runtime_snapshot() -> LiveRuntimeSnapshot:
         contexts=[context],
         queue_items=[queue_item],
         instance_snapshots=[instance_snapshot],
+        last_inspection_results=[
+            RuntimeInspectionResult(
+                instance_id="mumu-9",
+                status=InstanceStatus.READY,
+                health_check_ok=True,
+                health_check_message="healthy",
+                preview_frame=context.preview_frame,
+                metadata={"capture_preview": True, "run_health_check": True},
+            )
+        ],
         recent_events=[
             LiveRuntimeEventRecord(
                 sequence_id=1,
@@ -265,3 +300,7 @@ def _queued_task(instance_id: str, task_id: str, name: str, priority: int) -> Qu
         steps=[TaskStep("noop", "No-op", lambda context: step_success("noop", "ok"))],
     )
     return QueuedTask(instance_id=instance_id, spec=spec, priority=priority)
+
+
+def _task_foundations() -> TaskFoundationRepository:
+    return TaskFoundationRepository.load_default()

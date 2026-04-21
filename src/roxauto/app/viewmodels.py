@@ -5,10 +5,10 @@ from typing import Any, Iterable
 
 from roxauto.core.commands import CommandDispatchResult, InstanceCommand, InstanceCommandType
 from roxauto.core.events import AppEvent, EVENT_INSTANCE_ERROR, EVENT_TASK_FAILURE_SNAPSHOT_RECORDED
-from roxauto.core.models import InstanceState
 from roxauto.core.queue import QueuedTask
-from roxauto.core.runtime import QueueRunResult
+from roxauto.core.runtime import QueueRunResult, RuntimeInspectionResult
 from roxauto.emulator import LiveRuntimeEventRecord, LiveRuntimeInstanceSnapshot, LiveRuntimeSnapshot
+from roxauto.tasks import TaskReadinessReport, TaskRuntimeBuilderInput
 from roxauto.vision import VisionToolingState
 
 
@@ -74,6 +74,7 @@ class InstanceDetailView:
     queue_depth: int
     metadata_lines: list[str] = field(default_factory=list)
     warning: str = ""
+    inspection_summary: str = ""
 
 
 @dataclass(slots=True)
@@ -93,6 +94,8 @@ class QueuePaneView:
     total_count: int
     items: list[QueueItemView] = field(default_factory=list)
     empty_message: str = "No queued work for the selected instance."
+    last_queue_status: str = "idle"
+    last_queue_summary: str = ""
 
 
 @dataclass(slots=True)
@@ -136,10 +139,45 @@ class ManualControlsView:
 
 
 @dataclass(slots=True)
+class TaskReadinessRowView:
+    task_id: str
+    pack_id: str
+    manifest_path: str
+    builder_state: str
+    implementation_state: str
+    builder_blockers: list[str] = field(default_factory=list)
+    implementation_blockers: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+    required_anchors: list[str] = field(default_factory=list)
+    asset_requirement_ids: list[str] = field(default_factory=list)
+    runtime_requirement_ids: list[str] = field(default_factory=list)
+    calibration_requirement_ids: list[str] = field(default_factory=list)
+    foundation_requirement_ids: list[str] = field(default_factory=list)
+    is_related_to_selected_instance: bool = False
+
+
+@dataclass(slots=True)
+class TaskReadinessPaneView:
+    total_tasks: int
+    builder_ready_count: int
+    builder_blocked_count: int
+    implementation_ready_count: int
+    implementation_blocked_count: int
+    blocked_by_asset_count: int
+    blocked_by_runtime_count: int
+    blocked_by_calibration_count: int
+    blocked_by_foundation_count: int
+    selected_task_ids: list[str] = field(default_factory=list)
+    rows: list[TaskReadinessRowView] = field(default_factory=list)
+    empty_message: str = "No task readiness data available."
+
+
+@dataclass(slots=True)
 class OperatorConsoleState:
     snapshot: ConsoleSnapshot
     runtime_snapshot: LiveRuntimeSnapshot
     selected_instance_snapshot: LiveRuntimeInstanceSnapshot | None
+    selected_inspection_result: RuntimeInspectionResult | None
     summary: ConsoleSummaryView
     instance_rows: list[InstanceListEntryView]
     selected_instance_id: str
@@ -147,6 +185,7 @@ class OperatorConsoleState:
     queue: QueuePaneView
     logs: LogPaneView
     manual_controls: ManualControlsView
+    task_readiness: TaskReadinessPaneView
     vision: VisionToolingState
     global_emergency_stop_active: bool = False
 
@@ -254,8 +293,10 @@ def build_console_snapshot_from_runtime(
 ) -> ConsoleSnapshot:
     cards: list[InstanceCardView] = []
     by_id = {item.instance_id: item for item in runtime_snapshot.instance_snapshots}
+    inspection_by_id = _inspection_lookup(runtime_snapshot)
     for instance in runtime_snapshot.instances:
         snapshot = by_id.get(instance.instance_id)
+        inspection = inspection_by_id.get(instance.instance_id)
         metadata = dict(instance.metadata)
         if snapshot is not None:
             metadata["queue_depth"] = snapshot.queue_depth
@@ -268,6 +309,11 @@ def build_console_snapshot_from_runtime(
                 metadata["preview_frame"] = snapshot.preview_frame.image_path
             if snapshot.failure_snapshot is not None:
                 metadata["failure_snapshot"] = snapshot.failure_snapshot.snapshot_id
+        if inspection is not None:
+            metadata["last_inspection_status"] = inspection.status.value
+            metadata["last_inspection_health_ok"] = inspection.health_check_ok
+            if inspection.health_check_message:
+                metadata["last_inspection_message"] = inspection.health_check_message
         cards.append(
             InstanceCardView(
                 instance_id=instance.instance_id,
@@ -311,11 +357,32 @@ def build_queue_pane(
         for item in filtered
     ]
     empty_message = "No queued work for the selected instance." if selected_instance_id else "No queued work available."
+    last_queue_result = runtime_snapshot.last_queue_result
+    last_queue_status = "idle"
+    last_queue_summary = ""
+    if last_queue_result is not None and (
+        not selected_instance_id or last_queue_result.instance_id == selected_instance_id
+    ):
+        statuses = sorted({run.status.value for run in last_queue_result.runs})
+        if last_queue_result.stopped:
+            last_queue_status = "stopped"
+        elif statuses:
+            last_queue_status = ",".join(statuses)
+        last_queue_summary = (
+            last_queue_result.message
+            or (
+                f"queue result for {last_queue_result.instance_id}: "
+                f"runs={len(last_queue_result.runs)} "
+                f"remaining={last_queue_result.remaining_queue_depth}"
+            )
+        )
     return QueuePaneView(
         selected_instance_id=selected_instance_id,
         total_count=len(items),
         items=items,
         empty_message=empty_message,
+        last_queue_status=last_queue_status,
+        last_queue_summary=last_queue_summary,
     )
 
 
@@ -374,6 +441,7 @@ def build_instance_detail(
     snapshot: ConsoleSnapshot,
     *,
     selected_instance_snapshot: LiveRuntimeInstanceSnapshot | None = None,
+    selected_inspection_result: RuntimeInspectionResult | None = None,
     queue: QueuePaneView | None = None,
     global_emergency_stop_active: bool = False,
 ) -> InstanceDetailView:
@@ -428,14 +496,50 @@ def build_instance_detail(
             )
         for key, value in sorted(context.metadata.items()):
             metadata_lines.append(f"context.{key}: {value}")
+    if selected_inspection_result is not None:
+        metadata_lines.extend(
+            [
+                f"inspection.status: {selected_inspection_result.status.value}",
+                f"inspection.inspected_at: {selected_inspection_result.inspected_at}",
+                f"inspection.health_check_ok: {selected_inspection_result.health_check_ok}",
+            ]
+        )
+        if selected_inspection_result.health_check_message:
+            metadata_lines.append(
+                f"inspection.health_check_message: {selected_inspection_result.health_check_message}"
+            )
+        if selected_inspection_result.preview_frame is not None:
+            metadata_lines.append(
+                f"inspection.preview_frame: {selected_inspection_result.preview_frame.image_path}"
+            )
+        if selected_inspection_result.failure_snapshot is not None:
+            metadata_lines.append(
+                "inspection.failure_snapshot: "
+                f"{selected_inspection_result.failure_snapshot.snapshot_id}"
+            )
+        for key, value in sorted(selected_inspection_result.metadata.items()):
+            metadata_lines.append(f"inspection.{key}: {value}")
 
     warning_parts: list[str] = []
     if global_emergency_stop_active:
         warning_parts.append("Emergency stop requested. Waiting for runtime acknowledgement.")
     elif context is not None and context.stop_requested:
         warning_parts.append("Stop requested for this instance.")
-    if context is not None and context.health_check_ok is False:
+    if selected_inspection_result is not None and selected_inspection_result.health_check_ok is False:
+        warning_parts.append(
+            selected_inspection_result.health_check_message or "Latest health check failed."
+        )
+    elif context is not None and context.health_check_ok is False:
         warning_parts.append("Latest health check failed.")
+
+    inspection_summary = "No inspection result captured yet."
+    if selected_inspection_result is not None:
+        inspection_summary = (
+            f"{selected_inspection_result.status.value} | "
+            f"healthy={selected_inspection_result.health_check_ok}"
+        )
+        if selected_inspection_result.health_check_message:
+            inspection_summary += f" | {selected_inspection_result.health_check_message}"
 
     return InstanceDetailView(
         instance_id=instance.instance_id,
@@ -446,6 +550,7 @@ def build_instance_detail(
         queue_depth=selected_instance_snapshot.queue_depth if selected_instance_snapshot is not None else (queue.total_count if queue is not None else 0),
         metadata_lines=metadata_lines,
         warning=" ".join(warning_parts),
+        inspection_summary=inspection_summary,
     )
 
 
@@ -509,7 +614,7 @@ def _latest_command_feedback(
         not selected_instance_id or last_queue_result.instance_id == selected_instance_id
     ):
         statuses = sorted({run.status.value for run in last_queue_result.runs})
-        queue_status = ",".join(statuses) if statuses else "idle"
+        queue_status = ",".join(statuses) if statuses else ("stopped" if last_queue_result.stopped else "idle")
         return (
             last_queue_result.message
             or (
@@ -553,7 +658,9 @@ def build_console_summary(
 
     selected_instance = _instance_lookup(snapshot).get(selected_instance_id)
     selected_snapshot = runtime_snapshot.get_instance_snapshot(selected_instance_id) if selected_instance_id else None
-    if global_emergency_stop_active:
+    if not runtime_snapshot.last_sync_ok:
+        status_message = f"Discovery sync failed: {runtime_snapshot.last_sync_error or 'unknown error'}"
+    elif global_emergency_stop_active:
         status_message = "Global emergency stop is active."
     elif selected_snapshot is not None and selected_snapshot.context is not None and selected_snapshot.context.stop_requested:
         status_message = f"{selected_instance.label if selected_instance is not None else selected_instance_id} is stopped."
@@ -583,9 +690,11 @@ def build_instance_list_rows(
     runtime_snapshot: LiveRuntimeSnapshot,
 ) -> list[InstanceListEntryView]:
     runtime_by_id = {item.instance_id: item for item in runtime_snapshot.instance_snapshots}
+    inspection_by_id = _inspection_lookup(runtime_snapshot)
     rows: list[InstanceListEntryView] = []
     for instance in snapshot.instances:
         runtime_item = runtime_by_id.get(instance.instance_id)
+        inspection = inspection_by_id.get(instance.instance_id)
         context = runtime_item.context if runtime_item is not None else None
         health_summary = "health unknown"
         if runtime_item is not None:
@@ -593,11 +702,19 @@ def build_instance_list_rows(
                 health_summary = "healthy"
             elif runtime_item.health_check_ok is False:
                 health_summary = "health check failed"
+        if inspection is not None and inspection.health_check_message:
+            health_summary = f"{health_summary} ({inspection.health_check_message})"
         profile_summary = context.profile_binding.display_name if context is not None and context.profile_binding is not None else ""
-        preview_summary = runtime_item.preview_frame.image_path if runtime_item is not None and runtime_item.preview_frame is not None else ""
+        preview_summary = ""
+        if inspection is not None and inspection.preview_frame is not None:
+            preview_summary = inspection.preview_frame.image_path
+        elif runtime_item is not None and runtime_item.preview_frame is not None:
+            preview_summary = runtime_item.preview_frame.image_path
         warning = ""
         if context is not None and context.stop_requested:
             warning = "stop requested"
+        elif inspection is not None and inspection.health_check_ok is False:
+            warning = inspection.health_check_message or "runtime health check failed"
         elif instance.status.lower() == "error":
             warning = "runtime error"
         rows.append(
@@ -617,6 +734,99 @@ def build_instance_list_rows(
     return rows
 
 
+def build_task_readiness_pane(
+    reports: Iterable[TaskReadinessReport],
+    builder_inputs: Iterable[TaskRuntimeBuilderInput],
+    *,
+    selected_instance_snapshot: LiveRuntimeInstanceSnapshot | None = None,
+) -> TaskReadinessPaneView:
+    report_list = list(reports)
+    builder_inputs_by_task = {item.task_id: item for item in builder_inputs}
+    selected_task_ids = _selected_task_ids(selected_instance_snapshot)
+
+    rows = [
+        TaskReadinessRowView(
+            task_id=report.task_id,
+            pack_id=report.pack_id,
+            manifest_path=builder_inputs_by_task.get(report.task_id).manifest_path
+            if report.task_id in builder_inputs_by_task
+            else "",
+            builder_state=report.builder_readiness_state.value,
+            implementation_state=report.implementation_readiness_state.value,
+            builder_blockers=[
+                _format_requirement_summary(requirement)
+                for requirement in report.builder_requirements
+                if requirement.blocking and not requirement.satisfied
+            ],
+            implementation_blockers=[
+                _format_requirement_summary(requirement)
+                for requirement in report.implementation_requirements
+                if requirement.blocking and not requirement.satisfied
+            ],
+            warnings=[
+                _format_requirement_summary(requirement)
+                for requirement in report.warning_requirements
+            ],
+            required_anchors=list(builder_inputs_by_task.get(report.task_id).required_anchors)
+            if report.task_id in builder_inputs_by_task
+            else [],
+            asset_requirement_ids=list(builder_inputs_by_task.get(report.task_id).asset_requirement_ids)
+            if report.task_id in builder_inputs_by_task
+            else [],
+            runtime_requirement_ids=list(builder_inputs_by_task.get(report.task_id).runtime_requirement_ids)
+            if report.task_id in builder_inputs_by_task
+            else [],
+            calibration_requirement_ids=list(builder_inputs_by_task.get(report.task_id).calibration_requirement_ids)
+            if report.task_id in builder_inputs_by_task
+            else [],
+            foundation_requirement_ids=list(builder_inputs_by_task.get(report.task_id).foundation_requirement_ids)
+            if report.task_id in builder_inputs_by_task
+            else [],
+            is_related_to_selected_instance=report.task_id in selected_task_ids,
+        )
+        for report in report_list
+    ]
+    rows.sort(key=lambda row: (not row.is_related_to_selected_instance, row.task_id))
+
+    return TaskReadinessPaneView(
+        total_tasks=len(report_list),
+        builder_ready_count=sum(1 for report in report_list if report.builder_readiness_state.value == "ready"),
+        builder_blocked_count=sum(1 for report in report_list if report.builder_readiness_state.value != "ready"),
+        implementation_ready_count=sum(
+            1 for report in report_list if report.implementation_readiness_state.value == "ready"
+        ),
+        implementation_blocked_count=sum(
+            1 for report in report_list if report.implementation_readiness_state.value != "ready"
+        ),
+        blocked_by_asset_count=sum(
+            1
+            for report in report_list
+            if "blocked_by_asset"
+            in {report.builder_readiness_state.value, report.implementation_readiness_state.value}
+        ),
+        blocked_by_runtime_count=sum(
+            1
+            for report in report_list
+            if "blocked_by_runtime"
+            in {report.builder_readiness_state.value, report.implementation_readiness_state.value}
+        ),
+        blocked_by_calibration_count=sum(
+            1
+            for report in report_list
+            if "blocked_by_calibration"
+            in {report.builder_readiness_state.value, report.implementation_readiness_state.value}
+        ),
+        blocked_by_foundation_count=sum(
+            1
+            for report in report_list
+            if "blocked_by_foundation"
+            in {report.builder_readiness_state.value, report.implementation_readiness_state.value}
+        ),
+        selected_task_ids=selected_task_ids,
+        rows=rows,
+    )
+
+
 def build_operator_console_state(
     snapshot: ConsoleSnapshot,
     runtime_snapshot: LiveRuntimeSnapshot,
@@ -624,6 +834,8 @@ def build_operator_console_state(
     *,
     selected_instance_id: str = "",
     global_emergency_stop_active: bool = False,
+    task_readiness_reports: Iterable[TaskReadinessReport] = (),
+    task_runtime_builder_inputs: Iterable[TaskRuntimeBuilderInput] = (),
 ) -> OperatorConsoleState:
     resolved_instance_id = selected_instance_id
     if not resolved_instance_id and runtime_snapshot.instance_snapshots:
@@ -632,6 +844,7 @@ def build_operator_console_state(
         resolved_instance_id = snapshot.instances[0].instance_id
 
     selected_snapshot = runtime_snapshot.get_instance_snapshot(resolved_instance_id) if resolved_instance_id else None
+    selected_inspection = _inspection_lookup(runtime_snapshot).get(resolved_instance_id)
     queue = build_queue_pane(runtime_snapshot, selected_instance_id=resolved_instance_id)
     logs = build_log_pane(runtime_snapshot.recent_events, selected_instance_id=resolved_instance_id)
     instance = _instance_lookup(snapshot).get(resolved_instance_id)
@@ -645,6 +858,7 @@ def build_operator_console_state(
     detail = build_instance_detail(
         snapshot,
         selected_instance_snapshot=selected_snapshot,
+        selected_inspection_result=selected_inspection,
         queue=queue,
         global_emergency_stop_active=global_emergency_stop_active,
     )
@@ -657,10 +871,16 @@ def build_operator_console_state(
         global_emergency_stop_active=global_emergency_stop_active,
     )
     instance_rows = build_instance_list_rows(snapshot, runtime_snapshot)
+    task_readiness = build_task_readiness_pane(
+        task_readiness_reports,
+        task_runtime_builder_inputs,
+        selected_instance_snapshot=selected_snapshot,
+    )
     return OperatorConsoleState(
         snapshot=snapshot,
         runtime_snapshot=runtime_snapshot,
         selected_instance_snapshot=selected_snapshot,
+        selected_inspection_result=selected_inspection,
         summary=summary,
         instance_rows=instance_rows,
         selected_instance_id=resolved_instance_id,
@@ -668,6 +888,7 @@ def build_operator_console_state(
         queue=queue,
         logs=logs,
         manual_controls=manual_controls,
+        task_readiness=task_readiness,
         vision=vision_state,
         global_emergency_stop_active=global_emergency_stop_active,
     )
@@ -706,6 +927,10 @@ def _instance_lookup(snapshot: ConsoleSnapshot) -> dict[str, InstanceCardView]:
     return {instance.instance_id: instance for instance in snapshot.instances}
 
 
+def _inspection_lookup(runtime_snapshot: LiveRuntimeSnapshot) -> dict[str, RuntimeInspectionResult]:
+    return {inspection.instance_id: inspection for inspection in runtime_snapshot.last_inspection_results}
+
+
 def _event_name(event: AppEvent | LiveRuntimeEventRecord) -> str:
     return str(event.name)
 
@@ -722,3 +947,31 @@ def _event_instance_id(event: AppEvent | LiveRuntimeEventRecord) -> str:
 
 def _event_emitted_at(event: AppEvent | LiveRuntimeEventRecord) -> object:
     return event.emitted_at
+
+
+def _selected_task_ids(
+    selected_instance_snapshot: LiveRuntimeInstanceSnapshot | None,
+) -> list[str]:
+    if selected_instance_snapshot is None or selected_instance_snapshot.context is None:
+        return []
+    task_ids: list[str] = []
+    context = selected_instance_snapshot.context
+    if context.active_task_id:
+        task_ids.append(context.active_task_id)
+    if context.profile_binding is not None:
+        task_ids.extend(task_id for task_id in context.profile_binding.allowed_tasks if task_id)
+    seen: set[str] = set()
+    result: list[str] = []
+    for task_id in task_ids:
+        if task_id in seen:
+            continue
+        seen.add(task_id)
+        result.append(task_id)
+    return result
+
+
+def _format_requirement_summary(requirement) -> str:
+    summary = f"{requirement.domain.value} | {requirement.requirement_id} | {requirement.summary}"
+    if requirement.details:
+        summary += f" | {requirement.details}"
+    return summary
