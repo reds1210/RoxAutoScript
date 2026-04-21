@@ -24,12 +24,35 @@ def _parse_point(value: str) -> tuple[int, int]:
     return int(x_text.strip()), int(y_text.strip())
 
 
+def _parse_optional_point(value: str) -> tuple[int, int] | None:
+    text = value.strip()
+    if not text:
+        return None
+    return _parse_point(text)
+
+
+def _parse_optional_region(value: str) -> tuple[int, int, int, int] | None:
+    text = value.strip()
+    if not text:
+        return None
+    left, top, width, height = [int(part.strip()) for part in text.split(",", maxsplit=3)]
+    return left, top, width, height
+
+
+def _parse_optional_float(value: str) -> float | None:
+    text = value.strip()
+    if not text:
+        return None
+    return float(text)
+
+
 def launch_placeholder_gui() -> int:
     try:
         from PySide6.QtCore import QTimer, Qt
         from PySide6.QtGui import QPixmap
         from PySide6.QtWidgets import (
             QApplication,
+            QComboBox,
             QFormLayout,
             QGridLayout,
             QGroupBox,
@@ -279,6 +302,68 @@ def launch_placeholder_gui() -> int:
             manual_layout.addLayout(text)
             layout.addWidget(manual)
 
+            claim = QGroupBox("Claim Rewards")
+            claim_layout = QVBoxLayout()
+            claim.setLayout(claim_layout)
+            self.claim_banner_label = QLabel()
+            self.claim_banner_label.setWordWrap(True)
+            self.claim_status_label = QLabel()
+            self.claim_status_label.setObjectName("subtleLabel")
+            self.claim_status_label.setWordWrap(True)
+            claim_layout.addWidget(self.claim_banner_label)
+            claim_layout.addWidget(self.claim_status_label)
+
+            claim_actions = QHBoxLayout()
+            self.claim_queue_button = QPushButton("Queue Claim Rewards")
+            self.claim_queue_button.clicked.connect(self._queue_claim_rewards)
+            self.claim_run_button = QPushButton("Run Claim Rewards")
+            self.claim_run_button.clicked.connect(self._run_claim_rewards)
+            claim_actions.addWidget(self.claim_queue_button)
+            claim_actions.addWidget(self.claim_run_button)
+            claim_layout.addLayout(claim_actions)
+
+            source_actions = QHBoxLayout()
+            self.claim_capture_preview_button = QPushButton("Use Preview Source")
+            self.claim_capture_preview_button.clicked.connect(
+                lambda: self._capture_claim_rewards_source("preview")
+            )
+            self.claim_capture_failure_button = QPushButton("Use Failure Source")
+            self.claim_capture_failure_button.clicked.connect(
+                lambda: self._capture_claim_rewards_source("failure")
+            )
+            source_actions.addWidget(self.claim_capture_preview_button)
+            source_actions.addWidget(self.claim_capture_failure_button)
+            claim_layout.addLayout(source_actions)
+
+            claim_form = QFormLayout()
+            self.claim_mode_input = QComboBox()
+            self.claim_mode_input.addItem("Claimable", "claimable")
+            self.claim_mode_input.addItem("Already Claimed", "already_claimed")
+            self.claim_mode_input.addItem("Affordance Ambiguous", "ambiguous")
+            self.claim_mode_input.addItem("Panel Missing", "panel_missing")
+            self.claim_crop_input = QLineEdit()
+            self.claim_match_region_input = QLineEdit()
+            self.claim_threshold_input = QLineEdit()
+            self.claim_scale_input = QLineEdit()
+            self.claim_offset_input = QLineEdit()
+            claim_form.addRow("Workflow Mode", self.claim_mode_input)
+            claim_form.addRow("Crop Region", self.claim_crop_input)
+            claim_form.addRow("Match Region", self.claim_match_region_input)
+            claim_form.addRow("Threshold", self.claim_threshold_input)
+            claim_form.addRow("Capture Scale", self.claim_scale_input)
+            claim_form.addRow("Capture Offset", self.claim_offset_input)
+            claim_layout.addLayout(claim_form)
+
+            claim_editor_actions = QHBoxLayout()
+            self.claim_apply_button = QPushButton("Apply Claim Editor")
+            self.claim_apply_button.clicked.connect(self._apply_claim_rewards_editor)
+            self.claim_reset_button = QPushButton("Reset Claim Editor")
+            self.claim_reset_button.clicked.connect(self._reset_claim_rewards_editor)
+            claim_editor_actions.addWidget(self.claim_apply_button)
+            claim_editor_actions.addWidget(self.claim_reset_button)
+            claim_layout.addLayout(claim_editor_actions)
+            layout.addWidget(claim)
+
             queue = QGroupBox("Queue")
             queue_layout = QVBoxLayout()
             queue.setLayout(queue_layout)
@@ -294,6 +379,7 @@ def launch_placeholder_gui() -> int:
         def _build_observability_panel(self) -> QWidget:
             tabs = QTabWidget()
             tabs.addTab(self._build_preview_tab(Qt), "Preview")
+            tabs.addTab(self._text_tab("claim_header", "claim_box"), "Claim Rewards")
             tabs.addTab(self._text_tab("readiness_header", "readiness_box"), "Readiness")
             tabs.addTab(self._text_tab("calibration_header", "calibration_box"), "Calibration")
             tabs.addTab(self._text_tab("capture_header", "capture_box"), "Capture")
@@ -405,6 +491,69 @@ def launch_placeholder_gui() -> int:
                 return
             self._rebuild_state(selected_instance_id=self._state.selected_instance_id)
 
+        def _queue_claim_rewards(self) -> None:
+            if not self._state.selected_instance_id:
+                QMessageBox.warning(self, "Claim Rewards", "Select an instance first.")
+                return
+            self._bridge.queue_claim_rewards(self._state.selected_instance_id)
+            self._rebuild_state(selected_instance_id=self._state.selected_instance_id)
+
+        def _run_claim_rewards(self) -> None:
+            if not self._state.selected_instance_id:
+                QMessageBox.warning(self, "Claim Rewards", "Select an instance first.")
+                return
+            self._bridge.run_claim_rewards(self._state.selected_instance_id)
+            self._rebuild_state(selected_instance_id=self._state.selected_instance_id)
+
+        def _capture_claim_rewards_source(self, source_kind: str) -> None:
+            if not self._state.selected_instance_id:
+                QMessageBox.warning(self, "Claim Rewards", "Select an instance first.")
+                return
+            image_path = self._bridge.capture_claim_rewards_source(
+                self._state.selected_instance_id,
+                source_kind=source_kind,
+            )
+            if not image_path:
+                QMessageBox.warning(
+                    self,
+                    "Claim Rewards",
+                    f"No {source_kind} image is available for the selected instance.",
+                )
+                return
+            self._rebuild_state(selected_instance_id=self._state.selected_instance_id)
+
+        def _apply_claim_rewards_editor(self) -> None:
+            if not self._state.selected_instance_id:
+                QMessageBox.warning(self, "Claim Rewards", "Select an instance first.")
+                return
+            try:
+                workflow_mode = str(self.claim_mode_input.currentData())
+                crop_region = _parse_optional_region(self.claim_crop_input.text())
+                match_region = _parse_optional_region(self.claim_match_region_input.text())
+                threshold = _parse_optional_float(self.claim_threshold_input.text())
+                capture_scale = _parse_optional_float(self.claim_scale_input.text())
+                capture_offset = _parse_optional_point(self.claim_offset_input.text())
+            except ValueError as exc:
+                QMessageBox.warning(self, "Claim Rewards", f"Invalid editor input: {exc}")
+                return
+            self._bridge.update_claim_rewards_workflow(
+                self._state.selected_instance_id,
+                workflow_mode=workflow_mode,
+                crop_region=crop_region,
+                match_region=match_region,
+                confidence_threshold=threshold,
+                capture_scale=capture_scale,
+                capture_offset=capture_offset,
+            )
+            self._rebuild_state(selected_instance_id=self._state.selected_instance_id)
+
+        def _reset_claim_rewards_editor(self) -> None:
+            if not self._state.selected_instance_id:
+                QMessageBox.warning(self, "Claim Rewards", "Select an instance first.")
+                return
+            self._bridge.reset_claim_rewards_workflow(self._state.selected_instance_id)
+            self._rebuild_state(selected_instance_id=self._state.selected_instance_id)
+
         def _resolve_selected_instance_id(self, selected_instance_id: str) -> str:
             ids = {instance.instance_id for instance in self._console_snapshot.instances}
             if selected_instance_id and selected_instance_id in ids:
@@ -418,6 +567,11 @@ def launch_placeholder_gui() -> int:
             self._vision_state = self._bridge.vision_tooling_state(resolved)
             self._task_readiness_reports = self._bridge.task_readiness_reports()
             self._task_runtime_builder_inputs = self._bridge.task_runtime_builder_inputs()
+            self._claim_rewards = self._bridge.claim_rewards_pane(
+                resolved,
+                runtime_snapshot=self._runtime_snapshot,
+                vision_state=self._vision_state,
+            )
             self._state = build_operator_console_state(
                 self._console_snapshot,
                 self._runtime_snapshot,
@@ -426,6 +580,7 @@ def launch_placeholder_gui() -> int:
                 global_emergency_stop_active=self._bridge.global_emergency_stop_active(),
                 task_readiness_reports=self._task_readiness_reports,
                 task_runtime_builder_inputs=self._task_runtime_builder_inputs,
+                claim_rewards=self._claim_rewards,
             )
             self._render_state()
 
@@ -464,6 +619,7 @@ def launch_placeholder_gui() -> int:
             self._render_queue()
             self._render_logs()
             self._render_controls()
+            self._render_claim_rewards()
             self._render_vision()
 
         def _render_instance_list(self) -> None:
@@ -591,6 +747,92 @@ def launch_placeholder_gui() -> int:
             self.refresh_button.setEnabled(enabled.get("refresh", True))
             self.global_emergency_button.setEnabled(enabled.get("emergency_stop", True))
 
+        def _render_claim_rewards(self) -> None:
+            pane = self._state.claim_rewards
+            self.claim_banner_label.setText(pane.workflow_banner)
+            self.claim_status_label.setText(
+                "\n".join(
+                    [
+                        f"Status: {pane.workflow_status}",
+                        f"Queue: {pane.queue_summary}",
+                        f"Run: {pane.last_run_summary}",
+                        f"Failure: {pane.failure_summary}",
+                    ]
+                )
+            )
+            self.claim_queue_button.setEnabled(pane.can_queue)
+            self.claim_run_button.setEnabled(pane.can_run_now)
+            self.claim_capture_preview_button.setEnabled(bool(self._state.selected_instance_id))
+            self.claim_capture_failure_button.setEnabled(bool(self._state.selected_instance_id))
+            self.claim_apply_button.setEnabled(bool(self._state.selected_instance_id))
+            self.claim_reset_button.setEnabled(bool(self._state.selected_instance_id))
+
+            mode_index = self.claim_mode_input.findData(pane.editor.workflow_mode)
+            if mode_index >= 0:
+                self.claim_mode_input.setCurrentIndex(mode_index)
+            self.claim_crop_input.setText(pane.editor.crop_region_text)
+            self.claim_match_region_input.setText(pane.editor.match_region_text)
+            self.claim_threshold_input.setText(pane.editor.confidence_threshold_text)
+            self.claim_scale_input.setText(pane.editor.capture_scale_text)
+            self.claim_offset_input.setText(pane.editor.capture_offset_text)
+
+            self.claim_header.setText(
+                f"{pane.task_name} [{pane.workflow_status}] | "
+                f"manifest={pane.manifest_path or 'n/a'} | "
+                f"anchor={pane.selected_anchor_summary or 'n/a'}"
+            )
+            self.claim_box.setPlainText(
+                "\n".join(
+                    [
+                        f"Banner: {pane.workflow_banner}",
+                        f"Runtime gate: {pane.runtime_gate_summary or 'n/a'}",
+                        f"Scope: {pane.selected_scope_summary or 'n/a'}",
+                        f"Preview: {pane.preview_summary or 'n/a'}",
+                        f"Active step: {pane.active_step_summary or 'n/a'}",
+                        f"Last run id: {pane.last_run_id or 'n/a'}",
+                        f"Last run status: {pane.last_run_status or 'n/a'}",
+                        f"Failure reason: {pane.failure_reason or 'n/a'}",
+                        f"Failure step: {pane.failure_step_id or 'n/a'}",
+                        f"Failure snapshot: {pane.failure_snapshot_id or 'n/a'}",
+                        "Editor:",
+                        f"  workflow_mode={pane.editor.workflow_mode}",
+                        f"  source_kind={pane.editor.selected_source_kind}",
+                        f"  source_image={pane.editor.selected_source_image or 'n/a'}",
+                        f"  artifacts={pane.editor.artifact_count}",
+                        f"  crop_region={pane.editor.crop_region_text or 'n/a'}",
+                        f"  match_region={pane.editor.match_region_text or 'n/a'}",
+                        f"  threshold={pane.editor.confidence_threshold_text or 'n/a'}",
+                        f"  capture_scale={pane.editor.capture_scale_text or 'n/a'}",
+                        f"  capture_offset={pane.editor.capture_offset_text or 'n/a'}",
+                        f"  editor_summary={pane.editor.last_applied_summary or 'n/a'}",
+                        "Steps:",
+                        *(
+                            [
+                                (
+                                    f"  {row.step_id} | {row.status} | action={row.action} | "
+                                    f"current={'yes' if row.is_current else 'no'}"
+                                )
+                                for row in pane.step_rows
+                            ]
+                            or ["  none"]
+                        ),
+                        "Step details:",
+                        *(
+                            [
+                                (
+                                    f"  {row.step_id}: {row.summary} | "
+                                    f"success={row.success_condition} | "
+                                    f"failure={row.failure_condition} | "
+                                    f"screenshot={row.screenshot_path or 'n/a'}"
+                                )
+                                for row in pane.step_rows
+                            ]
+                            or ["  none"]
+                        ),
+                    ]
+                )
+            )
+
         def _render_vision(self) -> None:
             selected = self._state.selected_instance_snapshot
             inspection = self._state.selected_inspection_result
@@ -600,6 +842,7 @@ def launch_placeholder_gui() -> int:
             preview_inspection = vision.preview
             preview_path = self._preview_path()
             task_readiness = self._state.task_readiness
+            focused_task_rows = self._focused_task_rows()
 
             self.preview_header.setText(
                 f"Inspection: {inspection.status.value if inspection is not None else 'uninspected'} | "
@@ -659,13 +902,19 @@ def launch_placeholder_gui() -> int:
                                 "Selected task scope: "
                                 f"{', '.join(task_readiness.selected_task_ids) or 'none'}"
                             ),
+                            "Selected task diagnostics:",
+                            *(
+                                self._task_readiness_focus_lines(focused_task_rows)
+                                or ["  none"]
+                            ),
                             "Task rows:",
                             *(
                                 [
                                     (
                                         f"  {row.task_id} | builder={row.builder_state} | "
                                         f"implementation={row.implementation_state} | "
-                                        f"related={'yes' if row.is_related_to_selected_instance else 'no'}"
+                                        f"related={'yes' if row.is_related_to_selected_instance else 'no'} | "
+                                        f"scope={','.join(row.scope_reasons) or 'n/a'}"
                                     )
                                     for row in task_readiness.rows
                                 ]
@@ -865,13 +1114,60 @@ def launch_placeholder_gui() -> int:
             readiness = vision.readiness
             if readiness is not None:
                 lines.append(f"Workspace blockers: {readiness.blocking_count}")
-            if self._state.task_readiness.selected_task_ids:
+            focused_task_rows = self._focused_task_rows()
+            if focused_task_rows:
                 lines.append(
                     "Task readiness scope: "
-                    + ", ".join(self._state.task_readiness.selected_task_ids)
+                    + "; ".join(
+                        f"{row.task_id} [{','.join(row.scope_reasons) or 'selected'}]"
+                        for row in focused_task_rows
+                    )
                 )
             if vision.anchors.selected_anchor_summary:
                 lines.append(f"Anchor: {vision.anchors.selected_anchor_summary}")
+            return lines
+
+        def _focused_task_rows(self):
+            return [
+                row
+                for row in self._state.task_readiness.rows
+                if row.is_related_to_selected_instance
+            ]
+
+        def _task_readiness_focus_lines(self, rows) -> list[str]:
+            lines: list[str] = []
+            for row in rows:
+                scope = ",".join(row.scope_reasons) or "selected"
+                lines.extend(
+                    [
+                        (
+                            f"  {row.task_id} | scope={scope} | "
+                            f"builder={row.builder_state} | implementation={row.implementation_state}"
+                        ),
+                        f"    manifest={row.manifest_path or 'n/a'}",
+                        f"    anchors={', '.join(row.required_anchors) or 'none'}",
+                        f"    fixtures={', '.join(row.fixture_profile_paths) or 'none'}",
+                        f"    asset_requirements={', '.join(row.asset_requirement_ids) or 'none'}",
+                        f"    runtime_requirements={', '.join(row.runtime_requirement_ids) or 'none'}",
+                        f"    calibration_requirements={', '.join(row.calibration_requirement_ids) or 'none'}",
+                        f"    foundation_requirements={', '.join(row.foundation_requirement_ids) or 'none'}",
+                        "    builder_blockers:",
+                        *(
+                            [f"      - {item}" for item in row.builder_blockers]
+                            or ["      - none"]
+                        ),
+                        "    implementation_blockers:",
+                        *(
+                            [f"      - {item}" for item in row.implementation_blockers]
+                            or ["      - none"]
+                        ),
+                        "    warnings:",
+                        *(
+                            [f"      - {item}" for item in row.warnings]
+                            or ["      - none"]
+                        ),
+                    ]
+                )
             return lines
 
         def _inspection_lines(
