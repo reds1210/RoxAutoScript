@@ -58,10 +58,10 @@ Model policy:
 
 Use these as the default active lineup:
 
-- `codex/core-runtime-claim-rewards-hardening`
-- `codex/gui-claim-rewards-operator-hardening`
-- `codex/vision-claim-rewards-curation`
-- `codex/task-claim-rewards-real-flow`
+- `codex/core-runtime-step-telemetry`
+- `codex/gui-claim-rewards-production-telemetry`
+- `codex/vision-claim-rewards-live-captures`
+- `codex/task-claim-rewards-runtime-seam`
 
 ## 5. Naming Rules
 
@@ -79,10 +79,11 @@ Later branch families:
 
 If a track needs multiple phases, extend the name:
 
-- `codex/core-runtime-step-telemetry`
-- `codex/gui-claim-rewards-editor-persistence`
-- `codex/vision-claim-rewards-goldens`
-- `codex/task-guild-check-in`
+- `codex/core-runtime-registered-task-seam`
+- `codex/gui-claim-rewards-operator-guidance`
+- `codex/vision-claim-rewards-failure-cases`
+- `codex/task-guild-check-in-foundations`
+- `codex/claim-rewards-live-goldens`
 
 ### Local worktree folder names
 
@@ -90,10 +91,10 @@ Recommended sibling layout:
 
 ```text
 C:\code\RoxAutoScript
-C:\code\RoxAutoScript-wt-core-runtime-claim-rewards
-C:\code\RoxAutoScript-wt-gui-claim-rewards
-C:\code\RoxAutoScript-wt-vision-claim-rewards
-C:\code\RoxAutoScript-wt-task-claim-rewards
+C:\code\RoxAutoScript-wt-core-runtime-step-telemetry
+C:\code\RoxAutoScript-wt-gui-claim-rewards-production
+C:\code\RoxAutoScript-wt-vision-claim-rewards-live
+C:\code\RoxAutoScript-wt-task-claim-rewards-runtime
 ```
 
 Rule:
@@ -168,7 +169,7 @@ Reason:
 
 ## 8. Merge Order
 
-For round 5, merge in this order unless there is a strong reason not to:
+For the current claim-rewards production-hardening wave, merge in this order unless there is a strong reason not to:
 
 1. `Engine E` goldens branches when used
 2. `Engine C` vision curation branches
@@ -178,7 +179,7 @@ For round 5, merge in this order unless there is a strong reason not to:
 
 Reason:
 
-- curated assets and task expectations should settle before runtime and GUI integrations harden around them
+- live captures and task expectations should settle before runtime and GUI integrations harden around them
 
 ## 9. How To Start A Track
 
@@ -191,15 +192,15 @@ Recommended flow:
 5. confirm owned paths before editing
 6. implement only inside owned paths whenever possible
 
-Round-5 example:
+Round-6 example:
 
 ```powershell
 git switch main
 git pull
-git worktree add ..\RoxAutoScript-wt-core-runtime-claim-rewards -b codex/core-runtime-claim-rewards-hardening main
-git worktree add ..\RoxAutoScript-wt-gui-claim-rewards -b codex/gui-claim-rewards-operator-hardening main
-git worktree add ..\RoxAutoScript-wt-vision-claim-rewards -b codex/vision-claim-rewards-curation main
-git worktree add ..\RoxAutoScript-wt-task-claim-rewards -b codex/task-claim-rewards-real-flow main
+git worktree add ..\RoxAutoScript-wt-core-runtime-step-telemetry -b codex/core-runtime-step-telemetry main
+git worktree add ..\RoxAutoScript-wt-gui-claim-rewards-production -b codex/gui-claim-rewards-production-telemetry main
+git worktree add ..\RoxAutoScript-wt-vision-claim-rewards-live -b codex/vision-claim-rewards-live-captures main
+git worktree add ..\RoxAutoScript-wt-task-claim-rewards-runtime -b codex/task-claim-rewards-runtime-seam main
 ```
 
 Optional support worktree:
