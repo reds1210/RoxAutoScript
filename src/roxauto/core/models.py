@@ -33,6 +33,14 @@ class StepStatus(str, Enum):
     SKIPPED = "skipped"
 
 
+class TaskStepTelemetryStatus(str, Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+
+
 class StopConditionKind(str, Enum):
     MANUAL = "manual"
     TIMEOUT = "timeout"
@@ -97,6 +105,39 @@ class FailureSnapshotMetadata:
 
 
 @dataclass(slots=True)
+class TaskStepTelemetry:
+    step_id: str
+    description: str
+    status: TaskStepTelemetryStatus = TaskStepTelemetryStatus.PENDING
+    message: str = ""
+    screenshot_path: str | None = None
+    started_at: object | None = None
+    finished_at: object | None = None
+    data: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class TaskRunTelemetry:
+    task_id: str
+    run_id: str
+    status: TaskRunStatus
+    step_count: int = 0
+    completed_step_count: int = 0
+    current_step_id: str = ""
+    current_step_index: int = -1
+    started_at: object = field(default_factory=utc_now)
+    finished_at: object | None = None
+    queue_id: str = ""
+    attempt: int = 1
+    steps: list[TaskStepTelemetry] = field(default_factory=list)
+    preview_frame: PreviewFrame | None = None
+    failure_snapshot: FailureSnapshotMetadata | None = None
+    stop_condition: StopCondition | None = None
+    last_updated_at: object = field(default_factory=utc_now)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
 class ProfileBinding:
     profile_id: str
     display_name: str
@@ -128,11 +169,14 @@ class InstanceRuntimeContext:
     queue_depth: int = 0
     active_task_id: str | None = None
     active_run_id: str | None = None
+    active_task_run: TaskRunTelemetry | None = None
+    last_task_run: TaskRunTelemetry | None = None
     stop_requested: bool = False
     health_check_ok: bool | None = None
     profile_binding: ProfileBinding | None = None
     preview_frame: PreviewFrame | None = None
     failure_snapshot: FailureSnapshotMetadata | None = None
+    last_failure_snapshot: FailureSnapshotMetadata | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
 

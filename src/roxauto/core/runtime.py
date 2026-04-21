@@ -32,7 +32,10 @@ from roxauto.core.models import (
     StopConditionKind,
     TaskRun,
     TaskRunStatus,
+    TaskRunTelemetry,
     TaskSpec,
+    TaskStepTelemetry,
+    TaskStepTelemetryStatus,
     TaskStepResult,
 )
 from roxauto.core.queue import QueuedTask, TaskQueue
@@ -458,12 +461,15 @@ class _RuntimeTaskActionBridge:
         self.task_metadata["queue_id"] = self.queue_id
         self.task_metadata["profile_binding"] = self.runtime_context.profile_binding
         self.task_metadata["runtime_context"] = self.runtime_context
+        self.task_metadata["active_task_run"] = self.runtime_context.active_task_run
+        self.task_metadata["last_task_run"] = self.runtime_context.last_task_run
         self.task_metadata["health_check_ok"] = self.runtime_context.health_check_ok
         self.task_metadata["health_check_message"] = str(
             self.runtime_context.metadata.get("last_health_check_message", "")
         )
         self.task_metadata["preview_frame"] = self.runtime_context.preview_frame
         self.task_metadata["failure_snapshot"] = self.runtime_context.failure_snapshot
+        self.task_metadata["last_failure_snapshot"] = self.runtime_context.last_failure_snapshot
         self.task_metadata["stop_requested"] = self.runtime_context.stop_requested
 
 
@@ -481,20 +487,39 @@ class TaskRunner:
         )
         context.metadata["run_id"] = run.run_id
         context.metadata["task_id"] = run.task_id
-        runtime_context = context.metadata.get("runtime_context")
+        runtime_context = self._runtime_context(context)
+        queue_id = str(context.metadata.get("queue_id") or "")
+        attempt = self._next_attempt(runtime_context, run.task_id)
         if isinstance(runtime_context, InstanceRuntimeContext):
             runtime_context.active_run_id = run.run_id
+        self._start_run_telemetry(
+            spec=spec,
+            run=run,
+            context=context,
+            queue_id=queue_id,
+            attempt=attempt,
+        )
         self._event_bus.publish(
             EVENT_TASK_STARTED,
             {
                 "run_id": run.run_id,
                 "task_id": run.task_id,
                 "instance_id": run.instance_id,
+                "queue_id": queue_id,
+                "attempt": attempt,
+                "step_count": len(spec.steps),
             },
         )
         self._write_audit(
             "task.started",
-            {"run_id": run.run_id, "task_id": run.task_id, "instance_id": run.instance_id},
+            {
+                "run_id": run.run_id,
+                "task_id": run.task_id,
+                "instance_id": run.instance_id,
+                "queue_id": queue_id,
+                "attempt": attempt,
+                "step_count": len(spec.steps),
+            },
         )
 
         stop_condition = self._evaluate_stop_conditions(spec, context, run)
@@ -515,10 +540,16 @@ class TaskRunner:
             )
             run.finished_at = utc_now()
             context.metadata["run_status"] = run.status.value
-            self._finish_run(run)
+            self._finalize_run_telemetry(run=run, context=context)
+            self._finish_run(run, context=context)
             return run
 
-        for step in spec.steps:
+        for step_index, step in enumerate(spec.steps):
+            self._mark_step_running(
+                step=step,
+                step_index=step_index,
+                context=context,
+            )
             try:
                 result = step.handler(context)
                 step_reason = None
@@ -527,20 +558,39 @@ class TaskRunner:
                 step_reason = FailureSnapshotReason.STEP_EXCEPTION
 
             run.step_results.append(result)
+            self._apply_step_result(
+                step=step,
+                step_index=step_index,
+                result=result,
+                context=context,
+            )
             self._event_bus.publish(
                 EVENT_TASK_PROGRESS,
                 {
                     "run_id": run.run_id,
+                    "task_id": run.task_id,
+                    "instance_id": run.instance_id,
+                    "queue_id": queue_id,
+                    "attempt": attempt,
                     "step_id": result.step_id,
+                    "step_index": step_index,
+                    "step_count": len(spec.steps),
                     "status": result.status.value,
                     "message": result.message,
+                    "screenshot_path": result.screenshot_path,
                 },
             )
             self._write_audit(
                 "task.step",
                 {
                     "run_id": run.run_id,
+                    "task_id": run.task_id,
+                    "instance_id": run.instance_id,
+                    "queue_id": queue_id,
+                    "attempt": attempt,
                     "step_id": result.step_id,
+                    "step_index": step_index,
+                    "step_count": len(spec.steps),
                     "status": result.status.value,
                     "message": result.message,
                     "screenshot_path": result.screenshot_path,
@@ -559,14 +609,192 @@ class TaskRunner:
                 )
                 run.finished_at = utc_now()
                 context.metadata["run_status"] = run.status.value
-                self._finish_run(run)
+                self._finalize_run_telemetry(run=run, context=context)
+                self._finish_run(run, context=context)
                 return run
 
         run.status = TaskRunStatus.SUCCEEDED
         run.finished_at = utc_now()
         context.metadata["run_status"] = run.status.value
-        self._finish_run(run)
+        self._finalize_run_telemetry(run=run, context=context)
+        self._finish_run(run, context=context)
         return run
+
+    def _runtime_context(self, context: TaskExecutionContext) -> InstanceRuntimeContext | None:
+        runtime_context = context.metadata.get("runtime_context")
+        if isinstance(runtime_context, InstanceRuntimeContext):
+            return runtime_context
+        return None
+
+    def _next_attempt(self, runtime_context: InstanceRuntimeContext | None, task_id: str) -> int:
+        if runtime_context is None:
+            return 1
+        attempts = runtime_context.metadata.get("task_attempts")
+        if not isinstance(attempts, dict):
+            attempts = {}
+            runtime_context.metadata["task_attempts"] = attempts
+        attempt = int(attempts.get(task_id, 0)) + 1
+        attempts[task_id] = attempt
+        return attempt
+
+    def _start_run_telemetry(
+        self,
+        *,
+        spec: TaskSpec,
+        run: TaskRun,
+        context: TaskExecutionContext,
+        queue_id: str,
+        attempt: int,
+    ) -> None:
+        runtime_context = self._runtime_context(context)
+        preview_frame = context.metadata.get("preview_frame")
+        telemetry = TaskRunTelemetry(
+            task_id=run.task_id,
+            run_id=run.run_id,
+            status=TaskRunStatus.RUNNING,
+            step_count=len(spec.steps),
+            queue_id=queue_id,
+            attempt=attempt,
+            steps=[
+                TaskStepTelemetry(
+                    step_id=step.step_id,
+                    description=step.description,
+                )
+                for step in spec.steps
+            ],
+            preview_frame=preview_frame if isinstance(preview_frame, PreviewFrame) else None,
+            metadata={
+                "entry_state": spec.entry_state,
+                "task_name": spec.name,
+                "queue_id": queue_id,
+            },
+        )
+        context.metadata["task_attempt"] = attempt
+        context.metadata["current_step_id"] = ""
+        context.metadata["current_step_index"] = -1
+        context.metadata["task_run_telemetry"] = telemetry
+        if runtime_context is not None:
+            runtime_context.active_task_run = telemetry
+
+    def _mark_step_running(
+        self,
+        *,
+        step: TaskStep,
+        step_index: int,
+        context: TaskExecutionContext,
+    ) -> None:
+        telemetry = self._active_run_telemetry(context)
+        started_at = utc_now()
+        context.metadata["current_step_id"] = step.step_id
+        context.metadata["current_step_index"] = step_index
+        if telemetry is None or step_index >= len(telemetry.steps):
+            return
+        step_telemetry = telemetry.steps[step_index]
+        step_telemetry.status = TaskStepTelemetryStatus.RUNNING
+        step_telemetry.message = ""
+        step_telemetry.started_at = step_telemetry.started_at or started_at
+        step_telemetry.finished_at = None
+        telemetry.current_step_id = step.step_id
+        telemetry.current_step_index = step_index
+        telemetry.last_updated_at = started_at
+
+    def _apply_step_result(
+        self,
+        *,
+        step: TaskStep,
+        step_index: int,
+        result: TaskStepResult,
+        context: TaskExecutionContext,
+    ) -> None:
+        telemetry = self._active_run_telemetry(context)
+        finished_at = utc_now()
+        if telemetry is None or step_index >= len(telemetry.steps):
+            return
+        step_telemetry = telemetry.steps[step_index]
+        step_telemetry.status = self._telemetry_status_for_result(result)
+        step_telemetry.message = result.message
+        step_telemetry.screenshot_path = result.screenshot_path
+        step_telemetry.finished_at = finished_at
+        step_telemetry.started_at = step_telemetry.started_at or finished_at
+        step_telemetry.data = dict(result.data)
+        telemetry.completed_step_count = sum(
+            1
+            for item in telemetry.steps
+            if item.status
+            in {
+                TaskStepTelemetryStatus.SUCCEEDED,
+                TaskStepTelemetryStatus.FAILED,
+                TaskStepTelemetryStatus.SKIPPED,
+            }
+        )
+        telemetry.current_step_id = step.step_id if result.status == StepStatus.FAILED else ""
+        telemetry.current_step_index = step_index if result.status == StepStatus.FAILED else -1
+        preview_frame = context.metadata.get("preview_frame")
+        telemetry.preview_frame = preview_frame if isinstance(preview_frame, PreviewFrame) else telemetry.preview_frame
+        telemetry.last_updated_at = finished_at
+        context.metadata["task_run_telemetry"] = telemetry
+
+    def _telemetry_status_for_result(self, result: TaskStepResult) -> TaskStepTelemetryStatus:
+        if result.status == StepStatus.SUCCEEDED:
+            return TaskStepTelemetryStatus.SUCCEEDED
+        if result.status == StepStatus.SKIPPED:
+            return TaskStepTelemetryStatus.SKIPPED
+        return TaskStepTelemetryStatus.FAILED
+
+    def _active_run_telemetry(self, context: TaskExecutionContext) -> TaskRunTelemetry | None:
+        runtime_context = self._runtime_context(context)
+        if runtime_context is not None and runtime_context.active_task_run is not None:
+            return runtime_context.active_task_run
+        telemetry = context.metadata.get("task_run_telemetry")
+        if isinstance(telemetry, TaskRunTelemetry):
+            return telemetry
+        return None
+
+    def _finalize_run_telemetry(self, *, run: TaskRun, context: TaskExecutionContext) -> None:
+        runtime_context = self._runtime_context(context)
+        telemetry = self._active_run_telemetry(context)
+        if telemetry is None:
+            return
+        finished_at = run.finished_at or utc_now()
+        telemetry.status = run.status
+        telemetry.finished_at = finished_at
+        telemetry.current_step_id = ""
+        telemetry.current_step_index = -1
+        telemetry.completed_step_count = sum(
+            1
+            for item in telemetry.steps
+            if item.status
+            in {
+                TaskStepTelemetryStatus.SUCCEEDED,
+                TaskStepTelemetryStatus.FAILED,
+                TaskStepTelemetryStatus.SKIPPED,
+            }
+        )
+        telemetry.preview_frame = run.preview_frame or telemetry.preview_frame
+        telemetry.failure_snapshot = run.failure_snapshot
+        telemetry.stop_condition = run.stop_condition
+        telemetry.last_updated_at = finished_at
+        cloned = self._clone_run_telemetry(telemetry)
+        context.metadata["task_run_telemetry"] = cloned
+        context.metadata["last_task_run"] = cloned
+        context.metadata["current_step_id"] = ""
+        context.metadata["current_step_index"] = -1
+        if runtime_context is not None:
+            runtime_context.last_task_run = cloned
+            runtime_context.active_task_run = None
+            if run.failure_snapshot is not None:
+                runtime_context.last_failure_snapshot = run.failure_snapshot
+            context.metadata["last_failure_snapshot"] = runtime_context.last_failure_snapshot
+
+    def _clone_run_telemetry(self, telemetry: TaskRunTelemetry) -> TaskRunTelemetry:
+        return replace(
+            telemetry,
+            steps=[
+                replace(step, data=dict(step.data))
+                for step in telemetry.steps
+            ],
+            metadata=dict(telemetry.metadata),
+        )
 
     def _collect_stop_conditions(self, spec: TaskSpec) -> list[StopCondition]:
         conditions: list[StopCondition] = []
@@ -630,6 +858,14 @@ class TaskRunner:
         )
         run.preview_frame = preview_frame
         run.failure_snapshot = snapshot
+        if preview_frame is not None:
+            context.metadata["preview_frame"] = preview_frame
+        context.metadata["failure_snapshot"] = snapshot
+        telemetry = self._active_run_telemetry(context)
+        if telemetry is not None:
+            telemetry.preview_frame = preview_frame or telemetry.preview_frame
+            telemetry.failure_snapshot = snapshot
+            telemetry.last_updated_at = utc_now()
         payload = {
             "run_id": snapshot.run_id,
             "task_id": snapshot.task_id,
@@ -668,7 +904,9 @@ class TaskRunner:
             metadata={"task_id": run.task_id, "run_id": run.run_id},
         )
 
-    def _finish_run(self, run: TaskRun) -> None:
+    def _finish_run(self, run: TaskRun, *, context: TaskExecutionContext | None = None) -> None:
+        runtime_context = self._runtime_context(context) if context is not None else None
+        telemetry = runtime_context.last_task_run if runtime_context is not None else None
         self._event_bus.publish(
             EVENT_TASK_FINISHED,
             {
@@ -676,6 +914,15 @@ class TaskRunner:
                 "task_id": run.task_id,
                 "instance_id": run.instance_id,
                 "status": run.status.value,
+                "queue_id": telemetry.queue_id if telemetry is not None else "",
+                "attempt": telemetry.attempt if telemetry is not None else None,
+                "step_count": telemetry.step_count if telemetry is not None else len(run.step_results),
+                "completed_step_count": (
+                    telemetry.completed_step_count if telemetry is not None else len(run.step_results)
+                ),
+                "failure_snapshot_id": (
+                    run.failure_snapshot.snapshot_id if run.failure_snapshot is not None else ""
+                ),
             },
         )
         self._write_audit(
@@ -687,6 +934,7 @@ class TaskRunner:
                 "status": run.status.value,
                 "stop_condition": run.stop_condition,
                 "failure_snapshot": run.failure_snapshot,
+                "telemetry": telemetry,
             },
         )
 
@@ -887,7 +1135,12 @@ class RuntimeCoordinator:
             result.finished_at = utc_now()
             return result
 
-        self._registry.transition_status(instance_id, InstanceStatus.BUSY, metadata={"queue_started": True})
+        self._registry.transition_status(
+            instance_id,
+            InstanceStatus.BUSY,
+            metadata={"queue_started": True, "queue_retry": instance.status == InstanceStatus.ERROR},
+            force=instance.status == InstanceStatus.ERROR,
+        )
         while True:
             context.queue_depth = self._queue.size(instance_id)
             if context.stop_requested:
@@ -922,6 +1175,7 @@ class RuntimeCoordinator:
         return result
 
     def _run_task_item(self, instance: InstanceState, context: InstanceRuntimeContext, item: QueuedTask) -> TaskRun:
+        self._prepare_task_attempt_context(context)
         context.active_task_id = item.task_id
         context.metadata["queue_id"] = item.queue_id
         health_result = self._check_instance_health(instance, item)
@@ -966,8 +1220,13 @@ class RuntimeCoordinator:
             context=task_context,
         )
         context.active_run_id = run.run_id
-        context.preview_frame = run.preview_frame or context.preview_frame
+        if context.last_task_run is not None and context.last_task_run.preview_frame is not None:
+            context.preview_frame = context.last_task_run.preview_frame
+        else:
+            context.preview_frame = run.preview_frame or context.preview_frame
         context.failure_snapshot = run.failure_snapshot
+        if run.failure_snapshot is not None:
+            context.last_failure_snapshot = run.failure_snapshot
         return run
 
     def _refresh_instance(self, instance: InstanceState, command: InstanceCommand) -> dict[str, Any]:
@@ -1293,6 +1552,16 @@ class RuntimeCoordinator:
             context.health_check_ok = None
         return context
 
+    def _prepare_task_attempt_context(self, context: InstanceRuntimeContext) -> None:
+        if context.failure_snapshot is not None:
+            context.last_failure_snapshot = context.failure_snapshot
+        context.failure_snapshot = None
+        context.active_task_run = None
+        context.metadata.pop("current_step_id", None)
+        context.metadata.pop("current_step_index", None)
+        context.metadata.pop("task_run_telemetry", None)
+        context.metadata.pop("failure_snapshot", None)
+
     def _update_health_context(
         self,
         context: InstanceRuntimeContext,
@@ -1315,6 +1584,10 @@ class RuntimeCoordinator:
             context.metadata["last_health_check_command_id"] = command_id
         if step_id is not None:
             context.metadata["last_health_check_step_id"] = step_id
+        if context.active_task_run is not None:
+            context.active_task_run.metadata["last_health_check_message"] = result["message"]
+            context.active_task_run.metadata["last_health_check_ok"] = result["healthy"]
+            context.active_task_run.last_updated_at = utc_now()
 
     def _update_preview_context(
         self,
@@ -1339,6 +1612,9 @@ class RuntimeCoordinator:
             context.metadata["last_preview_command_id"] = command_id
         if step_id is not None:
             context.metadata["last_preview_step_id"] = step_id
+        if context.active_task_run is not None:
+            context.active_task_run.preview_frame = preview_frame
+            context.active_task_run.last_updated_at = utc_now()
 
     def _record_runtime_health_failure_snapshot(
         self,
@@ -1388,8 +1664,13 @@ class RuntimeCoordinator:
             )
             changed = True
         context.failure_snapshot = snapshot
+        context.last_failure_snapshot = snapshot
         context.metadata["last_failure_snapshot_id"] = snapshot.snapshot_id
         context.metadata["last_failure_reason"] = snapshot.reason.value
+        if context.active_task_run is not None:
+            context.active_task_run.failure_snapshot = snapshot
+            context.active_task_run.preview_frame = context.preview_frame
+            context.active_task_run.last_updated_at = utc_now()
         if changed:
             self._event_bus.publish(
                 EVENT_TASK_FAILURE_SNAPSHOT_RECORDED,
@@ -1417,11 +1698,17 @@ class RuntimeCoordinator:
         if snapshot is None or snapshot.task_id != "runtime.health_check":
             return
         context.failure_snapshot = None
+        if context.active_task_run is not None and context.active_task_run.failure_snapshot is snapshot:
+            context.active_task_run.failure_snapshot = None
+            context.active_task_run.last_updated_at = utc_now()
 
     def _clear_active_execution(self, context: InstanceRuntimeContext) -> None:
         context.active_task_id = None
         context.active_run_id = None
+        context.active_task_run = None
         context.metadata.pop("queue_id", None)
+        context.metadata.pop("current_step_id", None)
+        context.metadata.pop("current_step_index", None)
 
     def _normalize_result_status(self, result: Any) -> str | None:
         if isinstance(result, dict):

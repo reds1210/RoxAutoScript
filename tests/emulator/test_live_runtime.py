@@ -10,7 +10,7 @@ import tests._bootstrap  # noqa: F401
 from roxauto.core.commands import CommandDispatchStatus, InstanceCommand, InstanceCommandType
 from roxauto.core.models import InstanceState, InstanceStatus, ProfileBinding, TaskRunStatus, TaskSpec
 from roxauto.core.queue import QueuedTask
-from roxauto.core.runtime import TaskStep, step_success
+from roxauto.core.runtime import TaskStep, step_failure, step_success
 from roxauto.emulator.adapter import AdbCommandError, AdbCommandResult, AdbEmulatorAdapter
 from roxauto.emulator.live_runtime import LiveRuntimeSession, build_adb_live_runtime_session
 
@@ -182,6 +182,220 @@ class LiveRuntimeSessionTests(unittest.TestCase):
         self.assertEqual(context.metadata["last_task_action_type"], "tap")
         self.assertEqual(context.metadata["last_health_check_step_id"], "step-a")
         self.assertEqual(context.metadata["last_preview_step_id"], "step-a")
+
+    def test_live_state_projects_runtime_owned_last_run_telemetry(self) -> None:
+        adapter = FakeAdapter(healthy=True)
+        session = LiveRuntimeSession(adapter, discovery=lambda: [self.instance])
+        session.sync_instances()
+        session.enqueue(
+            QueuedTask(
+                instance_id="mumu-0",
+                spec=TaskSpec(
+                    task_id="daily_ui.claim_rewards",
+                    name="Daily Reward Claim",
+                    version="0.1.0",
+                    entry_state="ready",
+                    steps=[
+                        TaskStep("open_reward_panel", "Open reward panel", lambda ctx: step_success("open_reward_panel", "opened")),
+                        TaskStep("claim_reward", "Claim reward", lambda ctx: step_failure("claim_reward", "tap had no effect")),
+                    ],
+                ),
+                priority=100,
+            )
+        )
+
+        result = session.start_queue("mumu-0")
+        state = session.get_live_state(instance_id="mumu-0")
+
+        self.assertEqual(result.runs[0].status, TaskRunStatus.FAILED)
+        self.assertIsNotNone(state.selected_instance)
+        self.assertEqual(state.selected_instance.last_task_id, "daily_ui.claim_rewards")
+        self.assertEqual(state.selected_instance.last_run_status, "failed")
+        self.assertEqual(state.selected_instance.last_step_count, 2)
+        self.assertEqual(state.selected_instance.last_completed_step_count, 2)
+        self.assertTrue(state.selected_instance.failure_snapshot_id)
+        self.assertEqual(state.selected_instance.last_failure_snapshot_id, state.selected_instance.failure_snapshot_id)
+        self.assertEqual(state.selected_instance.last_failure_reason, "step_failed")
+
+    def test_live_state_preserves_last_failure_summary_after_successful_retry(self) -> None:
+        adapter = FakeAdapter(healthy=True)
+        session = LiveRuntimeSession(adapter, discovery=lambda: [self.instance])
+        session.sync_instances()
+
+        failure_spec = TaskSpec(
+            task_id="daily_ui.claim_rewards",
+            name="Daily Reward Claim",
+            version="0.1.0",
+            entry_state="ready",
+            steps=[
+                TaskStep("open_reward_panel", "Open reward panel", lambda ctx: step_success("open_reward_panel", "opened")),
+                TaskStep("claim_reward", "Claim reward", lambda ctx: step_failure("claim_reward", "tap had no effect")),
+            ],
+        )
+        success_spec = TaskSpec(
+            task_id="daily_ui.claim_rewards",
+            name="Daily Reward Claim",
+            version="0.1.0",
+            entry_state="ready",
+            steps=[
+                TaskStep("open_reward_panel", "Open reward panel", lambda ctx: step_success("open_reward_panel", "opened")),
+                TaskStep("claim_reward", "Claim reward", lambda ctx: step_success("claim_reward", "claimed")),
+            ],
+        )
+
+        session.enqueue(QueuedTask(instance_id="mumu-0", spec=failure_spec, priority=100))
+        session.start_queue("mumu-0")
+        failed_state = session.get_live_state(instance_id="mumu-0")
+
+        session.enqueue(QueuedTask(instance_id="mumu-0", spec=success_spec, priority=100))
+        succeeded = session.start_queue("mumu-0")
+        recovered_state = session.get_live_state(instance_id="mumu-0")
+
+        self.assertIsNotNone(failed_state.selected_instance)
+        self.assertTrue(failed_state.selected_instance.last_failure_snapshot_id)
+        self.assertEqual(succeeded.runs[0].status, TaskRunStatus.SUCCEEDED)
+        self.assertIsNotNone(recovered_state.selected_instance)
+        self.assertEqual(recovered_state.selected_instance.last_run_status, "succeeded")
+        self.assertFalse(recovered_state.selected_instance.failure_snapshot_id)
+        self.assertEqual(
+            recovered_state.selected_instance.last_failure_snapshot_id,
+            failed_state.selected_instance.last_failure_snapshot_id,
+        )
+        self.assertEqual(recovered_state.selected_instance.last_failure_reason, "step_failed")
+
+    def test_build_registered_task_spec_uses_runtime_claim_rewards_context(self) -> None:
+        adapter = FakeAdapter(healthy=True)
+        observed: dict[str, object] = {}
+        session = LiveRuntimeSession(
+            adapter,
+            discovery=lambda: [self.instance],
+            profile_resolver=lambda instance: ProfileBinding(
+                profile_id="claim-rewards-profile",
+                display_name="Claim Rewards Profile",
+                server_name="TW-1",
+                character_name="Knight",
+                allowed_tasks=["daily_ui.claim_rewards"],
+            ),
+        )
+        session.sync_instances()
+        session.refresh_runtime_contexts(instance_id="mumu-0", capture_preview=True)
+
+        def factory(request):
+            observed["task_id"] = request.task_id
+            observed["profile_id"] = request.profile_binding.profile_id if request.profile_binding is not None else ""
+            observed["health_check_ok"] = (
+                request.runtime_context.health_check_ok if request.runtime_context is not None else None
+            )
+            observed["preview_image_path"] = (
+                request.runtime_context.preview_frame.image_path
+                if request.runtime_context is not None and request.runtime_context.preview_frame is not None
+                else ""
+            )
+            observed["metadata"] = dict(request.metadata)
+            self.assertIs(request.adapter, adapter)
+            self.assertIs(request.execution_path.adapter, adapter)
+            return TaskSpec(
+                task_id=request.task_id,
+                name="Daily Reward Claim",
+                version="0.1.0",
+                entry_state="ready",
+                steps=[TaskStep("step-a", "Registered task build", lambda ctx: step_success("step-a", "ok"))],
+                metadata={"factory_metadata": dict(request.metadata)},
+            )
+
+        session.register_task_factory("daily_ui.claim_rewards", factory)
+
+        spec = session.build_registered_task_spec(
+            "mumu-0",
+            "daily_ui.claim_rewards",
+            metadata={"workflow_mode": "claimable"},
+        )
+
+        self.assertTrue(session.has_task_factory("daily_ui.claim_rewards"))
+        self.assertEqual(observed["task_id"], "daily_ui.claim_rewards")
+        self.assertEqual(observed["profile_id"], "claim-rewards-profile")
+        self.assertTrue(observed["health_check_ok"])
+        self.assertEqual(observed["preview_image_path"], str(Path("captures") / "mumu-0.png"))
+        self.assertEqual(observed["metadata"], {"workflow_mode": "claimable"})
+        self.assertEqual(spec.metadata["factory_metadata"]["workflow_mode"], "claimable")
+
+    def test_enqueue_registered_task_runs_claim_rewards_through_runtime_path(self) -> None:
+        adapter = FakeAdapter(healthy=True)
+        factory_calls: list[dict[str, object]] = []
+        session = LiveRuntimeSession(
+            adapter,
+            discovery=lambda: [self.instance],
+            profile_resolver=lambda instance: ProfileBinding(
+                profile_id="claim-rewards-profile",
+                display_name="Claim Rewards Profile",
+                server_name="TW-1",
+                character_name="Knight",
+                allowed_tasks=["daily_ui.claim_rewards"],
+            ),
+        )
+        session.sync_instances()
+
+        def factory(request):
+            factory_calls.append(dict(request.metadata))
+            workflow_mode = str(request.metadata.get("workflow_mode", ""))
+            return TaskSpec(
+                task_id=request.task_id,
+                name="Daily Reward Claim",
+                version="0.1.0",
+                entry_state="ready",
+                steps=[
+                    TaskStep(
+                        "step-a",
+                        "Uses registered runtime task builder",
+                        lambda ctx: step_success(
+                            "step-a",
+                            ctx.metadata["profile_binding"].profile_id,
+                            data={"workflow_mode": workflow_mode},
+                        ),
+                    )
+                ],
+                metadata={"workflow_mode": workflow_mode},
+            )
+
+        session.register_task_factory("daily_ui.claim_rewards", factory)
+
+        queued = session.enqueue_registered_task(
+            "mumu-0",
+            "daily_ui.claim_rewards",
+            priority=240,
+            builder_metadata={"workflow_mode": "claimable"},
+            queue_metadata={"operator_workflow": "claim_rewards"},
+        )
+        result = session.start_queue("mumu-0")
+        context = session.get_runtime_context("mumu-0")
+
+        self.assertEqual(factory_calls, [{"workflow_mode": "claimable"}])
+        self.assertEqual(queued.task_id, "daily_ui.claim_rewards")
+        self.assertEqual(queued.priority, 240)
+        self.assertEqual(queued.metadata["operator_workflow"], "claim_rewards")
+        self.assertEqual(result.runs[0].task_id, "daily_ui.claim_rewards")
+        self.assertEqual(result.runs[0].status, TaskRunStatus.SUCCEEDED)
+        self.assertEqual(result.runs[0].step_results[0].message, "claim-rewards-profile")
+        self.assertEqual(result.runs[0].step_results[0].data["workflow_mode"], "claimable")
+        self.assertEqual(context.metadata["last_run_status"], TaskRunStatus.SUCCEEDED.value)
+
+    def test_build_registered_task_spec_rejects_task_id_mismatch(self) -> None:
+        adapter = FakeAdapter(healthy=True)
+        session = LiveRuntimeSession(adapter, discovery=lambda: [self.instance])
+        session.sync_instances()
+        session.register_task_factory(
+            "daily_ui.claim_rewards",
+            lambda request: TaskSpec(
+                task_id="daily_ui.guild_check_in",
+                name="Wrong Task",
+                version="0.1.0",
+                entry_state="ready",
+                steps=[],
+            ),
+        )
+
+        with self.assertRaisesRegex(ValueError, "returned spec.task_id=daily_ui.guild_check_in"):
+            session.build_registered_task_spec("mumu-0", "daily_ui.claim_rewards")
 
     def test_schedule_runtime_refresh_updates_live_state_without_blocking_ui_reads(self) -> None:
         adapter = BlockingAdapter(healthy=True)
