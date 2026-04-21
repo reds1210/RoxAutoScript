@@ -251,6 +251,64 @@ class RuntimeCoordinatorTests(unittest.TestCase):
         self.assertTrue(any(name == "runtime.profile_bound" for name, _ in sink.records))
         self.assertTrue(any(name == "runtime.queue_completed" for name, _ in sink.records))
 
+    def test_start_queue_injects_task_action_bridge_for_task_steps(self) -> None:
+        queue = TaskQueue()
+        executor = FakeCommandExecutor()
+        coordinator = RuntimeCoordinator(
+            queue=queue,
+            task_runner=TaskRunner(),
+            command_executor=executor,
+            health_checker=FakeHealthChecker(healthy=True),
+            preview_capture=FakePreviewCapture(),
+        )
+        coordinator.sync_instances([self.instance])
+
+        def handler(ctx: TaskExecutionContext):
+            bridge = ctx.require_action_bridge()
+            self.assertIs(ctx.metadata["action_bridge"], bridge)
+            action = bridge.tap((12, 34), step_id="step-a", metadata={"source": "daily_ui.claim_rewards"})
+            health = bridge.check_health(step_id="step-a", metadata={"source": "daily_ui.claim_rewards"})
+            frame = bridge.capture_preview(step_id="step-a", metadata={"source": "daily_ui.claim_rewards"})
+            self.assertEqual(ctx.metadata["preview_frame"].frame_id, frame.frame_id)
+            return step_success(
+                "step-a",
+                action.message or action.status,
+                screenshot_path=frame.image_path if frame is not None else None,
+                data={
+                    "action_status": action.status,
+                    "health_ok": health.healthy,
+                    "preview_frame_id": frame.frame_id if frame is not None else "",
+                },
+            )
+
+        coordinator.enqueue(
+            QueuedTask(
+                instance_id="mumu-0",
+                spec=TaskSpec(
+                    task_id="daily_ui.claim_rewards",
+                    name="Daily Reward Claim",
+                    version="0.1.0",
+                    entry_state="ready",
+                    steps=[TaskStep("step-a", "Uses runtime action bridge", handler)],
+                ),
+                priority=100,
+            )
+        )
+
+        result = coordinator.start_queue("mumu-0")
+        context = coordinator.get_runtime_context("mumu-0")
+
+        self.assertEqual(result.runs[0].status, TaskRunStatus.SUCCEEDED)
+        self.assertEqual(executor.executed, [("mumu-0", "tap")])
+        self.assertEqual(result.runs[0].step_results[0].data["action_status"], "executed")
+        self.assertTrue(result.runs[0].step_results[0].data["health_ok"])
+        self.assertEqual(result.runs[0].step_results[0].screenshot_path, "captures/mumu-0.png")
+        self.assertIsNotNone(context.preview_frame)
+        self.assertEqual(context.metadata["last_task_action_type"], "tap")
+        self.assertEqual(context.metadata["last_task_action_status"], "executed")
+        self.assertEqual(context.metadata["last_health_check_step_id"], "step-a")
+        self.assertEqual(context.metadata["last_preview_step_id"], "step-a")
+
     def test_dispatch_refresh_updates_runtime_context(self) -> None:
         coordinator = RuntimeCoordinator(
             task_runner=TaskRunner(),

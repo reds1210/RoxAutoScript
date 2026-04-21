@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import unittest
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 import tests._bootstrap  # noqa: F401
-from roxauto.core.commands import InstanceCommand, InstanceCommandType
+from roxauto.core.commands import CommandDispatchStatus, InstanceCommand, InstanceCommandType
 from roxauto.core.models import InstanceState, InstanceStatus, ProfileBinding, TaskRunStatus, TaskSpec
 from roxauto.core.queue import QueuedTask
 from roxauto.core.runtime import TaskStep, step_success
-from roxauto.emulator.live_runtime import LiveRuntimeSession
+from roxauto.emulator.adapter import AdbCommandError, AdbCommandResult, AdbEmulatorAdapter
+from roxauto.emulator.live_runtime import LiveRuntimeSession, build_adb_live_runtime_session
 
 
 class FakeAdapter:
@@ -45,6 +47,37 @@ class FakeAdapter:
     def health_check(self, instance: InstanceState) -> bool:
         self.health_checks += 1
         return self.healthy
+
+
+class RecordingTransport:
+    def __init__(self, responses: list[AdbCommandResult | Exception] | None = None) -> None:
+        self._responses = list(responses or [])
+        self.calls: list[dict[str, object]] = []
+
+    def run(
+        self,
+        adb_serial: str,
+        args,
+        *,
+        text: bool = True,
+        timeout_sec: float | None = None,
+        check: bool = True,
+    ) -> AdbCommandResult:
+        self.calls.append(
+            {
+                "adb_serial": adb_serial,
+                "args": tuple(args),
+                "text": text,
+                "timeout_sec": timeout_sec,
+                "check": check,
+            }
+        )
+        if self._responses:
+            response = self._responses.pop(0)
+            if isinstance(response, Exception):
+                raise response
+            return response
+        return _result(adb_serial, tuple(args), stdout="" if text else b"")
 
 
 class LiveRuntimeSessionTests(unittest.TestCase):
@@ -90,6 +123,149 @@ class LiveRuntimeSessionTests(unittest.TestCase):
         self.assertEqual(snapshot.instance_snapshots[0].instance_id, "mumu-0")
         self.assertEqual(snapshot.instance_snapshots[0].profile_binding.profile_id, "main-account")
         self.assertGreaterEqual(len(snapshot.recent_events), 3)
+
+    def test_start_queue_task_step_uses_runtime_action_bridge_with_adapter(self) -> None:
+        adapter = FakeAdapter(healthy=True)
+        session = LiveRuntimeSession(adapter, discovery=lambda: [self.instance])
+        session.sync_instances()
+
+        def handler(ctx):
+            bridge = ctx.require_action_bridge()
+            bridge.tap((40, 60), step_id="step-a", metadata={"source": "daily_ui.claim_rewards"})
+            health = bridge.check_health(step_id="step-a", metadata={"source": "daily_ui.claim_rewards"})
+            frame = bridge.capture_preview(step_id="step-a", metadata={"source": "daily_ui.claim_rewards"})
+            return step_success(
+                "step-a",
+                "bridge ok",
+                screenshot_path=frame.image_path if frame is not None else None,
+                data={"health_ok": health.healthy},
+            )
+
+        session.enqueue(
+            QueuedTask(
+                instance_id="mumu-0",
+                spec=TaskSpec(
+                    task_id="daily_ui.claim_rewards",
+                    name="Daily Reward Claim",
+                    version="0.1.0",
+                    entry_state="ready",
+                    steps=[TaskStep("step-a", "Uses runtime action bridge", handler)],
+                ),
+                priority=100,
+            )
+        )
+
+        result = session.start_queue("mumu-0")
+        context = session.get_runtime_context("mumu-0")
+
+        self.assertEqual(result.runs[0].status, TaskRunStatus.SUCCEEDED)
+        self.assertEqual(adapter.taps, [(40, 60)])
+        self.assertEqual(adapter.health_checks, 2)
+        self.assertEqual(adapter.screenshot_requests, 2)
+        self.assertTrue(result.runs[0].step_results[0].data["health_ok"])
+        self.assertEqual(Path(result.runs[0].step_results[0].screenshot_path), Path("captures") / "mumu-0.png")
+        self.assertEqual(context.metadata["last_task_action_type"], "tap")
+        self.assertEqual(context.metadata["last_health_check_step_id"], "step-a")
+        self.assertEqual(context.metadata["last_preview_step_id"], "step-a")
+
+    def test_build_adb_live_runtime_session_wires_production_refresh_preview_and_failure_path(self) -> None:
+        transport = RecordingTransport(
+            responses=[
+                _result(self.instance.adb_serial, ("get-state",), stdout="device\n"),
+                _result(self.instance.adb_serial, ("shell", "echo", "health_check"), stdout="not_ok\n"),
+                _result(self.instance.adb_serial, ("exec-out", "screencap", "-p"), stdout=b"png-bytes"),
+            ]
+        )
+        with TemporaryDirectory() as temp_dir:
+            session = build_adb_live_runtime_session(
+                transport=transport,
+                screenshot_dir=Path(temp_dir),
+                discovery=lambda: [self.instance],
+            )
+            session.sync_instances()
+
+            dispatch = session.refresh("mumu-0")
+            context = session.get_runtime_context("mumu-0")
+
+            self.assertIsInstance(session.adapter, AdbEmulatorAdapter)
+            self.assertIs(session.execution_path.adapter, session.adapter)
+            self.assertEqual(dispatch.status, CommandDispatchStatus.COMPLETED)
+            self.assertFalse(context.health_check_ok)
+            self.assertIsNotNone(context.preview_frame)
+            self.assertIsNotNone(context.failure_snapshot)
+            self.assertEqual(context.failure_snapshot.task_id, "runtime.health_check")
+            self.assertEqual(Path(context.preview_frame.image_path).suffix, ".png")
+            self.assertEqual(
+                [call["args"] for call in transport.calls],
+                [
+                    ("get-state",),
+                    ("shell", "echo", "health_check"),
+                    ("exec-out", "screencap", "-p"),
+                ],
+            )
+
+    def test_build_adb_live_runtime_session_supports_task_failure_snapshot_for_first_task_path(self) -> None:
+        failed_tap = _result(
+            self.instance.adb_serial,
+            ("shell", "input", "tap", "40", "60"),
+            stdout="",
+            stderr="tap failed",
+            returncode=1,
+        )
+        transport = RecordingTransport(
+            responses=[
+                _result(self.instance.adb_serial, ("get-state",), stdout="device\n"),
+                _result(self.instance.adb_serial, ("shell", "echo", "health_check"), stdout="health_check\n"),
+                _result(self.instance.adb_serial, ("exec-out", "screencap", "-p"), stdout=b"png-bytes"),
+                AdbCommandError(failed_tap),
+            ]
+        )
+        with TemporaryDirectory() as temp_dir:
+            session = build_adb_live_runtime_session(
+                transport=transport,
+                screenshot_dir=Path(temp_dir),
+                discovery=lambda: [self.instance],
+            )
+            session.sync_instances()
+
+            def handler(ctx):
+                ctx.require_action_bridge().tap((40, 60), step_id="step-a", metadata={"source": "daily_ui.claim_rewards"})
+                return step_success("step-a", "unreachable")
+
+            session.enqueue(
+                QueuedTask(
+                    instance_id="mumu-0",
+                    spec=TaskSpec(
+                        task_id="daily_ui.claim_rewards",
+                        name="Daily Reward Claim",
+                        version="0.1.0",
+                        entry_state="ready",
+                        steps=[TaskStep("step-a", "Triggers adb-backed failure path", handler)],
+                    ),
+                    priority=100,
+                )
+            )
+
+            result = session.start_queue("mumu-0")
+            context = session.get_runtime_context("mumu-0")
+
+            self.assertEqual(result.runs[0].status, TaskRunStatus.FAILED)
+            self.assertEqual(result.runs[0].failure_snapshot.reason.value, "step_exception")
+            self.assertIn("ADB command failed", result.runs[0].step_results[0].message)
+            self.assertIsNotNone(result.runs[0].failure_snapshot.preview_frame)
+            self.assertIsNotNone(context.preview_frame)
+            self.assertIsNotNone(context.failure_snapshot)
+            self.assertEqual(context.failure_snapshot.task_id, "daily_ui.claim_rewards")
+            self.assertEqual(context.metadata["last_health_check_task_id"], "daily_ui.claim_rewards")
+            self.assertEqual(
+                [call["args"] for call in transport.calls],
+                [
+                    ("get-state",),
+                    ("shell", "echo", "health_check"),
+                    ("exec-out", "screencap", "-p"),
+                    ("shell", "input", "tap", "40", "60"),
+                ],
+            )
 
     def test_refresh_uses_integrated_health_and_preview_services(self) -> None:
         adapter = FakeAdapter(healthy=False)
@@ -241,3 +417,21 @@ class LiveRuntimeSessionTests(unittest.TestCase):
                 )
             ],
         )
+
+
+def _result(
+    adb_serial: str,
+    args: tuple[str, ...],
+    *,
+    stdout: str | bytes,
+    stderr: str | bytes = "",
+    returncode: int = 0,
+) -> AdbCommandResult:
+    return AdbCommandResult(
+        adb_serial=adb_serial,
+        args=args,
+        command=("adb", "-s", adb_serial, *args),
+        returncode=returncode,
+        stdout=stdout,
+        stderr=stderr,
+    )

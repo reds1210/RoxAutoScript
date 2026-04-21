@@ -2,16 +2,21 @@ from __future__ import annotations
 
 import unittest
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 import tests._bootstrap  # noqa: F401
 from roxauto.core.commands import InstanceCommand, InstanceCommandType
 from roxauto.core.models import InstanceState, InstanceStatus, PreviewFrame
+from roxauto.emulator.adapter import AdbCommandResult, AdbEmulatorAdapter
 from roxauto.emulator.execution import (
     ActionExecutor,
     CommandExecutionStatus,
     EmulatorActionAdapter,
     HealthCheckService,
+    RuntimeExecutionPath,
     ScreenshotCapturePipeline,
+    build_adb_execution_path,
+    build_runtime_execution_path,
 )
 
 
@@ -57,6 +62,37 @@ class FakeAdapter:
     def health_check(self, instance: InstanceState) -> bool:
         self.health_checks += 1
         return self.healthy
+
+
+class RecordingTransport:
+    def __init__(self, responses: list[AdbCommandResult | Exception] | None = None) -> None:
+        self._responses = list(responses or [])
+        self.calls: list[dict[str, object]] = []
+
+    def run(
+        self,
+        adb_serial: str,
+        args,
+        *,
+        text: bool = True,
+        timeout_sec: float | None = None,
+        check: bool = True,
+    ) -> AdbCommandResult:
+        self.calls.append(
+            {
+                "adb_serial": adb_serial,
+                "args": tuple(args),
+                "text": text,
+                "timeout_sec": timeout_sec,
+                "check": check,
+            }
+        )
+        if self._responses:
+            response = self._responses.pop(0)
+            if isinstance(response, Exception):
+                raise response
+            return response
+        return _result(adb_serial, tuple(args), stdout="" if text else b"")
 
 
 class EmulatorExecutionTests(unittest.TestCase):
@@ -119,3 +155,84 @@ class EmulatorExecutionTests(unittest.TestCase):
         self.assertEqual(adapter.health_checks, 1)
         self.assertEqual(sink.records[0][0], "instance.health_check")
         self.assertEqual(sink.records[0][1]["metadata"]["source"], "manual")
+
+    def test_build_runtime_execution_path_reuses_one_adapter_for_all_services(self) -> None:
+        adapter = FakeAdapter(healthy=True)
+        path = build_runtime_execution_path(adapter)
+
+        self.assertIsInstance(path, RuntimeExecutionPath)
+        self.assertIs(path.adapter, adapter)
+
+        tap_result = path.command_executor.execute(
+            self.instance,
+            InstanceCommand(
+                command_type=InstanceCommandType.TAP,
+                instance_id=self.instance.instance_id,
+                payload={"point": (9, 18)},
+            ),
+        )
+        health_result = path.health_checker.check(self.instance)
+        preview_frame = path.preview_capture.capture(self.instance)
+
+        self.assertEqual(tap_result.status, CommandExecutionStatus.EXECUTED)
+        self.assertEqual(adapter.taps, [(9, 18)])
+        self.assertTrue(health_result.healthy)
+        self.assertEqual(Path(preview_frame.image_path), Path("captures") / "mumu-0.png")
+        self.assertEqual(adapter.health_checks, 1)
+        self.assertEqual(adapter.screenshot_requests, 1)
+
+    def test_build_adb_execution_path_wires_real_adapter_with_shared_services(self) -> None:
+        transport = RecordingTransport(
+            responses=[
+                _result(self.instance.adb_serial, ("shell", "input", "text", "hello"), stdout=""),
+                _result(self.instance.adb_serial, ("get-state",), stdout="device\n"),
+                _result(self.instance.adb_serial, ("shell", "echo", "health_check"), stdout="health_check\n"),
+                _result(self.instance.adb_serial, ("exec-out", "screencap", "-p"), stdout=b"png-bytes"),
+            ]
+        )
+        with TemporaryDirectory() as temp_dir:
+            path = build_adb_execution_path(transport=transport, screenshot_dir=Path(temp_dir))
+
+            self.assertIsInstance(path.adapter, AdbEmulatorAdapter)
+
+            command_result = path.command_executor.execute(
+                self.instance,
+                InstanceCommand(
+                    command_type=InstanceCommandType.INPUT_TEXT,
+                    instance_id=self.instance.instance_id,
+                    payload={"text": "hello"},
+                ),
+            )
+            health_result = path.health_checker.check(self.instance)
+            preview_frame = path.preview_capture.capture(self.instance)
+
+            self.assertEqual(command_result.status, CommandExecutionStatus.EXECUTED)
+            self.assertTrue(health_result.healthy)
+            self.assertEqual(Path(preview_frame.image_path).suffix, ".png")
+            self.assertEqual(
+                [call["args"] for call in transport.calls],
+                [
+                    ("shell", "input", "text", "hello"),
+                    ("get-state",),
+                    ("shell", "echo", "health_check"),
+                    ("exec-out", "screencap", "-p"),
+                ],
+            )
+
+
+def _result(
+    adb_serial: str,
+    args: tuple[str, ...],
+    *,
+    stdout: str | bytes,
+    stderr: str | bytes = "",
+    returncode: int = 0,
+) -> AdbCommandResult:
+    return AdbCommandResult(
+        adb_serial=adb_serial,
+        args=args,
+        command=("adb", "-s", adb_serial, *args),
+        returncode=returncode,
+        stdout=stdout,
+        stderr=stderr,
+    )
