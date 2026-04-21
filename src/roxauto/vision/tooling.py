@@ -168,6 +168,11 @@ class MatchInspectorState:
     best_candidate_summary: str = ""
     calibration_resolution: CalibrationOverrideResolution | None = None
     inspection: ImageInspectionState | None = None
+    selected_image_path: str = ""
+    selected_source_image: str = ""
+    selected_overlay: InspectionOverlay | None = None
+    selected_overlay_summary: str = ""
+    failure_explanation: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -237,6 +242,15 @@ class FailureInspectorState:
     calibration_resolution: CalibrationOverrideResolution | None = None
     inspection: ImageInspectionState | None = None
     claim_rewards: ClaimRewardsInspectorState | None = None
+    focus_check_id: str = ""
+    focus_check_label: str = ""
+    focus_stage: str = ""
+    selected_threshold: float | None = None
+    selected_image_path: str = ""
+    selected_source_image: str = ""
+    selected_overlay: InspectionOverlay | None = None
+    selected_overlay_summary: str = ""
+    failure_explanation: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -260,6 +274,12 @@ class ClaimRewardsCheckState:
     best_candidate_summary: str = ""
     calibration_resolution: CalibrationOverrideResolution | None = None
     inspection: ImageInspectionState | None = None
+    is_selected: bool = False
+    selected_image_path: str = ""
+    selected_source_image: str = ""
+    selected_overlay: InspectionOverlay | None = None
+    selected_overlay_summary: str = ""
+    failure_explanation: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -277,8 +297,16 @@ class ClaimRewardsInspectorState:
     check_count: int = 0
     matched_check_count: int = 0
     missing_check_count: int = 0
+    selected_anchor_id: str = ""
+    selected_stage: str = ""
+    selected_threshold: float | None = None
+    selected_image_path: str = ""
+    selected_source_image: str = ""
+    selected_overlay: InspectionOverlay | None = None
+    selected_overlay_summary: str = ""
     selected_check_summary: str = ""
     workflow_summary: str = ""
+    failure_explanation: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -513,18 +541,31 @@ def build_match_inspector(
         expected_anchor_id=match_result.expected_anchor_id if match_result is not None else "",
     )
     if match_result is None:
+        inspection = build_image_inspection_state(
+            inspection_id="preview:empty",
+            image_path=source_image,
+            source_image=source_image,
+            calibration=calibration_resolution,
+            metadata={"kind": "preview"},
+        )
         return MatchInspectorState(
             repository_id=repository.repository_id if repository is not None else "",
             source_image=source_image,
             status=MatchStatus.MISSED,
             message=message or "Preview pipeline not connected yet.",
             calibration_resolution=calibration_resolution,
-            inspection=build_image_inspection_state(
-                inspection_id="preview:empty",
-                image_path=source_image,
-                source_image=source_image,
-                calibration=calibration_resolution,
-                metadata={"kind": "preview"},
+            inspection=inspection,
+            selected_image_path=_inspection_image_path(inspection, fallback=source_image),
+            selected_source_image=_inspection_source_image(inspection, fallback=source_image),
+            selected_overlay=inspection.selected_overlay,
+            selected_overlay_summary=inspection.selected_overlay_summary,
+            failure_explanation=_match_failure_explanation(
+                anchor_id="",
+                threshold=calibration_resolution.effective_confidence_threshold if calibration_resolution is not None else None,
+                message=message or "Preview pipeline not connected yet.",
+                status=MatchStatus.MISSED,
+                best_candidate=None,
+                candidate_count=0,
             ),
         )
 
@@ -544,6 +585,16 @@ def build_match_inspector(
         )
         for candidate in match_result.candidates
     ]
+    matched_candidate_view = _find_candidate_view(candidates, matched_candidate)
+    best_candidate_view = _find_candidate_view(candidates, best_candidate)
+    inspection = build_image_inspection_state(
+        inspection_id=f"match:{match_result.expected_anchor_id or 'preview'}",
+        image_path=match_result.source_image or source_image,
+        source_image=source_image or match_result.source_image,
+        match_result=match_result,
+        calibration=calibration_resolution,
+        metadata={"kind": "match_preview"},
+    )
 
     return MatchInspectorState(
         repository_id=repository.repository_id if repository is not None else "",
@@ -553,19 +604,24 @@ def build_match_inspector(
         threshold=match_result.threshold,
         message=match_result.message or message,
         candidate_count=len(candidates),
-        matched_candidate=_find_candidate_view(candidates, matched_candidate),
-        best_candidate=_find_candidate_view(candidates, best_candidate),
+        matched_candidate=matched_candidate_view,
+        best_candidate=best_candidate_view,
         candidates=candidates,
-        matched_candidate_summary=_candidate_summary(_find_candidate_view(candidates, matched_candidate)),
-        best_candidate_summary=_candidate_summary(_find_candidate_view(candidates, best_candidate)),
+        matched_candidate_summary=_candidate_summary(matched_candidate_view),
+        best_candidate_summary=_candidate_summary(best_candidate_view),
         calibration_resolution=calibration_resolution,
-        inspection=build_image_inspection_state(
-            inspection_id=f"match:{match_result.expected_anchor_id or 'preview'}",
-            image_path=match_result.source_image or source_image,
-            source_image=source_image or match_result.source_image,
-            match_result=match_result,
-            calibration=calibration_resolution,
-            metadata={"kind": "match_preview"},
+        inspection=inspection,
+        selected_image_path=_inspection_image_path(inspection, fallback=match_result.source_image or source_image),
+        selected_source_image=_inspection_source_image(inspection, fallback=source_image or match_result.source_image),
+        selected_overlay=inspection.selected_overlay,
+        selected_overlay_summary=inspection.selected_overlay_summary,
+        failure_explanation=_match_failure_explanation(
+            anchor_id=match_result.expected_anchor_id,
+            threshold=match_result.threshold,
+            message=match_result.message or message,
+            status=match_result.status,
+            best_candidate=best_candidate_view,
+            candidate_count=len(candidates),
         ),
         metadata=dict(match_result.metadata),
     )
@@ -586,6 +642,7 @@ def build_failure_inspector(
             screenshot_path="",
             status=MatchStatus.MISSED,
             message=message or "No failure snapshot available.",
+            failure_explanation=message or "No failure snapshot available.",
         )
 
     match_state = build_match_inspector(
@@ -627,8 +684,33 @@ def build_failure_inspector(
         metadata={"kind": "failure_inspection", "failure_id": failure_record.failure_id},
     )
     failure_message = failure_record.message or match_state.message or message
+    focus_check_id = ""
+    focus_check_label = ""
+    focus_stage = ""
+    selected_threshold = match_state.threshold if match_state.threshold else None
+    selected_image_path = _inspection_image_path(
+        failure_inspection,
+        fallback=failure_record.preview_image_path or failure_record.screenshot_path,
+    )
+    selected_source_image = _inspection_source_image(
+        failure_inspection,
+        fallback=failure_record.screenshot_path,
+    )
+    selected_overlay = failure_inspection.selected_overlay
+    selected_overlay_summary = failure_inspection.selected_overlay_summary
+    failure_explanation = _match_failure_explanation(
+        anchor_id=resolved_anchor_id,
+        threshold=selected_threshold,
+        message=failure_message,
+        status=failure_status,
+        best_candidate=failure_best_candidate,
+        candidate_count=failure_candidate_count,
+    )
 
     if selected_claim_check is not None:
+        focus_check_id = selected_claim_check.check_id
+        focus_check_label = selected_claim_check.label
+        focus_stage = selected_claim_check.stage
         if not resolved_anchor_id:
             resolved_anchor_id = selected_claim_check.anchor_id
         if calibration_resolution is None:
@@ -647,6 +729,12 @@ def build_failure_inspector(
             failure_best_summary = selected_claim_check.best_candidate_summary
         if not failure_message:
             failure_message = selected_claim_check.message
+        selected_threshold = selected_claim_check.threshold
+        selected_image_path = selected_claim_check.selected_image_path
+        selected_source_image = selected_claim_check.selected_source_image
+        selected_overlay = selected_claim_check.selected_overlay
+        selected_overlay_summary = selected_claim_check.selected_overlay_summary
+        failure_explanation = selected_claim_check.failure_explanation or failure_explanation
 
     return FailureInspectorState(
         failure_id=failure_record.failure_id,
@@ -664,6 +752,15 @@ def build_failure_inspector(
         calibration_resolution=calibration_resolution,
         inspection=failure_inspection,
         claim_rewards=claim_rewards,
+        focus_check_id=focus_check_id,
+        focus_check_label=focus_check_label,
+        focus_stage=focus_stage,
+        selected_threshold=selected_threshold,
+        selected_image_path=selected_image_path,
+        selected_source_image=selected_source_image,
+        selected_overlay=selected_overlay,
+        selected_overlay_summary=selected_overlay_summary,
+        failure_explanation=failure_explanation,
         metadata=dict(failure_record.metadata),
     )
 
@@ -986,6 +1083,67 @@ def _candidate_summary(candidate: MatchCandidateView | None) -> str:
     )
 
 
+def _inspection_image_path(inspection: ImageInspectionState | None, *, fallback: str = "") -> str:
+    if inspection is None:
+        return fallback
+    return inspection.image_path or fallback
+
+
+def _inspection_source_image(inspection: ImageInspectionState | None, *, fallback: str = "") -> str:
+    if inspection is None:
+        return fallback
+    return inspection.source_image or fallback
+
+
+def _match_failure_explanation(
+    *,
+    anchor_id: str,
+    threshold: float | None,
+    message: str,
+    status: MatchStatus,
+    best_candidate: MatchCandidateView | None,
+    candidate_count: int,
+) -> str:
+    normalized_anchor_id = anchor_id or "anchor"
+    normalized_message = message.strip()
+    if status == MatchStatus.MATCHED:
+        if normalized_message:
+            return normalized_message
+        if best_candidate is not None:
+            return (
+                f"{normalized_anchor_id} matched at {best_candidate.confidence:.3f} "
+                f"with threshold {threshold:.3f}."
+            ) if threshold is not None else f"{normalized_anchor_id} matched at {best_candidate.confidence:.3f}."
+        return f"{normalized_anchor_id} matched."
+
+    detail = ""
+    if best_candidate is None and candidate_count == 0:
+        detail = (
+            f"No candidates were found for {normalized_anchor_id}"
+            + (f" at threshold {threshold:.3f}." if threshold is not None else ".")
+        )
+    elif best_candidate is not None and best_candidate.anchor_id != normalized_anchor_id:
+        detail = (
+            f"Expected {normalized_anchor_id}, but best candidate was "
+            f"{best_candidate.anchor_id} at {best_candidate.confidence:.3f}."
+        )
+    elif best_candidate is not None and threshold is not None and not best_candidate.passed_threshold:
+        detail = (
+            f"{normalized_anchor_id} peaked at {best_candidate.confidence:.3f}, "
+            f"below threshold {threshold:.3f}."
+        )
+    elif best_candidate is not None:
+        detail = f"{normalized_anchor_id} did not produce a passing match."
+    else:
+        detail = f"{normalized_anchor_id} did not match."
+
+    if not normalized_message:
+        return detail
+    if detail.lower() in normalized_message.lower():
+        return normalized_message
+    return f"{normalized_message} {detail}".strip()
+
+
 def _claim_rewards_check_summary(check: ClaimRewardsCheckState | None) -> str:
     if check is None:
         return ""
@@ -1002,6 +1160,36 @@ def _claim_rewards_workflow_summary(checks: list[ClaimRewardsCheckState], *, cur
     parts.append(f"matched={sum(1 for check in checks if check.status == MatchStatus.MATCHED)}")
     parts.append(f"missing={sum(1 for check in checks if check.status != MatchStatus.MATCHED)}")
     return " | ".join(parts)
+
+
+def _mark_claim_rewards_check_selection(
+    check: ClaimRewardsCheckState,
+    selected_check_id: str,
+) -> ClaimRewardsCheckState:
+    return ClaimRewardsCheckState(
+        check_id=check.check_id,
+        label=check.label,
+        anchor_id=check.anchor_id,
+        stage=check.stage,
+        status=check.status,
+        threshold=check.threshold,
+        message=check.message,
+        candidate_count=check.candidate_count,
+        matched_candidate=check.matched_candidate,
+        best_candidate=check.best_candidate,
+        candidates=list(check.candidates),
+        matched_candidate_summary=check.matched_candidate_summary,
+        best_candidate_summary=check.best_candidate_summary,
+        calibration_resolution=check.calibration_resolution,
+        inspection=check.inspection,
+        is_selected=check.check_id == selected_check_id,
+        selected_image_path=check.selected_image_path,
+        selected_source_image=check.selected_source_image,
+        selected_overlay=check.selected_overlay,
+        selected_overlay_summary=check.selected_overlay_summary,
+        failure_explanation=check.failure_explanation,
+        metadata=dict(check.metadata),
+    )
 
 
 def _build_claim_rewards_inspector(
@@ -1077,6 +1265,11 @@ def _build_claim_rewards_inspector(
                 best_candidate_summary=match_state.best_candidate_summary,
                 calibration_resolution=match_state.calibration_resolution,
                 inspection=match_state.inspection,
+                selected_image_path=match_state.selected_image_path,
+                selected_source_image=match_state.selected_source_image,
+                selected_overlay=match_state.selected_overlay,
+                selected_overlay_summary=match_state.selected_overlay_summary,
+                failure_explanation=match_state.failure_explanation,
                 metadata={**dict(anchor.metadata), **dict(payload.get("metadata", {}))},
             )
         )
@@ -1085,18 +1278,35 @@ def _build_claim_rewards_inspector(
         return None
 
     selected_check = _select_claim_rewards_check(checks, selected_check_id or current_check_id)
+    selected_check_id_value = selected_check.check_id if selected_check is not None else ""
+    checks = [
+        _mark_claim_rewards_check_selection(check, selected_check_id_value)
+        for check in checks
+    ]
+    selected_check = next(
+        (check for check in checks if check.check_id == selected_check_id_value),
+        None,
+    )
     return ClaimRewardsInspectorState(
         task_id="daily_ui.claim_rewards",
-        current_check_id=current_check_id or (selected_check.check_id if selected_check is not None else ""),
-        selected_check_id=selected_check.check_id if selected_check is not None else "",
+        current_check_id=current_check_id or selected_check_id_value,
+        selected_check_id=selected_check_id_value,
         selected_check=selected_check,
         checks=checks,
         available_check_ids=[check.check_id for check in checks],
         check_count=len(checks),
         matched_check_count=sum(1 for check in checks if check.status == MatchStatus.MATCHED),
         missing_check_count=sum(1 for check in checks if check.status != MatchStatus.MATCHED),
+        selected_anchor_id=selected_check.anchor_id if selected_check is not None else "",
+        selected_stage=selected_check.stage if selected_check is not None else "",
+        selected_threshold=selected_check.threshold if selected_check is not None else None,
+        selected_image_path=selected_check.selected_image_path if selected_check is not None else "",
+        selected_source_image=selected_check.selected_source_image if selected_check is not None else "",
+        selected_overlay=selected_check.selected_overlay if selected_check is not None else None,
+        selected_overlay_summary=selected_check.selected_overlay_summary if selected_check is not None else "",
         selected_check_summary=_claim_rewards_check_summary(selected_check),
         workflow_summary=_claim_rewards_workflow_summary(checks, current_check_id=current_check_id),
+        failure_explanation=selected_check.failure_explanation if selected_check is not None else "",
         metadata={key: value for key, value in claim_metadata.items() if key != "checks"},
     )
 
