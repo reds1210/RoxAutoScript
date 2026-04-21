@@ -35,6 +35,7 @@ assets/templates/
       *.png
     goldens/
       claim_rewards/
+        catalog.json
         *.png
   odin/
     manifest.json
@@ -155,9 +156,10 @@ These builders stay inside the vision layer and do not depend on `app`, `core` r
 
 Current sample coverage:
 
-- `daily_ui.reward_panel` now ships as a curated PNG crop plus one screenshot-style baseline image for the opened reward panel scene
-- `daily_ui.claim_reward` now ships as a curated PNG crop plus one screenshot-style baseline image for the tappable claim button scene
-- `daily_ui.reward_confirm_state` now ships as a curated PNG crop plus one screenshot-style baseline image for the confirmation modal scene
+- `daily_ui.reward_panel` now ships as a curated PNG crop plus one live zh-TW ROX baseline image for the opened reward panel scene
+- `daily_ui.claim_reward` now ships as a curated PNG crop plus one curated screenshot-style baseline image for the tappable claim button scene
+- `daily_ui.reward_confirm_state` now ships as a curated PNG crop plus one curated screenshot-style baseline image for the confirmation modal scene
+- `docs/vision/claim_rewards_live/raw/` now keeps the supporting live capture trail for this task only
 - `daily_ui.guild_check_in_button` placeholder template now exists under `assets/templates/daily_ui/`
 - `odin.start_button` placeholder template exists
 - Engine D's task asset inventory still marks the `daily_ui.claim_reward` dependency as `placeholder`; vision readiness now reports the curated template as `ready` and flags the inventory drift as an explicit mismatch instead of degrading the actual template status
@@ -181,6 +183,11 @@ Each anchor participating in that contract carries:
 - `metadata.curation.intent_id`
 - `metadata.curation.scene_id`
 - `metadata.curation.variant_id`
+- `metadata.curation.metadata.golden_catalog_path`
+- `metadata.curation.metadata.golden_id`
+- `metadata.curation.metadata.live_capture`
+- `metadata.curation.metadata.proof_summary`
+- `metadata.curation.metadata.failure_case`
 
 This gives the vision layer enough information to:
 
@@ -191,11 +198,30 @@ This gives the vision layer enough information to:
 
 The branch now also ships a minimal golden organization for this task only:
 
+- `assets/templates/daily_ui/goldens/claim_rewards/catalog.json`
 - `assets/templates/daily_ui/goldens/claim_rewards/daily_ui_claim_rewards__reward_panel__baseline__v1.png`
 - `assets/templates/daily_ui/goldens/claim_rewards/daily_ui_claim_rewards__claim_button__baseline__v1.png`
 - `assets/templates/daily_ui/goldens/claim_rewards/daily_ui_claim_rewards__confirm_state__baseline__v1.png`
+- `assets/templates/daily_ui/goldens/claim_rewards/live/daily_ui_claim_rewards__reward_panel__live_capture__emulator_5560__daily_signin.png`
+- `assets/templates/daily_ui/goldens/claim_rewards/live/daily_ui_claim_rewards__entry_context__live_capture__emulator_5556__after_fuli_tap.png`
 
-These are repo-curated screenshot-style baselines. They are more meaningful than the previous SVG placeholders, but they are still not live device captures from a real ROX run.
+`catalog.json` is the machine-readable index for the three shipped claim-rewards baselines. It records:
+
+- which anchor and inspection role each golden supports
+- which scene and stage the image proves
+- whether the file is a live capture or a curated stand-in
+- the current file hash and resolution so later live replacements stay traceable
+- which step or failure case each image is meant to explain during claim-rewards inspection
+
+Current claim-rewards golden coverage:
+
+- `daily_ui_claim_rewards__reward_panel__baseline__v1.png`: live zh-TW ROX daily sign-in panel-open golden for `daily_ui.reward_panel`
+- `daily_ui_claim_rewards__claim_button__baseline__v1.png`: curated stand-in for the claimable panel state used by `daily_ui.claim_reward`
+- `daily_ui_claim_rewards__confirm_state__baseline__v1.png`: curated stand-in for the confirmation modal used by `daily_ui.reward_confirm_state`
+- `live/daily_ui_claim_rewards__reward_panel__live_capture__emulator_5560__daily_signin.png`: descriptive copy of the canonical live panel-open screenshot for manual review and downstream tooling
+- `live/daily_ui_claim_rewards__entry_context__live_capture__emulator_5556__after_fuli_tap.png`: live pre-panel navigation evidence after the Fu Li tap, used to debug failures before the panel-open anchor appears
+
+`daily_ui.reward_panel` is now backed by a live capture. `daily_ui.claim_reward` and `daily_ui.reward_confirm_state` still rely on curated stand-ins because the available accounts did not expose approved live claimable or confirmation-modal states during this round. The manifest and golden catalog call this out explicitly so downstream consumers can distinguish canonical live evidence from still-pending live replacements.
 
 ## GUI Consumption
 
