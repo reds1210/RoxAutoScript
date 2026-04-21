@@ -137,6 +137,7 @@ The vision package now exposes service-layer builders so the GUI can stop invent
 - `resolve_calibration_override()` centralizes per-anchor threshold/region/crop resolution so GUI and tooling do not each re-implement override logic.
 - `build_image_inspection_state()` turns match/crop/calibration context into a shared `ImageInspectionState` that preview, capture, and failure panes can all consume directly.
 - `FailureInspectorState.claim_rewards` now exposes a claim-specific checklist for `daily_ui.claim_rewards`, including per-check match summaries and one `ImageInspectionState` per check so GUI can focus directly on panel/button/confirm failures.
+- `MatchInspectorState`, `ClaimRewardsCheckState`, `ClaimRewardsInspectorState`, and `FailureInspectorState` now flatten GUI-facing render fields such as `selected_image_path`, `selected_overlay`, `selected_overlay_summary`, `selected_threshold`, and `failure_explanation`.
 
 These builders stay inside the vision layer and do not depend on `app`, `core` runtime orchestration details, or emulator transport implementations.
 
@@ -178,14 +179,23 @@ When the failure metadata includes a nested `claim_rewards` payload, Engine B sh
 - `FailureInspectorState.claim_rewards.checks`: the ordered per-check list for `reward_panel`, `claim_reward_button`, and `confirm_state`
 - `FailureInspectorState.claim_rewards.selected_check`: the currently failing or selected check
 - `FailureInspectorState.claim_rewards.selected_check.inspection`: the overlay-ready image state for the selected check
+- `FailureInspectorState.claim_rewards.selected_image_path`
+- `FailureInspectorState.claim_rewards.selected_threshold`
+- `FailureInspectorState.claim_rewards.selected_overlay_summary`
+- `FailureInspectorState.claim_rewards.failure_explanation`
 - `FailureInspectorState.claim_rewards.selected_check_summary`: a one-line summary for the selected check
 - `FailureInspectorState.inspection`: the same selected-check inspection promoted to the generic failure pane for backward-compatible fallback rendering
+- `FailureInspectorState.selected_image_path`
+- `FailureInspectorState.selected_threshold`
+- `FailureInspectorState.selected_overlay_summary`
+- `FailureInspectorState.failure_explanation`
 
 Recommended GUI behavior:
 
 - show the checklist in claim flow order
 - default focus to `current_check_id` when provided
 - render `selected_check.inspection` overlays even when the generic top-level `match_result` is absent
+- render the secondary panel from the flattened `selected_*` and `failure_explanation` fields first, and only fall back to nested inspection data when the GUI needs the full overlay list
 
 ## Capture/Crop Workflow Skeleton
 

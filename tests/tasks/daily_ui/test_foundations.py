@@ -13,6 +13,7 @@ class DailyUiFoundationsTests(unittest.TestCase):
 
         self.assertEqual(catalog.pack_id, "daily_ui")
         self.assertEqual(len(catalog.entries), 2)
+        self.assertEqual(catalog.entries[0].display_name, "每日領獎")
 
     def test_loads_daily_ui_blueprints(self) -> None:
         blueprints = load_daily_ui_blueprints()

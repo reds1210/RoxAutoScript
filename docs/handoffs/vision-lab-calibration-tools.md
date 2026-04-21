@@ -42,6 +42,22 @@ Public APIs added or changed:
   - `ClaimRewardsInspectorState`
 - `FailureInspectorState` now includes:
   - `claim_rewards`
+- `MatchInspectorState`, `ClaimRewardsCheckState`, `ClaimRewardsInspectorState`, and `FailureInspectorState` now expose flattened GUI render fields:
+  - `selected_image_path`
+  - `selected_source_image`
+  - `selected_overlay`
+  - `selected_overlay_summary`
+  - `failure_explanation`
+- `FailureInspectorState` now also exposes:
+  - `focus_check_id`
+  - `focus_check_label`
+  - `focus_stage`
+  - `selected_threshold`
+- `ClaimRewardsInspectorState` now also exposes:
+  - `selected_anchor_id`
+  - `selected_stage`
+  - `selected_threshold`
+- `ClaimRewardsCheckState` now exposes `is_selected` so GUI does not need to re-run selection rules locally
 - `assets/templates/daily_ui/manifest.json` now declares `metadata.task_support["daily_ui.claim_rewards"]`
 - `daily_ui` now exposes three claim-rewards inspection anchors:
   - `daily_ui.reward_panel`
@@ -57,6 +73,7 @@ Contract changes:
 - template validation now understands manifest-level task support contracts and will fail when a declared task is missing one of its required inspection roles
 - failure inspection can now consume nested `failure_record.metadata["claim_rewards"]` payloads and build per-check match/overlay state even when no top-level `match_result` exists
 - `FailureInspectorState.inspection` now falls back to the selected claim-rewards check inspection so existing failure panes still render a useful overlay without special-case logic
+- GUI no longer needs to derive the currently focused image / overlay / threshold from nested inspection objects for claim-rewards panes; the selected render surface is flattened into the state contracts directly
 
 Assumptions:
 
@@ -91,7 +108,15 @@ Recommended next step:
   - `FailureInspectorState.claim_rewards.checks`
   - `FailureInspectorState.claim_rewards.selected_check`
   - `FailureInspectorState.claim_rewards.selected_check.inspection`
+  - `FailureInspectorState.claim_rewards.selected_image_path`
+  - `FailureInspectorState.claim_rewards.selected_threshold`
+  - `FailureInspectorState.claim_rewards.selected_overlay_summary`
+  - `FailureInspectorState.claim_rewards.failure_explanation`
   - `FailureInspectorState.claim_rewards.selected_check_summary`
+  - `FailureInspectorState.selected_image_path`
+  - `FailureInspectorState.selected_threshold`
+  - `FailureInspectorState.selected_overlay_summary`
+  - `FailureInspectorState.failure_explanation`
   - `FailureInspectorState.inspection` as the backward-compatible focused overlay
 - runtime-side failure metadata should emit:
   - `task_id = "daily_ui.claim_rewards"`

@@ -437,6 +437,51 @@ Rules:
 - production runtime wiring may be bundled as one `RuntimeExecutionPath` so GUI and runtime code reuse the same adapter-backed services
 - `command_executor`, `health_checker`, and `preview_capture` should all be built from the same emulator adapter instance
 
+### `LiveRuntimeState`
+
+Minimum fields:
+
+- `revision`
+- `refresh_state`
+- `instance_count`
+- `ready_count`
+- `busy_count`
+- `paused_count`
+- `error_count`
+- `disconnected_count`
+- `queued_count`
+- `failure_count`
+- `instances`
+- `selected_instance`
+
+Rules:
+
+- GUI-facing polling should prefer `LiveRuntimeState` or `LiveRuntimeInstanceSummary` over rebuilding a full `LiveRuntimeSnapshot` on every repaint
+- `refresh_state` should expose whether a background rediscover or runtime refresh is pending or in flight
+- `instances` should be lightweight summaries only; expensive work such as health checks and preview capture must happen in scheduled runtime refreshes, not during state reads
+
+### `LiveRuntimeSession`
+
+Minimum GUI-facing methods:
+
+- `build_adb_live_runtime_session(...)`
+- `get_live_state(instance_id=None)`
+- `list_instance_summaries()`
+- `get_instance_summary(instance_id)`
+- `schedule_runtime_refresh(instance_id=None, run_health_check=True, capture_preview=False)`
+- `schedule_rediscover(instance_id=None, refresh_runtime=False, run_health_check=True, capture_preview=False)`
+- `connect_instance(instance, refresh_runtime=False, ...)`
+- `disconnect_instance(instance_id, reason="")`
+- `reconnect_instance(instance_id, rediscover=True, ...)`
+- `rediscover_instances(...)`
+
+Rules:
+
+- GUI threads should treat `schedule_*` methods as the non-blocking entry points for discovery and runtime inspection work
+- GUI threads should read `get_live_state(...)` for cards, counters, selection, and refresh banners
+- sync `poll()` / `refresh_runtime_contexts()` remain valid for tests and CLI-style tooling, but GUI integrations should not loop over them on the UI thread
+- production GUI wiring should start from `build_adb_live_runtime_session(...)` instead of hand-building adapter/execution services
+
 ### `RuntimeCoordinator`
 
 Responsibilities:
