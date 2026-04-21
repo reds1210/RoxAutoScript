@@ -30,6 +30,17 @@
       "action": "deterministic_navigation",
       "success_condition": "The reward panel is visible with a stable claim affordance.",
       "failure_condition": "Reward panel could not be confirmed after deterministic navigation.",
+      "metadata": {
+        "display_name": "開啟每日獎勵",
+        "failure_reason_id": "reward_panel_unavailable",
+        "status_texts": {
+          "failed": "開啟獎勵面板失敗",
+          "pending": "等待開啟獎勵面板",
+          "running": "正在開啟獎勵面板",
+          "succeeded": "已開啟獎勵面板"
+        },
+        "summary": "進入每日獎勵固定面板。"
+      },
       "notes": "Runtime bridge opens the fixed panel through deterministic navigation before vision checks start."
     },
     {
@@ -37,6 +48,17 @@
       "action": "vision_verify",
       "success_condition": "A claimable or already-claimed reward state can be distinguished.",
       "failure_condition": "Claim button state remains ambiguous.",
+      "metadata": {
+        "display_name": "確認獎勵狀態",
+        "failure_reason_id": "claim_state_ambiguous",
+        "status_texts": {
+          "failed": "獎勵狀態辨識失敗",
+          "pending": "等待確認獎勵狀態",
+          "running": "正在確認獎勵狀態",
+          "succeeded": "已確認獎勵狀態"
+        },
+        "summary": "辨識目前畫面是可領取、已領取或需確認。"
+      },
       "notes": "Bridge classifies claimable, claimed, and confirm-required panel states from fixed anchors."
     },
     {
@@ -44,6 +66,17 @@
       "action": "tap_anchor",
       "success_condition": "The claim tap advances the panel into a claimed or confirm-required state.",
       "failure_condition": "Claim tap does not change the reward panel state.",
+      "metadata": {
+        "display_name": "點擊領獎",
+        "failure_reason_id": "claim_tap_no_effect",
+        "status_texts": {
+          "failed": "領獎點擊失敗",
+          "pending": "等待點擊領獎",
+          "running": "正在點擊領獎",
+          "succeeded": "已完成領獎點擊"
+        },
+        "summary": "在可領取狀態下點擊領獎按鈕。"
+      },
       "notes": "Claim button coordinates come from the matched reward anchor."
     },
     {
@@ -51,6 +84,17 @@
       "action": "tap_anchor",
       "success_condition": "A confirmation modal is accepted when the client presents one.",
       "failure_condition": "Confirmation modal cannot be verified or resolved after the claim tap.",
+      "metadata": {
+        "display_name": "確認領獎",
+        "failure_reason_id": "confirm_tap_no_effect",
+        "status_texts": {
+          "failed": "確認領獎失敗",
+          "pending": "等待確認領獎",
+          "running": "正在確認領獎",
+          "succeeded": "已完成確認領獎"
+        },
+        "summary": "當畫面出現確認彈窗時，點擊確認完成領取。"
+      },
       "notes": "Uses the shared common.confirm_button anchor when the modal is present."
     },
     {
@@ -58,11 +102,107 @@
       "action": "vision_verify",
       "success_condition": "A claimed state indicator is visible and no actionable claim button remains in the same panel.",
       "failure_condition": "The post-claim panel cannot be verified as claimed.",
+      "metadata": {
+        "display_name": "確認已領取",
+        "failure_reason_id": "claimed_state_unverified",
+        "status_texts": {
+          "failed": "已領取驗證失敗",
+          "pending": "等待確認已領取",
+          "running": "正在確認已領取",
+          "succeeded": "已確認完成領取"
+        },
+        "summary": "在流程最後再次驗證畫面已顯示已領取狀態。"
+      },
       "notes": "Final verification always captures a fresh screenshot."
     }
   ],
   "metadata": {
     "phase": "pre_gate_3",
+    "product_display": {
+      "category_label": "每日任務",
+      "description": "開啟固定每日獎勵面板並完成領獎，必要時確認彈窗。",
+      "display_name": "每日領獎",
+      "failure_reasons": [
+        {
+          "reason_id": "reward_panel_unavailable",
+          "retryable": true,
+          "summary": "無法確認每日獎勵面板是否已成功開啟。",
+          "title": "找不到每日獎勵面板"
+        },
+        {
+          "reason_id": "claim_state_ambiguous",
+          "retryable": true,
+          "summary": "無法分辨目前是可領取、已領取或需要確認。",
+          "title": "獎勵狀態無法辨識"
+        },
+        {
+          "reason_id": "claim_affordance_missing",
+          "retryable": true,
+          "summary": "畫面上沒有可安全點擊的領獎按鈕。",
+          "title": "找不到領獎按鈕"
+        },
+        {
+          "reason_id": "claim_tap_no_effect",
+          "retryable": true,
+          "summary": "點擊領獎後，畫面沒有進入已領取或待確認狀態。",
+          "title": "領獎點擊沒有生效"
+        },
+        {
+          "reason_id": "confirm_modal_unavailable",
+          "retryable": true,
+          "summary": "需要確認時，系統無法穩定辨識確認彈窗。",
+          "title": "確認彈窗無法辨識"
+        },
+        {
+          "reason_id": "confirm_tap_no_effect",
+          "retryable": true,
+          "summary": "點擊確認後，畫面沒有回到已領取狀態。",
+          "title": "確認點擊沒有生效"
+        },
+        {
+          "reason_id": "claimed_state_unverified",
+          "retryable": true,
+          "summary": "任務完成前，系統無法再次驗證已領取畫面。",
+          "title": "無法確認已領取狀態"
+        },
+        {
+          "reason_id": "operator_stop",
+          "retryable": true,
+          "summary": "操作員主動停止了每日領獎任務。",
+          "title": "任務被手動停止"
+        },
+        {
+          "reason_id": "health_check_failed",
+          "retryable": true,
+          "summary": "執行前或執行中健康檢查失敗，任務已中止。",
+          "title": "裝置健康檢查失敗"
+        },
+        {
+          "reason_id": "step_exception",
+          "retryable": false,
+          "summary": "任務步驟發生未預期例外，需要檢查 bridge 或 matcher 實作。",
+          "title": "任務步驟發生例外"
+        }
+      ],
+      "locale": "zh-TW",
+      "preset_description": "固定介面的每日獎勵領取流程。",
+      "preset_id": "daily_ui.claim_rewards.mvp",
+      "short_name": "每日領獎",
+      "status_texts": {
+        "aborted": "已中止",
+        "blocked": "尚未就緒",
+        "claimable": "可領取",
+        "claimed": "已領取",
+        "confirm_required": "需確認",
+        "failed": "執行失敗",
+        "pending": "等待執行",
+        "ready": "可執行",
+        "running": "執行中",
+        "skipped": "已略過",
+        "succeeded": "已完成",
+        "unavailable": "狀態未確認"
+      }
+    },
     "runtime_requirement_ids": [
       "runtime.daily_ui.dispatch_bridge"
     ],
@@ -79,10 +219,12 @@
     "entry_condition": "Home HUD is visible and the fixed reward panel can be opened through deterministic UI navigation.",
     "failure_condition": "The reward panel, claim button, or confirmation modal cannot be verified within retry budget.",
     "metadata": {
+      "description_zh_tw": "開啟每日獎勵面板、領取獎勵並完成必要的確認步驟。",
+      "display_name_zh_tw": "每日領獎",
       "implementation_state": "fixtured",
       "phase": "pre_gate_3"
     },
-    "name": "Daily Reward Claim",
+    "name": "每日領獎",
     "recovery_policy": "abort",
     "requires": [
       "common.close_button",

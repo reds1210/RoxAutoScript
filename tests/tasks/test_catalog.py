@@ -61,6 +61,7 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
 
         self.assertEqual([catalog.pack_id for catalog in catalogs], ["daily_ui", "odin"])
         self.assertEqual(catalogs[0].entries[0].task_id, "daily_ui.claim_rewards")
+        self.assertEqual(catalogs[0].entries[0].display_name, "每日領獎")
 
     def test_builds_asset_inventory(self) -> None:
         inventory = self.repository.build_asset_inventory()
