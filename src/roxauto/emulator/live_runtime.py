@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import threading
+import time
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -20,7 +22,13 @@ from roxauto.core.events import (
     EVENT_TASK_STARTED,
     EventBus,
 )
-from roxauto.core.models import InstanceRuntimeContext, InstanceState, PreviewFrame, ProfileBinding
+from roxauto.core.models import (
+    InstanceRuntimeContext,
+    InstanceState,
+    InstanceStatus,
+    PreviewFrame,
+    ProfileBinding,
+)
 from roxauto.core.queue import QueuedTask, TaskQueue
 from roxauto.core.runtime import AuditSink, QueueRunResult, RuntimeCoordinator, RuntimeInspectionResult
 from roxauto.core.time import utc_now
@@ -129,6 +137,83 @@ class LiveRuntimeSnapshot:
         return None
 
 
+@dataclass(slots=True, frozen=True)
+class LiveRuntimeInstanceSummary:
+    instance_id: str
+    label: str
+    adb_serial: str
+    status: str
+    last_seen_at: object
+    queue_depth: int = 0
+    active_task_id: str = ""
+    active_run_id: str = ""
+    stop_requested: bool = False
+    health_check_ok: bool | None = None
+    profile_id: str = ""
+    profile_display_name: str = ""
+    preview_image_path: str = ""
+    failure_snapshot_id: str = ""
+    failure_reason: str = ""
+
+
+@dataclass(slots=True, frozen=True)
+class LiveRuntimeRefreshState:
+    operation: str = "idle"
+    instance_id: str = ""
+    rediscover: bool = False
+    refresh_runtime: bool = False
+    run_health_check: bool = True
+    capture_preview: bool = False
+    in_flight: bool = False
+    pending: bool = False
+    last_requested_at: object | None = None
+    last_started_at: object | None = None
+    last_finished_at: object | None = None
+    last_error: str = ""
+    last_completed_revision: int = 0
+
+
+@dataclass(slots=True, frozen=True)
+class LiveRuntimeState:
+    captured_at: object = field(default_factory=utc_now)
+    revision: int = 0
+    refresh_state: LiveRuntimeRefreshState = field(default_factory=LiveRuntimeRefreshState)
+    last_sync_at: object | None = None
+    last_discovery_at: object | None = None
+    last_sync_ok: bool = True
+    last_sync_error: str = ""
+    instance_count: int = 0
+    ready_count: int = 0
+    busy_count: int = 0
+    paused_count: int = 0
+    error_count: int = 0
+    disconnected_count: int = 0
+    queued_count: int = 0
+    failure_count: int = 0
+    last_command_type: str = ""
+    last_command_status: str = ""
+    last_queue_instance_id: str = ""
+    last_queue_message: str = ""
+    instances: tuple[LiveRuntimeInstanceSummary, ...] = field(default_factory=tuple)
+    selected_instance: LiveRuntimeInstanceSummary | None = None
+
+    def get_instance(self, instance_id: str) -> LiveRuntimeInstanceSummary | None:
+        for item in self.instances:
+            if item.instance_id == instance_id:
+                return item
+        return None
+
+
+@dataclass(slots=True)
+class _ScheduledRefreshRequest:
+    operation: str
+    instance_id: str | None = None
+    rediscover: bool = False
+    refresh_runtime: bool = False
+    run_health_check: bool = True
+    capture_preview: bool = False
+
+
 class LiveRuntimeSession:
     def __init__(
         self,
@@ -157,6 +242,15 @@ class LiveRuntimeSession:
         self._last_queue_result: QueueRunResult | None = None
         self._last_inspection_results: list[RuntimeInspectionResult] = []
         self._last_snapshot: LiveRuntimeSnapshot | None = None
+        self._operation_lock = threading.RLock()
+        self._state_lock = threading.Lock()
+        self._live_state_cache: LiveRuntimeState | None = None
+        self._refresh_state = LiveRuntimeRefreshState()
+        self._background_condition = threading.Condition()
+        self._background_request: _ScheduledRefreshRequest | None = None
+        self._background_worker: threading.Thread | None = None
+        self._background_shutdown = False
+        self._background_in_flight = False
         if execution_path is not None and adapter is not None:
             raise ValueError("Provide either adapter or execution_path, not both")
         if execution_path is None:
@@ -176,6 +270,8 @@ class LiveRuntimeSession:
             audit_sink=self._audit_sink,
         )
         self._subscribe_runtime_events()
+        with self._operation_lock:
+            self._publish_live_state_locked()
 
     @property
     def event_bus(self) -> EventBus:
@@ -231,12 +327,23 @@ class LiveRuntimeSession:
 
     @property
     def last_snapshot(self) -> LiveRuntimeSnapshot:
-        if self._last_snapshot is None or self._last_snapshot.revision != self._revision:
-            self._last_snapshot = self.snapshot(force_refresh=True)
-        return self._last_snapshot
+        with self._operation_lock:
+            if self._last_snapshot is None or self._last_snapshot.revision != self._revision:
+                self._last_snapshot = self.snapshot(force_refresh=True)
+            return self._last_snapshot
+
+    @property
+    def refresh_state(self) -> LiveRuntimeRefreshState:
+        with self._state_lock:
+            return self._refresh_state
+
+    @property
+    def last_live_state(self) -> LiveRuntimeState:
+        return self.get_live_state()
 
     def discover(self) -> list[InstanceState]:
-        return list(self._discovery())
+        with self._operation_lock:
+            return list(self._discovery())
 
     def poll(
         self,
@@ -246,49 +353,57 @@ class LiveRuntimeSession:
         run_health_check: bool = True,
         capture_preview: bool = True,
     ) -> LiveRuntimeSnapshot:
-        self.sync_instances()
-        if refresh_runtime and self._last_sync_ok:
-            self.refresh_runtime_contexts(
-                instance_id=instance_id,
-                run_health_check=run_health_check,
-                capture_preview=capture_preview,
-            )
-        return self.snapshot(instance_id=instance_id)
+        with self._operation_lock:
+            self.sync_instances()
+            if refresh_runtime and self._last_sync_ok:
+                self.refresh_runtime_contexts(
+                    instance_id=instance_id,
+                    run_health_check=run_health_check,
+                    capture_preview=capture_preview,
+                )
+            return self.snapshot(instance_id=instance_id)
 
     def sync_instances(self, states: list[InstanceState] | None = None) -> list[InstanceState]:
-        before_revision = self._revision
-        if states is None:
-            try:
-                states = self.discover()
-            except Exception as exc:
-                self._last_sync_at = utc_now()
-                self._last_sync_ok = False
-                self._last_sync_error = str(exc)
-                self._ensure_revision_changed(before_revision)
-                return self._coordinator.registry.list_instances()
-            self._last_discovery_at = utc_now()
-        else:
-            states = list(states)
+        with self._operation_lock:
+            before_revision = self._revision
+            if states is None:
+                try:
+                    states = self.discover()
+                except Exception as exc:
+                    self._last_sync_at = utc_now()
+                    self._last_sync_ok = False
+                    self._last_sync_error = str(exc)
+                    self._ensure_revision_changed(before_revision)
+                    self._publish_live_state_locked()
+                    return self._coordinator.registry.list_instances()
+                self._last_discovery_at = utc_now()
+            else:
+                states = list(states)
 
-        synced = self._coordinator.sync_instances(states)
-        self._last_sync_at = utc_now()
-        self._last_sync_ok = True
-        self._last_sync_error = ""
-        self._auto_bind_profiles(synced)
-        self._ensure_revision_changed(before_revision)
-        return synced
+            synced = self._coordinator.sync_instances(states)
+            self._last_sync_at = utc_now()
+            self._last_sync_ok = True
+            self._last_sync_error = ""
+            self._auto_bind_profiles(synced)
+            self._ensure_revision_changed(before_revision)
+            self._publish_live_state_locked()
+            return synced
 
     def bind_profile(self, instance_id: str, binding: ProfileBinding) -> InstanceRuntimeContext:
-        before_revision = self._revision
-        context = self._coordinator.bind_profile(instance_id, binding)
-        self._ensure_revision_changed(before_revision)
-        return context
+        with self._operation_lock:
+            before_revision = self._revision
+            context = self._coordinator.bind_profile(instance_id, binding)
+            self._ensure_revision_changed(before_revision)
+            self._publish_live_state_locked()
+            return context
 
     def enqueue(self, item: QueuedTask) -> QueuedTask:
-        before_revision = self._revision
-        queued = self._coordinator.enqueue(item)
-        self._ensure_revision_changed(before_revision)
-        return queued
+        with self._operation_lock:
+            before_revision = self._revision
+            queued = self._coordinator.enqueue(item)
+            self._ensure_revision_changed(before_revision)
+            self._publish_live_state_locked()
+            return queued
 
     def enqueue_many(self, items: list[QueuedTask]) -> list[QueuedTask]:
         return [self.enqueue(item) for item in items]
@@ -302,22 +417,26 @@ class LiveRuntimeSession:
         )
 
     def dispatch_command(self, command: InstanceCommand) -> CommandDispatchResult:
-        before_revision = self._revision
-        result = self._coordinator.dispatch_command(command)
-        self._last_command_result = result
-        if command.command_type == InstanceCommandType.START_QUEUE:
-            self._store_last_queue_result_from_dispatch(result)
-        elif command.command_type == InstanceCommandType.REFRESH:
-            self._store_last_inspection_results_from_contexts(result.instance_ids)
-        self._ensure_revision_changed(before_revision)
-        return result
+        with self._operation_lock:
+            before_revision = self._revision
+            result = self._coordinator.dispatch_command(command)
+            self._last_command_result = result
+            if command.command_type == InstanceCommandType.START_QUEUE:
+                self._store_last_queue_result_from_dispatch(result)
+            elif command.command_type == InstanceCommandType.REFRESH:
+                self._store_last_inspection_results_from_contexts(result.instance_ids)
+            self._ensure_revision_changed(before_revision)
+            self._publish_live_state_locked()
+            return result
 
     def start_queue(self, instance_id: str) -> QueueRunResult:
-        before_revision = self._revision
-        result = self._coordinator.start_queue(instance_id)
-        self._last_queue_result = result
-        self._ensure_revision_changed(before_revision)
-        return result
+        with self._operation_lock:
+            before_revision = self._revision
+            result = self._coordinator.start_queue(instance_id)
+            self._last_queue_result = result
+            self._ensure_revision_changed(before_revision)
+            self._publish_live_state_locked()
+            return result
 
     def refresh_runtime_contexts(
         self,
@@ -326,32 +445,37 @@ class LiveRuntimeSession:
         run_health_check: bool = True,
         capture_preview: bool = True,
     ) -> list[RuntimeInspectionResult]:
-        before_revision = self._revision
-        if instance_id is None:
-            results = self._coordinator.inspect_instances(
-                run_health_check=run_health_check,
-                capture_preview=capture_preview,
-            )
-        else:
-            results = [
-                self._coordinator.inspect_instance(
-                    instance_id,
+        with self._operation_lock:
+            before_revision = self._revision
+            if instance_id is None:
+                results = self._coordinator.inspect_instances(
                     run_health_check=run_health_check,
                     capture_preview=capture_preview,
                 )
-            ]
-        self._last_inspection_results = list(results)
-        self._ensure_revision_changed(before_revision)
-        return list(results)
+            else:
+                results = [
+                    self._coordinator.inspect_instance(
+                        instance_id,
+                        run_health_check=run_health_check,
+                        capture_preview=capture_preview,
+                    )
+                ]
+            self._last_inspection_results = list(results)
+            self._ensure_revision_changed(before_revision)
+            self._publish_live_state_locked()
+            return list(results)
 
     def get_runtime_context(self, instance_id: str) -> InstanceRuntimeContext | None:
-        return self._coordinator.get_runtime_context(instance_id)
+        with self._operation_lock:
+            return self._coordinator.get_runtime_context(instance_id)
 
     def list_runtime_contexts(self) -> list[InstanceRuntimeContext]:
-        return self._coordinator.list_runtime_contexts()
+        with self._operation_lock:
+            return self._coordinator.list_runtime_contexts()
 
     def list_queue_items(self, instance_id: str | None = None) -> list[QueuedTask]:
-        return self._coordinator.queue.list_items(instance_id=instance_id)
+        with self._operation_lock:
+            return self._coordinator.queue.list_items(instance_id=instance_id)
 
     def get_instance_snapshot(self, instance_id: str) -> LiveRuntimeInstanceSnapshot | None:
         return self.snapshot(instance_id=instance_id).get_instance_snapshot(instance_id)
@@ -362,41 +486,453 @@ class LiveRuntimeSession:
         *,
         force_refresh: bool = False,
     ) -> LiveRuntimeSnapshot:
-        if (
-            instance_id is None
-            and not force_refresh
-            and self._last_snapshot is not None
-            and self._last_snapshot.revision == self._revision
-        ):
-            return self._last_snapshot
+        with self._operation_lock:
+            if (
+                instance_id is None
+                and not force_refresh
+                and self._last_snapshot is not None
+                and self._last_snapshot.revision == self._revision
+            ):
+                return self._last_snapshot
 
+            instances = self._coordinator.registry.list_instances()
+            contexts = self.list_runtime_contexts()
+            queue_items = self.list_queue_items()
+            if instance_id is not None:
+                instances = [instance for instance in instances if instance.instance_id == instance_id]
+                contexts = [context for context in contexts if context.instance_id == instance_id]
+                queue_items = [item for item in queue_items if item.instance_id == instance_id]
+
+            snapshot = LiveRuntimeSnapshot(
+                captured_at=utc_now(),
+                revision=self._revision,
+                last_sync_at=self._last_sync_at,
+                last_discovery_at=self._last_discovery_at,
+                last_sync_ok=self._last_sync_ok,
+                last_sync_error=self._last_sync_error,
+                last_command_result=self._last_command_result,
+                last_queue_result=self._last_queue_result,
+                last_inspection_results=self._filter_inspection_results(instance_id=instance_id),
+                instance_snapshots=self._build_instance_snapshots(instances, contexts, queue_items),
+                instances=instances,
+                contexts=contexts,
+                queue_items=queue_items,
+                recent_events=self._list_recent_events(instance_id=instance_id),
+            )
+            if instance_id is None:
+                self._last_snapshot = snapshot
+            return snapshot
+
+    def get_live_state(self, instance_id: str | None = None) -> LiveRuntimeState:
+        with self._state_lock:
+            cached = self._live_state_cache
+        if cached is None:
+            with self._operation_lock:
+                self._publish_live_state_locked()
+            with self._state_lock:
+                cached = self._live_state_cache
+        if cached is None:
+            return LiveRuntimeState(refresh_state=self.refresh_state)
+        if instance_id is None:
+            return cached
+        return replace(
+            cached,
+            captured_at=utc_now(),
+            selected_instance=cached.get_instance(instance_id),
+        )
+
+    def list_instance_summaries(self) -> list[LiveRuntimeInstanceSummary]:
+        return list(self.get_live_state().instances)
+
+    def get_instance_summary(self, instance_id: str) -> LiveRuntimeInstanceSummary | None:
+        return self.get_live_state(instance_id=instance_id).selected_instance
+
+    def connect_instance(
+        self,
+        instance: InstanceState,
+        *,
+        refresh_runtime: bool = False,
+        run_health_check: bool = True,
+        capture_preview: bool = False,
+    ) -> LiveRuntimeInstanceSummary | None:
+        with self._operation_lock:
+            merged = self._merge_instance_states_locked(instance)
+            self.sync_instances(merged)
+            if refresh_runtime and self._last_sync_ok:
+                self.refresh_runtime_contexts(
+                    instance_id=instance.instance_id,
+                    run_health_check=run_health_check,
+                    capture_preview=capture_preview,
+                )
+        return self.get_instance_summary(instance.instance_id)
+
+    def disconnect_instance(
+        self,
+        instance_id: str,
+        *,
+        reason: str = "",
+    ) -> LiveRuntimeInstanceSummary | None:
+        with self._operation_lock:
+            instance = self._coordinator.registry.get(instance_id)
+            if instance is None:
+                raise KeyError(f"Unknown instance_id: {instance_id}")
+            metadata = dict(instance.metadata)
+            if reason:
+                metadata["disconnect_reason"] = reason
+            merged = self._merge_instance_states_locked(
+                replace(
+                    instance,
+                    status=InstanceStatus.DISCONNECTED,
+                    metadata=metadata,
+                )
+            )
+            self.sync_instances(merged)
+        return self.get_instance_summary(instance_id)
+
+    def reconnect_instance(
+        self,
+        instance_id: str,
+        *,
+        rediscover: bool = True,
+        refresh_runtime: bool = False,
+        run_health_check: bool = True,
+        capture_preview: bool = False,
+    ) -> LiveRuntimeInstanceSummary | None:
+        with self._operation_lock:
+            instance = self._coordinator.registry.get(instance_id)
+            if instance is None:
+                raise KeyError(f"Unknown instance_id: {instance_id}")
+            metadata = dict(instance.metadata)
+            metadata["reconnect_requested_at"] = utc_now()
+            merged = self._merge_instance_states_locked(
+                replace(
+                    instance,
+                    status=InstanceStatus.CONNECTING,
+                    metadata=metadata,
+                )
+            )
+            self.sync_instances(merged)
+            if rediscover:
+                self.rediscover_instances(
+                    instance_id=instance_id,
+                    refresh_runtime=refresh_runtime,
+                    run_health_check=run_health_check,
+                    capture_preview=capture_preview,
+                )
+            elif refresh_runtime and self._last_sync_ok:
+                self.refresh_runtime_contexts(
+                    instance_id=instance_id,
+                    run_health_check=run_health_check,
+                    capture_preview=capture_preview,
+                )
+        return self.get_instance_summary(instance_id)
+
+    def rediscover_instances(
+        self,
+        *,
+        instance_id: str | None = None,
+        refresh_runtime: bool = False,
+        run_health_check: bool = True,
+        capture_preview: bool = False,
+    ) -> list[LiveRuntimeInstanceSummary]:
+        with self._operation_lock:
+            self.sync_instances()
+            if (
+                refresh_runtime
+                and self._last_sync_ok
+                and (instance_id is None or self._coordinator.registry.get(instance_id) is not None)
+            ):
+                self.refresh_runtime_contexts(
+                    instance_id=instance_id,
+                    run_health_check=run_health_check,
+                    capture_preview=capture_preview,
+                )
+        return self.list_instance_summaries()
+
+    def schedule_runtime_refresh(
+        self,
+        instance_id: str | None = None,
+        *,
+        run_health_check: bool = True,
+        capture_preview: bool = False,
+    ) -> LiveRuntimeRefreshState:
+        return self._schedule_refresh(
+            _ScheduledRefreshRequest(
+                operation="runtime_refresh",
+                instance_id=instance_id,
+                refresh_runtime=True,
+                run_health_check=run_health_check,
+                capture_preview=capture_preview,
+            )
+        )
+
+    def schedule_rediscover(
+        self,
+        *,
+        instance_id: str | None = None,
+        refresh_runtime: bool = False,
+        run_health_check: bool = True,
+        capture_preview: bool = False,
+    ) -> LiveRuntimeRefreshState:
+        return self._schedule_refresh(
+            _ScheduledRefreshRequest(
+                operation="rediscover",
+                instance_id=instance_id,
+                rediscover=True,
+                refresh_runtime=refresh_runtime,
+                run_health_check=run_health_check,
+                capture_preview=capture_preview,
+            )
+        )
+
+    def schedule_sync(self) -> LiveRuntimeRefreshState:
+        return self.schedule_rediscover(refresh_runtime=False)
+
+    def wait_for_background_idle(self, timeout_sec: float = 5.0) -> bool:
+        timeout_sec = max(0.0, float(timeout_sec))
+        end_monotonic = None
+        if timeout_sec > 0.0:
+            end_monotonic = time.monotonic() + timeout_sec
+        with self._background_condition:
+            while True:
+                if self._background_request is None and not self._background_in_flight:
+                    return True
+                if end_monotonic is None:
+                    return False
+                remaining = end_monotonic - time.monotonic()
+                if remaining <= 0:
+                    return False
+                self._background_condition.wait(timeout=remaining)
+
+    def _schedule_refresh(self, request: _ScheduledRefreshRequest) -> LiveRuntimeRefreshState:
+        self._ensure_background_worker()
+        scheduled_at = utc_now()
+        with self._background_condition:
+            self._background_request = request
+            self._background_condition.notify_all()
+        self._set_refresh_state(
+            replace(
+                self.refresh_state,
+                operation=request.operation,
+                instance_id=request.instance_id or "",
+                rediscover=request.rediscover,
+                refresh_runtime=request.refresh_runtime,
+                run_health_check=request.run_health_check,
+                capture_preview=request.capture_preview,
+                pending=True,
+                last_requested_at=scheduled_at,
+                last_error="",
+            )
+        )
+        return self.refresh_state
+
+    def _ensure_background_worker(self) -> None:
+        with self._background_condition:
+            if self._background_worker is not None and self._background_worker.is_alive():
+                return
+            self._background_shutdown = False
+            self._background_worker = threading.Thread(
+                target=self._background_worker_loop,
+                name="roxauto-live-runtime-refresh",
+                daemon=True,
+            )
+            self._background_worker.start()
+
+    def _background_worker_loop(self) -> None:
+        while True:
+            with self._background_condition:
+                while not self._background_shutdown and self._background_request is None:
+                    self._background_condition.wait()
+                if self._background_shutdown:
+                    self._background_condition.notify_all()
+                    return
+                request = self._background_request
+                self._background_request = None
+                self._background_in_flight = True
+
+            self._set_refresh_state(
+                replace(
+                    self.refresh_state,
+                    operation=request.operation,
+                    instance_id=request.instance_id or "",
+                    rediscover=request.rediscover,
+                    refresh_runtime=request.refresh_runtime,
+                    run_health_check=request.run_health_check,
+                    capture_preview=request.capture_preview,
+                    in_flight=True,
+                    pending=False,
+                    last_started_at=utc_now(),
+                    last_error="",
+                )
+            )
+
+            error = ""
+            try:
+                if request.rediscover:
+                    self.rediscover_instances(
+                        instance_id=request.instance_id,
+                        refresh_runtime=request.refresh_runtime,
+                        run_health_check=request.run_health_check,
+                        capture_preview=request.capture_preview,
+                    )
+                elif request.refresh_runtime:
+                    with self._operation_lock:
+                        if self._coordinator.registry.get(request.instance_id or "") is None and request.instance_id:
+                            raise KeyError(f"Unknown instance_id: {request.instance_id}")
+                    self.refresh_runtime_contexts(
+                        instance_id=request.instance_id,
+                        run_health_check=request.run_health_check,
+                        capture_preview=request.capture_preview,
+                    )
+                else:
+                    self.sync_instances()
+                if request.rediscover and not self._last_sync_ok:
+                    error = self._last_sync_error
+            except Exception as exc:
+                error = str(exc)
+
+            with self._background_condition:
+                has_pending = self._background_request is not None
+                self._background_in_flight = has_pending
+                self._background_condition.notify_all()
+            self._set_refresh_state(
+                replace(
+                    self.refresh_state,
+                    in_flight=False,
+                    pending=has_pending,
+                    last_finished_at=utc_now(),
+                    last_error=error,
+                    last_completed_revision=self._revision,
+                )
+            )
+            with self._background_condition:
+                self._background_condition.notify_all()
+
+    def _set_refresh_state(self, state: LiveRuntimeRefreshState) -> None:
+        with self._state_lock:
+            self._refresh_state = state
+            if self._live_state_cache is not None:
+                self._live_state_cache = replace(
+                    self._live_state_cache,
+                    captured_at=utc_now(),
+                    refresh_state=state,
+                )
+
+    def _publish_live_state_locked(self) -> LiveRuntimeState:
         instances = self._coordinator.registry.list_instances()
-        contexts = self.list_runtime_contexts()
-        queue_items = self.list_queue_items()
-        if instance_id is not None:
-            instances = [instance for instance in instances if instance.instance_id == instance_id]
-            contexts = [context for context in contexts if context.instance_id == instance_id]
-            queue_items = [item for item in queue_items if item.instance_id == instance_id]
-
-        snapshot = LiveRuntimeSnapshot(
+        status_counts = {
+            InstanceStatus.READY.value: 0,
+            InstanceStatus.BUSY.value: 0,
+            InstanceStatus.PAUSED.value: 0,
+            InstanceStatus.ERROR.value: 0,
+            InstanceStatus.DISCONNECTED.value: 0,
+        }
+        summaries: list[LiveRuntimeInstanceSummary] = []
+        queued_count = 0
+        failure_count = 0
+        for instance in instances:
+            context = self._coordinator.get_runtime_context(instance.instance_id)
+            if context is None:
+                context = self._coordinator._sync_context_for_instance(instance)
+            status_value = instance.status.value
+            if status_value in status_counts:
+                status_counts[status_value] += 1
+            summary = self._build_instance_summary(instance, context)
+            summaries.append(summary)
+            queued_count += summary.queue_depth
+            if summary.failure_snapshot_id:
+                failure_count += 1
+        queue_message = self._last_queue_result.message if self._last_queue_result is not None else ""
+        state = LiveRuntimeState(
             captured_at=utc_now(),
             revision=self._revision,
+            refresh_state=self.refresh_state,
             last_sync_at=self._last_sync_at,
             last_discovery_at=self._last_discovery_at,
             last_sync_ok=self._last_sync_ok,
             last_sync_error=self._last_sync_error,
-            last_command_result=self._last_command_result,
-            last_queue_result=self._last_queue_result,
-            last_inspection_results=self._filter_inspection_results(instance_id=instance_id),
-            instance_snapshots=self._build_instance_snapshots(instances, contexts, queue_items),
-            instances=instances,
-            contexts=contexts,
-            queue_items=queue_items,
-            recent_events=self._list_recent_events(instance_id=instance_id),
+            instance_count=len(summaries),
+            ready_count=status_counts[InstanceStatus.READY.value],
+            busy_count=status_counts[InstanceStatus.BUSY.value],
+            paused_count=status_counts[InstanceStatus.PAUSED.value],
+            error_count=status_counts[InstanceStatus.ERROR.value],
+            disconnected_count=status_counts[InstanceStatus.DISCONNECTED.value],
+            queued_count=queued_count,
+            failure_count=failure_count,
+            last_command_type=self._last_command_result.command_type.value if self._last_command_result is not None else "",
+            last_command_status=self._last_command_result.status.value if self._last_command_result is not None else "",
+            last_queue_instance_id=self._last_queue_result.instance_id if self._last_queue_result is not None else "",
+            last_queue_message=queue_message,
+            instances=tuple(summaries),
         )
-        if instance_id is None:
-            self._last_snapshot = snapshot
-        return snapshot
+        with self._state_lock:
+            self._live_state_cache = state
+        return state
+
+    def _build_instance_summary(
+        self,
+        instance: InstanceState,
+        context: InstanceRuntimeContext | None,
+    ) -> LiveRuntimeInstanceSummary:
+        profile_id = ""
+        profile_display_name = ""
+        preview_image_path = ""
+        failure_snapshot_id = ""
+        failure_reason = ""
+        queue_depth = 0
+        active_task_id = ""
+        active_run_id = ""
+        stop_requested = False
+        health_check_ok = None
+        if context is not None:
+            queue_depth = context.queue_depth
+            active_task_id = context.active_task_id or ""
+            active_run_id = context.active_run_id or ""
+            stop_requested = context.stop_requested
+            health_check_ok = context.health_check_ok
+            if context.profile_binding is not None:
+                profile_id = context.profile_binding.profile_id
+                profile_display_name = context.profile_binding.display_name
+            if context.preview_frame is not None:
+                preview_image_path = context.preview_frame.image_path
+            if context.failure_snapshot is not None:
+                failure_snapshot_id = context.failure_snapshot.snapshot_id
+                failure_reason = context.failure_snapshot.reason.value
+        return LiveRuntimeInstanceSummary(
+            instance_id=instance.instance_id,
+            label=instance.label,
+            adb_serial=instance.adb_serial,
+            status=instance.status.value,
+            last_seen_at=instance.last_seen_at,
+            queue_depth=queue_depth,
+            active_task_id=active_task_id,
+            active_run_id=active_run_id,
+            stop_requested=stop_requested,
+            health_check_ok=health_check_ok,
+            profile_id=profile_id,
+            profile_display_name=profile_display_name,
+            preview_image_path=preview_image_path,
+            failure_snapshot_id=failure_snapshot_id,
+            failure_reason=failure_reason,
+        )
+
+    def _merge_instance_states_locked(self, updated: InstanceState) -> list[InstanceState]:
+        merged: list[InstanceState] = []
+        replaced_existing = False
+        for existing in self._coordinator.registry.list_instances():
+            if existing.instance_id == updated.instance_id:
+                merged.append(updated)
+                replaced_existing = True
+            else:
+                merged.append(
+                    replace(
+                        existing,
+                        metadata=dict(existing.metadata),
+                    )
+                )
+        if not replaced_existing:
+            merged.append(updated)
+        return merged
 
     def _auto_bind_profiles(self, states: list[InstanceState]) -> None:
         if self._profile_resolver is None:

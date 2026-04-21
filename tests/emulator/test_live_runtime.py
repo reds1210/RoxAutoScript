@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import threading
+import time
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -47,6 +49,19 @@ class FakeAdapter:
     def health_check(self, instance: InstanceState) -> bool:
         self.health_checks += 1
         return self.healthy
+
+
+class BlockingAdapter(FakeAdapter):
+    def __init__(self, healthy: bool = True) -> None:
+        super().__init__(healthy=healthy)
+        self.health_check_started = threading.Event()
+        self.release_health_check = threading.Event()
+
+    def health_check(self, instance: InstanceState) -> bool:
+        self.health_check_started.set()
+        if not self.release_health_check.wait(timeout=5.0):
+            raise TimeoutError("background health check did not release")
+        return super().health_check(instance)
 
 
 class RecordingTransport:
@@ -168,6 +183,73 @@ class LiveRuntimeSessionTests(unittest.TestCase):
         self.assertEqual(context.metadata["last_health_check_step_id"], "step-a")
         self.assertEqual(context.metadata["last_preview_step_id"], "step-a")
 
+    def test_schedule_runtime_refresh_updates_live_state_without_blocking_ui_reads(self) -> None:
+        adapter = BlockingAdapter(healthy=True)
+        session = LiveRuntimeSession(adapter, discovery=lambda: [self.instance])
+        session.sync_instances()
+
+        scheduled = session.schedule_runtime_refresh(instance_id="mumu-0", capture_preview=True)
+
+        self.assertTrue(scheduled.pending or scheduled.in_flight)
+        self.assertTrue(adapter.health_check_started.wait(timeout=1.0))
+
+        started = time.monotonic()
+        live_state = session.get_live_state(instance_id="mumu-0")
+        elapsed = time.monotonic() - started
+
+        self.assertLess(elapsed, 0.2)
+        self.assertIsNotNone(live_state.selected_instance)
+        self.assertIn(live_state.refresh_state.operation, {"runtime_refresh", "idle"})
+        self.assertTrue(live_state.refresh_state.pending or live_state.refresh_state.in_flight)
+
+        adapter.release_health_check.set()
+
+        self.assertTrue(session.wait_for_background_idle(timeout_sec=2.0))
+        final_state = session.get_live_state(instance_id="mumu-0")
+
+        self.assertFalse(final_state.refresh_state.in_flight)
+        self.assertFalse(final_state.refresh_state.pending)
+        self.assertEqual(final_state.selected_instance.instance_id, "mumu-0")
+        self.assertTrue(final_state.selected_instance.health_check_ok)
+        self.assertEqual(final_state.selected_instance.preview_image_path, str(Path("captures") / "mumu-0.png"))
+        self.assertEqual(adapter.health_checks, 1)
+        self.assertEqual(adapter.screenshot_requests, 1)
+
+    def test_connect_disconnect_reconnect_and_rediscover_surfaces_update_live_state(self) -> None:
+        adapter = FakeAdapter(healthy=True)
+        discovered: dict[str, list[InstanceState]] = {"states": []}
+        session = LiveRuntimeSession(adapter, discovery=lambda: list(discovered["states"]))
+
+        connected = session.connect_instance(self.instance)
+        self.assertIsNotNone(connected)
+        self.assertEqual(connected.status, "ready")
+        self.assertEqual(session.get_live_state().instance_count, 1)
+
+        disconnected = session.disconnect_instance("mumu-0", reason="operator requested")
+        self.assertIsNotNone(disconnected)
+        self.assertEqual(disconnected.status, "disconnected")
+        self.assertEqual(session.get_live_state(instance_id="mumu-0").selected_instance.status, "disconnected")
+
+        reconnecting = session.reconnect_instance("mumu-0", rediscover=False)
+        self.assertIsNotNone(reconnecting)
+        self.assertEqual(reconnecting.status, "connecting")
+
+        discovered["states"] = [
+            InstanceState(
+                instance_id="mumu-0",
+                label="MuMu 0",
+                adb_serial="127.0.0.1:16384",
+                status=InstanceStatus.READY,
+            )
+        ]
+        summaries = session.rediscover_instances()
+        refreshed = session.get_instance_summary("mumu-0")
+
+        self.assertEqual(len(summaries), 1)
+        self.assertIsNotNone(refreshed)
+        self.assertEqual(refreshed.status, "ready")
+        self.assertEqual(session.get_live_state().disconnected_count, 0)
+
     def test_build_adb_live_runtime_session_wires_production_refresh_preview_and_failure_path(self) -> None:
         transport = RecordingTransport(
             responses=[
@@ -195,6 +277,47 @@ class LiveRuntimeSessionTests(unittest.TestCase):
             self.assertIsNotNone(context.failure_snapshot)
             self.assertEqual(context.failure_snapshot.task_id, "runtime.health_check")
             self.assertEqual(Path(context.preview_frame.image_path).suffix, ".png")
+            self.assertEqual(
+                [call["args"] for call in transport.calls],
+                [
+                    ("get-state",),
+                    ("shell", "echo", "health_check"),
+                    ("exec-out", "screencap", "-p"),
+                ],
+            )
+
+    def test_build_adb_live_runtime_session_supports_background_rediscover_for_gui_state(self) -> None:
+        transport = RecordingTransport(
+            responses=[
+                _result(self.instance.adb_serial, ("get-state",), stdout="device\n"),
+                _result(self.instance.adb_serial, ("shell", "echo", "health_check"), stdout="health_check\n"),
+                _result(self.instance.adb_serial, ("exec-out", "screencap", "-p"), stdout=b"png-bytes"),
+            ]
+        )
+        with TemporaryDirectory() as temp_dir:
+            session = build_adb_live_runtime_session(
+                transport=transport,
+                screenshot_dir=Path(temp_dir),
+                discovery=lambda: [self.instance],
+            )
+
+            scheduled = session.schedule_rediscover(
+                instance_id="mumu-0",
+                refresh_runtime=True,
+                capture_preview=True,
+            )
+
+            self.assertTrue(scheduled.pending or scheduled.in_flight)
+            self.assertTrue(session.wait_for_background_idle(timeout_sec=2.0))
+
+            live_state = session.get_live_state(instance_id="mumu-0")
+
+            self.assertEqual(live_state.instance_count, 1)
+            self.assertTrue(live_state.last_sync_ok)
+            self.assertFalse(live_state.refresh_state.in_flight)
+            self.assertEqual(live_state.selected_instance.instance_id, "mumu-0")
+            self.assertTrue(live_state.selected_instance.health_check_ok)
+            self.assertTrue(live_state.selected_instance.preview_image_path.endswith(".png"))
             self.assertEqual(
                 [call["args"] for call in transport.calls],
                 [
