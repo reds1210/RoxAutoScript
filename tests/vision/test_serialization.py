@@ -5,6 +5,9 @@ from datetime import datetime, timezone
 
 import tests._bootstrap  # noqa: F401
 from roxauto.vision import (
+    AnchorCurationProfile,
+    AnchorCurationReference,
+    AnchorCurationStatus,
     CalibrationOverrideResolution,
     CalibrationProfile,
     CaptureArtifact,
@@ -25,6 +28,32 @@ from roxauto.core.models import VisionMatch
 
 
 class VisionSerializationTests(unittest.TestCase):
+    def test_anchor_curation_profile_roundtrip(self) -> None:
+        profile = AnchorCurationProfile(
+            status=AnchorCurationStatus.PLANNED,
+            intent_id="claim_rewards_reward_panel",
+            scene_id="reward_panel_open",
+            variant_id="tw_baseline",
+            notes="Need a live reward panel capture.",
+            references=[
+                AnchorCurationReference(
+                    reference_id="capture-plan-1",
+                    image_path="captures/claim_rewards/reward_panel_open__tw_baseline.png",
+                    kind="planned_capture",
+                    notes="Capture after deterministic panel entry.",
+                )
+            ],
+            metadata={"task_id": "daily_ui.claim_rewards"},
+        )
+
+        restored = AnchorCurationProfile.from_dict(profile.to_dict())
+
+        self.assertEqual(restored.status, profile.status)
+        self.assertEqual(restored.scene_id, profile.scene_id)
+        self.assertEqual(restored.reference_count, 1)
+        self.assertEqual(restored.references[0].kind, "planned_capture")
+        self.assertEqual(restored.to_dict(), profile.to_dict())
+
     def test_calibration_profile_roundtrip(self) -> None:
         profile = CalibrationProfile(
             profile_id="profile-1",

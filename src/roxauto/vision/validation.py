@@ -8,6 +8,7 @@ from re import compile
 from typing import Any, Self
 
 from roxauto.core.serde import to_primitive
+from roxauto.vision.models import AnchorCurationProfile, AnchorCurationStatus
 from roxauto.vision.repository import AnchorRepository
 
 _ASSET_NAME_PATTERN = compile(r"^[a-z0-9_]+$")
@@ -153,6 +154,9 @@ class TemplateDependencyReadiness:
     source_path: str = ""
     resolved_template_path: str = ""
     inventory_mismatch: bool = False
+    curation_status: AnchorCurationStatus | None = None
+    curation_reference_count: int = 0
+    curation_summary: str = ""
     issue_codes: list[str] = field(default_factory=list)
     message: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -167,6 +171,13 @@ class TemplateDependencyReadiness:
             readiness_status = raw_status
         else:
             readiness_status = TemplateReadinessStatus(str(raw_status))
+        raw_curation_status = data.get("curation_status")
+        if isinstance(raw_curation_status, AnchorCurationStatus):
+            curation_status = raw_curation_status
+        elif raw_curation_status:
+            curation_status = AnchorCurationStatus(str(raw_curation_status))
+        else:
+            curation_status = None
         return cls(
             asset_id=str(data.get("asset_id", "")),
             task_id=str(data.get("task_id", "")),
@@ -180,6 +191,9 @@ class TemplateDependencyReadiness:
             source_path=str(data.get("source_path", "")),
             resolved_template_path=str(data.get("resolved_template_path", "")),
             inventory_mismatch=bool(data.get("inventory_mismatch", False)),
+            curation_status=curation_status,
+            curation_reference_count=int(data.get("curation_reference_count", 0)),
+            curation_summary=str(data.get("curation_summary", "")),
             issue_codes=[str(code) for code in data.get("issue_codes", [])],
             message=str(data.get("message", "")),
             metadata=dict(data.get("metadata", {})),
@@ -402,6 +416,7 @@ def validate_template_repository(
                 )
 
         issues.extend(_validate_template_path(repository_root, anchor.anchor_id, anchor.template_path))
+        issues.extend(_validate_anchor_curation(repository, anchor))
 
     issues.extend(_validate_task_support_contract(repository))
 
@@ -539,12 +554,14 @@ def build_vision_workspace_readiness_report(
         issue_codes = list(anchor_issue_codes.get(anchor_id, []))
         resolved_template_path = ""
         asset_exists = False
+        curation = None
 
         if repository is not None and anchor_present:
             anchor = repository.get_anchor(anchor_id)
             resolved_template_path = str(repository.resolve_asset_path(anchor_id))
             asset_exists = Path(resolved_template_path).exists()
             metadata.setdefault("placeholder", bool(anchor.metadata.get("placeholder", False)))
+            curation = repository.get_anchor_curation(anchor_id)
 
         readiness_status, message = _resolve_template_readiness_status(
             repository_present=repository_present,
@@ -553,6 +570,7 @@ def build_vision_workspace_readiness_report(
             inventory_status=inventory_status,
             issue_codes=issue_codes,
             placeholder=bool(metadata.get("placeholder", False)),
+            curation_status=curation.status if curation is not None else None,
         )
 
         expected_source_path = ""
@@ -560,6 +578,12 @@ def build_vision_workspace_readiness_report(
             expected_source_path = f"assets/templates/{pack_id}/manifest.json#{anchor_id}"
         inventory_mismatch = bool(expected_source_path and source_path != expected_source_path)
         if inventory_status == "missing" and anchor_present and asset_exists:
+            inventory_mismatch = True
+        if (
+            curation is not None
+            and curation.status == AnchorCurationStatus.CURATED
+            and inventory_status == "placeholder"
+        ):
             inventory_mismatch = True
 
         template_dependencies.append(
@@ -576,6 +600,9 @@ def build_vision_workspace_readiness_report(
                 source_path=source_path,
                 resolved_template_path=resolved_template_path,
                 inventory_mismatch=inventory_mismatch,
+                curation_status=curation.status if curation is not None else None,
+                curation_reference_count=curation.reference_count if curation is not None else 0,
+                curation_summary=_curation_summary(curation),
                 issue_codes=issue_codes,
                 message=message,
                 metadata={
@@ -598,6 +625,201 @@ def build_vision_workspace_readiness_report(
             "inventory_version": str(document.get("version", "")),
         },
     )
+
+
+def _validate_anchor_curation(
+    repository: AnchorRepository,
+    anchor: Any,
+) -> list[TemplateValidationIssue]:
+    metadata = dict(anchor.metadata)
+    curation = AnchorCurationProfile.from_metadata(metadata)
+    task_ids = set(_anchor_task_ids(metadata))
+    if "daily_ui.claim_rewards" not in task_ids and curation is None:
+        return []
+
+    issues: list[TemplateValidationIssue] = []
+    if "daily_ui.claim_rewards" in task_ids and curation is None:
+        issues.append(
+            TemplateValidationIssue(
+                code="missing_anchor_curation_metadata",
+                severity=TemplateValidationSeverity.ERROR,
+                message=(
+                    f"Anchor '{anchor.anchor_id}' must define metadata.curation for "
+                    "'daily_ui.claim_rewards' template curation."
+                ),
+                anchor_id=anchor.anchor_id,
+                path=str(repository.manifest_path),
+                metadata={"task_id": "daily_ui.claim_rewards"},
+            )
+        )
+        return issues
+
+    if curation is None:
+        return issues
+
+    for field_name in ("intent_id", "scene_id", "variant_id"):
+        if getattr(curation, field_name):
+            continue
+        issues.append(
+            TemplateValidationIssue(
+                code="missing_anchor_curation_field",
+                severity=TemplateValidationSeverity.ERROR,
+                message=(
+                    f"Anchor '{anchor.anchor_id}' must define metadata.curation.{field_name} "
+                    "for deterministic curation tracking."
+                ),
+                anchor_id=anchor.anchor_id,
+                path=str(repository.manifest_path),
+                metadata={"field": field_name},
+            )
+        )
+
+    if curation.status == AnchorCurationStatus.CURATED:
+        if bool(metadata.get("placeholder", False)):
+            issues.append(
+                TemplateValidationIssue(
+                    code="curated_anchor_marked_placeholder",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=(
+                        f"Anchor '{anchor.anchor_id}' cannot stay marked as placeholder "
+                        "after curation status becomes curated."
+                    ),
+                    anchor_id=anchor.anchor_id,
+                    path=str(repository.manifest_path),
+                )
+            )
+        if curation.reference_count == 0:
+            issues.append(
+                TemplateValidationIssue(
+                    code="curated_anchor_missing_references",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=(
+                        f"Anchor '{anchor.anchor_id}' must include at least one "
+                        "metadata.curation.references entry once curated."
+                    ),
+                    anchor_id=anchor.anchor_id,
+                    path=str(repository.manifest_path),
+                )
+            )
+        if Path(anchor.template_path).suffix.lower() not in {".png", ".jpg", ".jpeg", ".webp", ".bmp"}:
+            issues.append(
+                TemplateValidationIssue(
+                    code="curated_anchor_requires_raster_template",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=(
+                        f"Anchor '{anchor.anchor_id}' must use a raster template asset "
+                        "when curation status is curated."
+                    ),
+                    anchor_id=anchor.anchor_id,
+                    path=anchor.template_path,
+                )
+            )
+    elif not bool(metadata.get("placeholder", False)):
+        issues.append(
+            TemplateValidationIssue(
+                code="non_curated_anchor_missing_placeholder_flag",
+                severity=TemplateValidationSeverity.WARNING,
+                message=(
+                    f"Anchor '{anchor.anchor_id}' is not curated yet and should keep "
+                    "metadata.placeholder=true until live captures are promoted."
+                ),
+                anchor_id=anchor.anchor_id,
+                path=str(repository.manifest_path),
+            )
+        )
+
+    for reference in curation.references:
+        issues.extend(_validate_curation_reference_path(repository.root.resolve(), anchor.anchor_id, reference))
+
+    return issues
+
+
+def _validate_curation_reference_path(
+    repository_root: Path,
+    anchor_id: str,
+    reference: Any,
+) -> list[TemplateValidationIssue]:
+    issues: list[TemplateValidationIssue] = []
+    reference_id = str(getattr(reference, "reference_id", "") or "")
+    image_path = str(getattr(reference, "image_path", "") or "")
+    if not image_path:
+        issues.append(
+            TemplateValidationIssue(
+                code="empty_curation_reference_path",
+                severity=TemplateValidationSeverity.ERROR,
+                message=(
+                    f"Anchor '{anchor_id}' has a curation reference"
+                    + (f" '{reference_id}'" if reference_id else "")
+                    + " without image_path."
+                ),
+                anchor_id=anchor_id,
+            )
+        )
+        return issues
+
+    candidate_path = Path(image_path)
+    if candidate_path.is_absolute():
+        issues.append(
+            TemplateValidationIssue(
+                code="absolute_curation_reference_path",
+                severity=TemplateValidationSeverity.ERROR,
+                message=(
+                    f"Anchor '{anchor_id}' must keep curation reference paths "
+                    "relative to the repository root."
+                ),
+                anchor_id=anchor_id,
+                path=image_path,
+            )
+        )
+        return issues
+
+    if ".." in candidate_path.parts:
+        issues.append(
+            TemplateValidationIssue(
+                code="curation_reference_path_outside_repository",
+                severity=TemplateValidationSeverity.ERROR,
+                message=(
+                    f"Anchor '{anchor_id}' cannot resolve a curation reference "
+                    "outside the repository root."
+                ),
+                anchor_id=anchor_id,
+                path=image_path,
+            )
+        )
+        return issues
+
+    resolved_path = (repository_root / candidate_path).resolve()
+    try:
+        resolved_path.relative_to(repository_root)
+    except ValueError:
+        issues.append(
+            TemplateValidationIssue(
+                code="curation_reference_path_outside_repository",
+                severity=TemplateValidationSeverity.ERROR,
+                message=(
+                    f"Anchor '{anchor_id}' cannot resolve a curation reference "
+                    "outside the repository root."
+                ),
+                anchor_id=anchor_id,
+                path=str(resolved_path),
+            )
+        )
+        return issues
+
+    if not resolved_path.exists():
+        issues.append(
+            TemplateValidationIssue(
+                code="missing_curation_reference_asset",
+                severity=TemplateValidationSeverity.ERROR,
+                message=(
+                    f"Anchor '{anchor_id}' points to a missing curation reference image."
+                ),
+                anchor_id=anchor_id,
+                path=str(resolved_path),
+            )
+        )
+
+    return issues
 
 
 def _validate_template_path(
@@ -802,6 +1024,20 @@ def _anchor_task_ids(metadata: dict[str, Any]) -> list[str]:
     return task_ids
 
 
+def _curation_summary(curation: AnchorCurationProfile | None) -> str:
+    if curation is None:
+        return ""
+    parts = [curation.status.value]
+    if curation.scene_id:
+        parts.append(f"scene={curation.scene_id}")
+    if curation.variant_id:
+        parts.append(f"variant={curation.variant_id}")
+    parts.append(f"refs={curation.reference_count}")
+    if curation.intent_id:
+        parts.append(f"intent={curation.intent_id}")
+    return " | ".join(parts)
+
+
 def _resolve_template_readiness_status(
     *,
     repository_present: bool,
@@ -810,6 +1046,7 @@ def _resolve_template_readiness_status(
     inventory_status: str,
     issue_codes: list[str],
     placeholder: bool,
+    curation_status: AnchorCurationStatus | None,
 ) -> tuple[TemplateReadinessStatus, str]:
     if not repository_present:
         return (
@@ -830,6 +1067,11 @@ def _resolve_template_readiness_status(
         return (
             TemplateReadinessStatus.INVALID,
             "Anchor is present but has validation issues that should be resolved before consumption.",
+        )
+    if curation_status == AnchorCurationStatus.CURATED and not placeholder:
+        return (
+            TemplateReadinessStatus.READY,
+            "Template dependency is curated and resolves without validation errors.",
         )
     if placeholder or inventory_status == "placeholder":
         return (

@@ -17,6 +17,7 @@ from roxauto.vision import (
     RecordingAction,
     RecordingActionType,
     ReplayScript,
+    TemplateReadinessStatus,
     build_anchor_inspector,
     build_capture_inspector,
     build_failure_inspection,
@@ -54,7 +55,15 @@ class VisionToolingTests(unittest.TestCase):
         self.assertEqual(len(workspace.repositories), 3)
         self.assertTrue(all(entry.is_valid for entry in workspace.repositories))
         self.assertEqual(workspace.repository_count, 3)
-        self.assertEqual(workspace.readiness.inventory_mismatch_count, 0)
+        self.assertEqual(workspace.readiness.inventory_mismatch_count, 1)
+        claim_dependency = next(
+            dependency
+            for dependency in workspace.readiness.template_dependencies
+            if dependency.anchor_id == "daily_ui.claim_reward"
+        )
+        self.assertEqual(claim_dependency.readiness_status, TemplateReadinessStatus.READY)
+        self.assertEqual(claim_dependency.curation_status.value, "curated")
+        self.assertIn("intent=claim_rewards_claim_button", claim_dependency.curation_summary)
 
     def test_build_anchor_inspector_applies_calibration_override_and_validation_issues(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -256,7 +265,7 @@ class VisionToolingTests(unittest.TestCase):
         )
 
         self.assertEqual(tooling.workspace.selected_repository_id, "common")
-        self.assertEqual(tooling.readiness.inventory_mismatch_count, 0)
+        self.assertEqual(tooling.readiness.inventory_mismatch_count, 1)
         self.assertEqual(tooling.anchors.selected_anchor.anchor_id, "common.close_button")
         self.assertIn("threshold=0.95", tooling.anchors.selected_anchor_summary)
         self.assertEqual(tooling.calibration.selected_anchor.effective_confidence_threshold, 0.95)
@@ -276,6 +285,7 @@ class VisionToolingTests(unittest.TestCase):
         self.assertEqual(tooling.match.selected_source_image, "preview://sample")
         self.assertEqual(tooling.match.selected_overlay.kind, InspectionOverlayKind.MATCHED_ANCHOR)
         self.assertIn("Matched close button", tooling.match.failure_explanation)
+        self.assertEqual(tooling.match.curation_summary, "")
         self.assertEqual(tooling.preview.selected_overlay.kind, InspectionOverlayKind.MATCHED_ANCHOR)
         self.assertEqual(tooling.failure.best_candidate.anchor_id, "common.close_button")
         self.assertEqual(tooling.failure.inspection.selected_overlay.kind, InspectionOverlayKind.MATCHED_ANCHOR)
@@ -347,13 +357,33 @@ class VisionToolingTests(unittest.TestCase):
         self.assertEqual(failure.claim_rewards.selected_threshold, 0.92)
         self.assertEqual(failure.claim_rewards.selected_image_path, "captures/reward-preview.png")
         self.assertEqual(failure.claim_rewards.selected_source_image, "captures/reward-preview.png")
+        self.assertEqual(failure.claim_rewards.selected_anchor_label, "Reward Confirm State")
+        self.assertTrue(failure.claim_rewards.selected_template_path.endswith("daily_reward_confirm_state.png"))
+        self.assertTrue(
+            failure.claim_rewards.selected_reference_image_path.endswith(
+                "daily_ui_claim_rewards__confirm_state__baseline__v1.png"
+            )
+        )
         self.assertEqual(failure.claim_rewards.selected_check.anchor_id, "daily_ui.reward_confirm_state")
         self.assertTrue(failure.claim_rewards.selected_check.is_selected)
         self.assertEqual(failure.claim_rewards.selected_check.selected_image_path, "captures/reward-preview.png")
         self.assertEqual(failure.claim_rewards.selected_check.threshold, 0.92)
         self.assertIn("below threshold 0.920", failure.claim_rewards.selected_check.failure_explanation)
-        self.assertIn("Confirm", failure.claim_rewards.selected_check_summary)
+        self.assertEqual(failure.claim_rewards.selected_check.anchor_label, "Reward Confirm State")
+        self.assertTrue(failure.claim_rewards.selected_check.selected_template_path.endswith("daily_reward_confirm_state.png"))
+        self.assertTrue(
+            failure.claim_rewards.selected_check.selected_reference_image_path.endswith(
+                "daily_ui_claim_rewards__confirm_state__baseline__v1.png"
+            )
+        )
+        self.assertEqual(failure.claim_rewards.selected_check.curation_status.value, "curated")
+        self.assertIn("scene=reward_confirm_modal", failure.claim_rewards.selected_check.curation_summary)
+        self.assertIn("threshold=0.920", failure.claim_rewards.selected_check_summary)
+        self.assertIn("image=captures/reward-preview.png", failure.claim_rewards.selected_check_summary)
         self.assertIn("below threshold 0.920", failure.claim_rewards.failure_explanation)
+        self.assertIn("Reward Confirm State (daily_ui.reward_confirm_state)", failure.claim_rewards.failure_explanation)
+        self.assertIn("template=", failure.claim_rewards.failure_explanation)
+        self.assertIn("reference=", failure.claim_rewards.failure_explanation)
         self.assertEqual(failure.best_candidate.anchor_id, "daily_ui.reward_confirm_state")
         self.assertEqual(failure.candidate_count, 1)
         self.assertEqual(failure.focus_check_id, "confirm_state")
@@ -364,6 +394,17 @@ class VisionToolingTests(unittest.TestCase):
         self.assertEqual(failure.selected_source_image, "captures/reward-preview.png")
         self.assertEqual(failure.selected_overlay.kind, InspectionOverlayKind.EXPECTED_ANCHOR)
         self.assertIn("expected:daily_ui.reward_confirm_state", failure.selected_overlay_summary)
+        self.assertEqual(failure.selected_anchor_label, "Reward Confirm State")
+        self.assertTrue(failure.selected_template_path.endswith("daily_reward_confirm_state.png"))
+        self.assertTrue(
+            failure.selected_reference_image_path.endswith(
+                "daily_ui_claim_rewards__confirm_state__baseline__v1.png"
+            )
+        )
+        self.assertEqual(failure.curation_status.value, "curated")
+        self.assertIn("scene=reward_confirm_modal", failure.curation_summary)
         self.assertIn("below threshold 0.920", failure.failure_explanation)
+        self.assertIn("template=", failure.failure_explanation)
+        self.assertIn("reference=", failure.failure_explanation)
         self.assertEqual(failure.inspection.selected_overlay.kind, InspectionOverlayKind.EXPECTED_ANCHOR)
         self.assertEqual(failure.inspection.selected_overlay.metadata["anchor_id"], "daily_ui.reward_confirm_state")

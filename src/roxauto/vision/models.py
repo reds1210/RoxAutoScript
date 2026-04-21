@@ -17,6 +17,12 @@ class MatchStatus(str, Enum):
     MISSED = "missed"
 
 
+class AnchorCurationStatus(str, Enum):
+    PLANNED = "planned"
+    CAPTURED = "captured"
+    CURATED = "curated"
+
+
 class RecordingActionType(str, Enum):
     TAP = "tap"
     SWIPE = "swipe"
@@ -87,6 +93,87 @@ class AnchorSpec:
 
     def resolved_template_path(self, repository_root: Path) -> Path:
         return repository_root / self.template_path
+
+
+@dataclass(slots=True)
+class AnchorCurationReference:
+    reference_id: str
+    image_path: str
+    kind: str = ""
+    notes: str = ""
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return to_primitive(asdict(self))
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        return cls(
+            reference_id=str(data.get("reference_id", "")),
+            image_path=str(data.get("image_path", "")),
+            kind=str(data.get("kind", "")),
+            notes=str(data.get("notes", "")),
+            metadata=dict(data.get("metadata", {})),
+        )
+
+
+@dataclass(slots=True)
+class AnchorCurationProfile:
+    status: AnchorCurationStatus
+    intent_id: str = ""
+    scene_id: str = ""
+    variant_id: str = ""
+    notes: str = ""
+    references: list[AnchorCurationReference] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def reference_count(self) -> int:
+        return len(self.references)
+
+    @property
+    def is_curated(self) -> bool:
+        return self.status == AnchorCurationStatus.CURATED
+
+    def to_dict(self) -> dict[str, Any]:
+        return to_primitive(asdict(self))
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        raw_status = data.get("status", AnchorCurationStatus.PLANNED.value)
+        if isinstance(raw_status, AnchorCurationStatus):
+            status = raw_status
+        else:
+            status = AnchorCurationStatus(str(raw_status))
+        return cls(
+            status=status,
+            intent_id=str(data.get("intent_id", "")),
+            scene_id=str(data.get("scene_id", "")),
+            variant_id=str(data.get("variant_id", "")),
+            notes=str(data.get("notes", "")),
+            references=[
+                AnchorCurationReference.from_dict(entry)
+                for entry in data.get("references", [])
+                if isinstance(entry, dict)
+            ],
+            metadata=dict(data.get("metadata", {})),
+        )
+
+    @classmethod
+    def from_metadata(cls, metadata: dict[str, Any] | None) -> Self | None:
+        if not isinstance(metadata, dict):
+            return None
+        raw_curation = metadata.get("curation")
+        if not isinstance(raw_curation, dict):
+            return None
+        payload = dict(raw_curation)
+        if "status" not in payload:
+            payload["status"] = (
+                AnchorCurationStatus.PLANNED.value
+                if bool(metadata.get("placeholder", False))
+                else AnchorCurationStatus.CAPTURED.value
+            )
+        return cls.from_dict(payload)
 
 
 @dataclass(slots=True)

@@ -8,6 +8,9 @@ from roxauto.core.models import VisionMatch
 from roxauto.core.serde import to_primitive
 from roxauto.core.time import utc_now
 from roxauto.vision.models import (
+    AnchorCurationProfile,
+    AnchorCurationReference,
+    AnchorCurationStatus,
     CalibrationOverrideResolution,
     CalibrationProfile,
     CaptureArtifact,
@@ -55,6 +58,10 @@ class AnchorInspectionRow:
     tags: list[str] = field(default_factory=list)
     override: dict[str, Any] = field(default_factory=dict)
     issue_codes: list[str] = field(default_factory=list)
+    curation_status: AnchorCurationStatus | None = None
+    curation_reference_count: int = 0
+    curation_summary: str = ""
+    curation_profile: AnchorCurationProfile | None = None
     calibration_resolution: CalibrationOverrideResolution | None = None
     overlay: InspectionOverlay | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -157,6 +164,7 @@ class MatchInspectorState:
     repository_id: str
     source_image: str
     expected_anchor_id: str = ""
+    expected_anchor_label: str = ""
     status: MatchStatus = MatchStatus.MISSED
     threshold: float = 0.85
     message: str = ""
@@ -172,6 +180,10 @@ class MatchInspectorState:
     selected_source_image: str = ""
     selected_overlay: InspectionOverlay | None = None
     selected_overlay_summary: str = ""
+    selected_template_path: str = ""
+    selected_reference_image_path: str = ""
+    curation_status: AnchorCurationStatus | None = None
+    curation_summary: str = ""
     failure_explanation: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -250,6 +262,11 @@ class FailureInspectorState:
     selected_source_image: str = ""
     selected_overlay: InspectionOverlay | None = None
     selected_overlay_summary: str = ""
+    selected_anchor_label: str = ""
+    selected_template_path: str = ""
+    selected_reference_image_path: str = ""
+    curation_status: AnchorCurationStatus | None = None
+    curation_summary: str = ""
     failure_explanation: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -262,6 +279,7 @@ class ClaimRewardsCheckState:
     check_id: str
     label: str
     anchor_id: str
+    anchor_label: str = ""
     stage: str = ""
     status: MatchStatus = MatchStatus.MISSED
     threshold: float = 0.85
@@ -279,6 +297,10 @@ class ClaimRewardsCheckState:
     selected_source_image: str = ""
     selected_overlay: InspectionOverlay | None = None
     selected_overlay_summary: str = ""
+    selected_template_path: str = ""
+    selected_reference_image_path: str = ""
+    curation_status: AnchorCurationStatus | None = None
+    curation_summary: str = ""
     failure_explanation: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -304,6 +326,11 @@ class ClaimRewardsInspectorState:
     selected_source_image: str = ""
     selected_overlay: InspectionOverlay | None = None
     selected_overlay_summary: str = ""
+    selected_anchor_label: str = ""
+    selected_template_path: str = ""
+    selected_reference_image_path: str = ""
+    selected_curation_status: AnchorCurationStatus | None = None
+    selected_curation_summary: str = ""
     selected_check_summary: str = ""
     workflow_summary: str = ""
     failure_explanation: str = ""
@@ -535,10 +562,18 @@ def build_match_inspector(
     source_image: str = "",
     message: str = "",
 ) -> MatchInspectorState:
+    expected_anchor_id = match_result.expected_anchor_id if match_result is not None else ""
+    selected_anchor = _selected_anchor(repository, expected_anchor_id)
+    curation = _selected_anchor_curation(
+        repository=repository,
+        expected_anchor_id=expected_anchor_id,
+    )
+    selected_template_path = _selected_template_path(repository, expected_anchor_id)
+    selected_reference_image_path = _selected_reference_image_path(repository, expected_anchor_id)
     calibration_resolution = _resolve_selected_calibration(
         repository=repository,
         calibration_profile=calibration_profile,
-        expected_anchor_id=match_result.expected_anchor_id if match_result is not None else "",
+        expected_anchor_id=expected_anchor_id,
     )
     if match_result is None:
         inspection = build_image_inspection_state(
@@ -551,6 +586,7 @@ def build_match_inspector(
         return MatchInspectorState(
             repository_id=repository.repository_id if repository is not None else "",
             source_image=source_image,
+            expected_anchor_label=selected_anchor.label if selected_anchor is not None else "",
             status=MatchStatus.MISSED,
             message=message or "Preview pipeline not connected yet.",
             calibration_resolution=calibration_resolution,
@@ -559,13 +595,22 @@ def build_match_inspector(
             selected_source_image=_inspection_source_image(inspection, fallback=source_image),
             selected_overlay=inspection.selected_overlay,
             selected_overlay_summary=inspection.selected_overlay_summary,
+            selected_template_path=selected_template_path,
+            selected_reference_image_path=selected_reference_image_path,
+            curation_status=curation.status if curation is not None else None,
+            curation_summary=_curation_summary(curation),
             failure_explanation=_match_failure_explanation(
-                anchor_id="",
+                anchor_id=expected_anchor_id,
+                anchor_label=selected_anchor.label if selected_anchor is not None else "",
                 threshold=calibration_resolution.effective_confidence_threshold if calibration_resolution is not None else None,
                 message=message or "Preview pipeline not connected yet.",
                 status=MatchStatus.MISSED,
                 best_candidate=None,
                 candidate_count=0,
+                image_path=_inspection_image_path(inspection, fallback=source_image),
+                template_path=selected_template_path,
+                reference_image_path=selected_reference_image_path,
+                curation=curation,
             ),
         )
 
@@ -600,6 +645,7 @@ def build_match_inspector(
         repository_id=repository.repository_id if repository is not None else "",
         source_image=match_result.source_image or source_image,
         expected_anchor_id=match_result.expected_anchor_id,
+        expected_anchor_label=selected_anchor.label if selected_anchor is not None else "",
         status=match_result.status,
         threshold=match_result.threshold,
         message=match_result.message or message,
@@ -615,13 +661,22 @@ def build_match_inspector(
         selected_source_image=_inspection_source_image(inspection, fallback=source_image or match_result.source_image),
         selected_overlay=inspection.selected_overlay,
         selected_overlay_summary=inspection.selected_overlay_summary,
+        selected_template_path=selected_template_path,
+        selected_reference_image_path=selected_reference_image_path,
+        curation_status=curation.status if curation is not None else None,
+        curation_summary=_curation_summary(curation),
         failure_explanation=_match_failure_explanation(
             anchor_id=match_result.expected_anchor_id,
+            anchor_label=selected_anchor.label if selected_anchor is not None else "",
             threshold=match_result.threshold,
             message=match_result.message or message,
             status=match_result.status,
             best_candidate=best_candidate_view,
             candidate_count=len(candidates),
+            image_path=_inspection_image_path(inspection, fallback=match_result.source_image or source_image),
+            template_path=selected_template_path,
+            reference_image_path=selected_reference_image_path,
+            curation=curation,
         ),
         metadata=dict(match_result.metadata),
     )
@@ -642,6 +697,7 @@ def build_failure_inspector(
             screenshot_path="",
             status=MatchStatus.MISSED,
             message=message or "No failure snapshot available.",
+            curation_summary="",
             failure_explanation=message or "No failure snapshot available.",
         )
 
@@ -698,13 +754,23 @@ def build_failure_inspector(
     )
     selected_overlay = failure_inspection.selected_overlay
     selected_overlay_summary = failure_inspection.selected_overlay_summary
+    selected_anchor_label = match_state.expected_anchor_label
+    selected_template_path = match_state.selected_template_path
+    selected_reference_image_path = match_state.selected_reference_image_path
+    curation_status = match_state.curation_status
+    curation_summary = match_state.curation_summary
     failure_explanation = _match_failure_explanation(
         anchor_id=resolved_anchor_id,
+        anchor_label=selected_anchor_label,
         threshold=selected_threshold,
         message=failure_message,
         status=failure_status,
         best_candidate=failure_best_candidate,
         candidate_count=failure_candidate_count,
+        image_path=selected_image_path,
+        template_path=selected_template_path,
+        reference_image_path=selected_reference_image_path,
+        curation=_selected_anchor_curation(repository=repository, expected_anchor_id=resolved_anchor_id),
     )
 
     if selected_claim_check is not None:
@@ -734,6 +800,11 @@ def build_failure_inspector(
         selected_source_image = selected_claim_check.selected_source_image
         selected_overlay = selected_claim_check.selected_overlay
         selected_overlay_summary = selected_claim_check.selected_overlay_summary
+        selected_anchor_label = selected_claim_check.anchor_label
+        selected_template_path = selected_claim_check.selected_template_path
+        selected_reference_image_path = selected_claim_check.selected_reference_image_path
+        curation_status = selected_claim_check.curation_status
+        curation_summary = selected_claim_check.curation_summary
         failure_explanation = selected_claim_check.failure_explanation or failure_explanation
 
     return FailureInspectorState(
@@ -760,6 +831,11 @@ def build_failure_inspector(
         selected_source_image=selected_source_image,
         selected_overlay=selected_overlay,
         selected_overlay_summary=selected_overlay_summary,
+        selected_anchor_label=selected_anchor_label,
+        selected_template_path=selected_template_path,
+        selected_reference_image_path=selected_reference_image_path,
+        curation_status=curation_status,
+        curation_summary=curation_summary,
         failure_explanation=failure_explanation,
         metadata=dict(failure_record.metadata),
     )
@@ -872,6 +948,7 @@ def _build_anchor_row(
     issue_codes: list[str] | None = None,
 ) -> AnchorInspectionRow:
     anchor = repository.get_anchor(anchor_id)
+    curation = repository.get_anchor_curation(anchor_id)
     calibration_resolution = resolve_calibration_override(
         anchor=anchor,
         calibration_profile=calibration_profile,
@@ -896,6 +973,10 @@ def _build_anchor_row(
         tags=list(anchor.tags),
         override=override,
         issue_codes=list(issue_codes or []),
+        curation_status=curation.status if curation is not None else None,
+        curation_reference_count=curation.reference_count if curation is not None else 0,
+        curation_summary=_curation_summary(curation),
+        curation_profile=curation,
         calibration_resolution=calibration_resolution,
         overlay=overlay,
         metadata=dict(anchor.metadata),
@@ -1028,12 +1109,15 @@ def _format_region(region: CropRegion | tuple[int, int, int, int] | None) -> str
 def _anchor_summary(anchor: AnchorInspectionRow | None) -> str:
     if anchor is None:
         return ""
-    return (
+    summary = (
         f"{anchor.label or anchor.anchor_id} | template={anchor.template_path} | "
         f"threshold={anchor.effective_confidence_threshold:.2f} | "
         f"region={_format_region(anchor.effective_match_region)} | "
         f"issues={','.join(anchor.issue_codes) or 'none'}"
     )
+    if anchor.curation_summary:
+        summary += f" | curation={anchor.curation_summary}"
+    return summary
 
 
 def _artifact_kind_counts(
@@ -1095,62 +1179,180 @@ def _inspection_source_image(inspection: ImageInspectionState | None, *, fallbac
     return inspection.source_image or fallback
 
 
+def _selected_anchor_curation(
+    *,
+    repository: AnchorRepository | None,
+    expected_anchor_id: str,
+) -> AnchorCurationProfile | None:
+    if repository is None or not expected_anchor_id or not repository.has_anchor(expected_anchor_id):
+        return None
+    return repository.get_anchor_curation(expected_anchor_id)
+
+
+def _selected_anchor(repository: AnchorRepository | None, anchor_id: str):
+    if repository is None or not anchor_id or not repository.has_anchor(anchor_id):
+        return None
+    return repository.get_anchor(anchor_id)
+
+
+def _selected_template_path(repository: AnchorRepository | None, anchor_id: str) -> str:
+    anchor = _selected_anchor(repository, anchor_id)
+    if anchor is None:
+        return ""
+    return str(repository.resolve_asset_path(anchor_id))
+
+
+def _selected_reference(
+    repository: AnchorRepository | None,
+    anchor_id: str,
+) -> AnchorCurationReference | None:
+    if repository is None or not anchor_id or not repository.has_anchor(anchor_id):
+        return None
+    return repository.get_primary_curation_reference(anchor_id)
+
+
+def _selected_reference_image_path(repository: AnchorRepository | None, anchor_id: str) -> str:
+    if repository is None or not anchor_id or not repository.has_anchor(anchor_id):
+        return ""
+    resolved_path = repository.resolve_curation_reference_path(anchor_id)
+    return str(resolved_path) if resolved_path is not None else ""
+
+
+def _curation_summary(curation: AnchorCurationProfile | None) -> str:
+    if curation is None:
+        return ""
+    parts = [curation.status.value]
+    if curation.scene_id:
+        parts.append(f"scene={curation.scene_id}")
+    if curation.variant_id:
+        parts.append(f"variant={curation.variant_id}")
+    parts.append(f"refs={curation.reference_count}")
+    if curation.intent_id:
+        parts.append(f"intent={curation.intent_id}")
+    return " | ".join(parts)
+
+
+def _append_curation_note(message: str, curation: AnchorCurationProfile | None) -> str:
+    normalized_message = message.strip()
+    if curation is None or curation.status == AnchorCurationStatus.CURATED:
+        return normalized_message
+    note = f"Template curation status: {_curation_summary(curation)}."
+    if not normalized_message:
+        return note
+    if note.lower() in normalized_message.lower():
+        return normalized_message
+    return f"{normalized_message} {note}".strip()
+
+
+def _append_template_context(
+    message: str,
+    *,
+    template_path: str,
+    reference_image_path: str,
+) -> str:
+    normalized_message = message.strip()
+    suffix_parts: list[str] = []
+    if template_path:
+        suffix_parts.append(f"template={template_path}")
+    if reference_image_path:
+        suffix_parts.append(f"reference={reference_image_path}")
+    if not suffix_parts:
+        return normalized_message
+    suffix = " | ".join(suffix_parts)
+    if suffix in normalized_message:
+        return normalized_message
+    return f"{normalized_message} [{suffix}]".strip()
+
+
 def _match_failure_explanation(
     *,
     anchor_id: str,
+    anchor_label: str,
     threshold: float | None,
     message: str,
     status: MatchStatus,
     best_candidate: MatchCandidateView | None,
     candidate_count: int,
+    image_path: str,
+    template_path: str,
+    reference_image_path: str,
+    curation: AnchorCurationProfile | None,
 ) -> str:
     normalized_anchor_id = anchor_id or "anchor"
+    normalized_anchor_label = anchor_label or normalized_anchor_id
     normalized_message = message.strip()
     if status == MatchStatus.MATCHED:
         if normalized_message:
-            return normalized_message
+            return _append_curation_note(normalized_message, curation)
         if best_candidate is not None:
-            return (
-                f"{normalized_anchor_id} matched at {best_candidate.confidence:.3f} "
-                f"with threshold {threshold:.3f}."
+            base = (
+                f"{normalized_anchor_label} ({normalized_anchor_id}) matched on {image_path or 'current image'} "
+                f"at {best_candidate.confidence:.3f} with threshold {threshold:.3f}."
             ) if threshold is not None else f"{normalized_anchor_id} matched at {best_candidate.confidence:.3f}."
-        return f"{normalized_anchor_id} matched."
+        else:
+            base = f"{normalized_anchor_label} ({normalized_anchor_id}) matched."
+        return _append_curation_note(
+            _append_template_context(base, template_path=template_path, reference_image_path=reference_image_path),
+            curation,
+        )
 
     detail = ""
     if best_candidate is None and candidate_count == 0:
         detail = (
-            f"No candidates were found for {normalized_anchor_id}"
+            f"No candidates were found for {normalized_anchor_label} ({normalized_anchor_id}) on "
+            f"{image_path or 'current image'}"
             + (f" at threshold {threshold:.3f}." if threshold is not None else ".")
         )
     elif best_candidate is not None and best_candidate.anchor_id != normalized_anchor_id:
         detail = (
-            f"Expected {normalized_anchor_id}, but best candidate was "
+            f"Expected {normalized_anchor_label} ({normalized_anchor_id}) on {image_path or 'current image'}, "
+            f"but best candidate was "
             f"{best_candidate.anchor_id} at {best_candidate.confidence:.3f}."
         )
     elif best_candidate is not None and threshold is not None and not best_candidate.passed_threshold:
         detail = (
-            f"{normalized_anchor_id} peaked at {best_candidate.confidence:.3f}, "
+            f"{normalized_anchor_label} ({normalized_anchor_id}) on {image_path or 'current image'} "
+            f"peaked at {best_candidate.confidence:.3f}, "
             f"below threshold {threshold:.3f}."
         )
     elif best_candidate is not None:
-        detail = f"{normalized_anchor_id} did not produce a passing match."
+        detail = (
+            f"{normalized_anchor_label} ({normalized_anchor_id}) on {image_path or 'current image'} "
+            "did not produce a passing match."
+        )
     else:
-        detail = f"{normalized_anchor_id} did not match."
+        detail = f"{normalized_anchor_label} ({normalized_anchor_id}) did not match."
 
     if not normalized_message:
-        return detail
+        return _append_curation_note(
+            _append_template_context(detail, template_path=template_path, reference_image_path=reference_image_path),
+            curation,
+        )
     if detail.lower() in normalized_message.lower():
-        return normalized_message
-    return f"{normalized_message} {detail}".strip()
+        return _append_curation_note(
+            _append_template_context(normalized_message, template_path=template_path, reference_image_path=reference_image_path),
+            curation,
+        )
+    return _append_curation_note(
+        _append_template_context(
+            f"{normalized_message} {detail}".strip(),
+            template_path=template_path,
+            reference_image_path=reference_image_path,
+        ),
+        curation,
+    )
 
 
 def _claim_rewards_check_summary(check: ClaimRewardsCheckState | None) -> str:
     if check is None:
         return ""
-    return (
-        f"{check.label} | anchor={check.anchor_id} | status={check.status.value} | "
-        f"candidates={check.candidate_count} | message={check.message or 'n/a'}"
+    summary = (
+        f"{check.label} | anchor={check.anchor_id} | threshold={check.threshold:.3f} | "
+        f"image={check.selected_image_path or 'n/a'} | message={check.message or 'n/a'}"
     )
+    if check.curation_summary:
+        summary += f" | curation={check.curation_summary}"
+    return summary
 
 
 def _claim_rewards_workflow_summary(checks: list[ClaimRewardsCheckState], *, current_check_id: str) -> str:
@@ -1170,6 +1372,7 @@ def _mark_claim_rewards_check_selection(
         check_id=check.check_id,
         label=check.label,
         anchor_id=check.anchor_id,
+        anchor_label=check.anchor_label,
         stage=check.stage,
         status=check.status,
         threshold=check.threshold,
@@ -1187,6 +1390,10 @@ def _mark_claim_rewards_check_selection(
         selected_source_image=check.selected_source_image,
         selected_overlay=check.selected_overlay,
         selected_overlay_summary=check.selected_overlay_summary,
+        selected_template_path=check.selected_template_path,
+        selected_reference_image_path=check.selected_reference_image_path,
+        curation_status=check.curation_status,
+        curation_summary=check.curation_summary,
         failure_explanation=check.failure_explanation,
         metadata=dict(check.metadata),
     )
@@ -1222,6 +1429,8 @@ def _build_claim_rewards_inspector(
         if not isinstance(payload, dict):
             payload = {}
         stage = str(payload.get("stage") or anchor.metadata.get("stage") or "")
+        selected_template_path = _selected_template_path(repository, anchor.anchor_id)
+        selected_reference_image_path = _selected_reference_image_path(repository, anchor.anchor_id)
         calibration_resolution = resolve_calibration_override(
             anchor=anchor,
             calibration_profile=calibration_profile,
@@ -1253,6 +1462,7 @@ def _build_claim_rewards_inspector(
                 check_id=check_id,
                 label=str(payload.get("label") or anchor.label or check_id.replace("_", " ")),
                 anchor_id=anchor.anchor_id,
+                anchor_label=anchor.label,
                 stage=stage,
                 status=match_state.status,
                 threshold=match_state.threshold,
@@ -1269,6 +1479,10 @@ def _build_claim_rewards_inspector(
                 selected_source_image=match_state.selected_source_image,
                 selected_overlay=match_state.selected_overlay,
                 selected_overlay_summary=match_state.selected_overlay_summary,
+                selected_template_path=selected_template_path,
+                selected_reference_image_path=selected_reference_image_path,
+                curation_status=match_state.curation_status,
+                curation_summary=match_state.curation_summary,
                 failure_explanation=match_state.failure_explanation,
                 metadata={**dict(anchor.metadata), **dict(payload.get("metadata", {}))},
             )
@@ -1304,6 +1518,11 @@ def _build_claim_rewards_inspector(
         selected_source_image=selected_check.selected_source_image if selected_check is not None else "",
         selected_overlay=selected_check.selected_overlay if selected_check is not None else None,
         selected_overlay_summary=selected_check.selected_overlay_summary if selected_check is not None else "",
+        selected_anchor_label=selected_check.anchor_label if selected_check is not None else "",
+        selected_template_path=selected_check.selected_template_path if selected_check is not None else "",
+        selected_reference_image_path=selected_check.selected_reference_image_path if selected_check is not None else "",
+        selected_curation_status=selected_check.curation_status if selected_check is not None else None,
+        selected_curation_summary=selected_check.curation_summary if selected_check is not None else "",
         selected_check_summary=_claim_rewards_check_summary(selected_check),
         workflow_summary=_claim_rewards_workflow_summary(checks, current_check_id=current_check_id),
         failure_explanation=selected_check.failure_explanation if selected_check is not None else "",

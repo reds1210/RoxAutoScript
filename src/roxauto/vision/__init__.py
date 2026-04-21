@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from roxauto.vision.models import (
+    AnchorCurationProfile,
+    AnchorCurationReference,
+    AnchorCurationStatus,
     AnchorSpec,
     CalibrationOverrideResolution,
     CalibrationProfile,
@@ -71,6 +74,9 @@ __all__ = [
     "AnchorRepository",
     "AnchorInspectionRow",
     "AnchorInspectorState",
+    "AnchorCurationProfile",
+    "AnchorCurationReference",
+    "AnchorCurationStatus",
     "AnchorSpec",
     "CalibrationOverrideResolution",
     "CalibrationProfile",
