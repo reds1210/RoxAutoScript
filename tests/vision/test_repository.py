@@ -37,7 +37,9 @@ class AnchorRepositoryTests(unittest.TestCase):
         self.assertIsNotNone(reward_panel_curation)
         self.assertEqual(reward_panel_curation.status.value, "curated")
         self.assertEqual(reward_panel_curation.scene_id, "reward_panel_open")
-        self.assertEqual(reward_panel_curation.reference_count, 1)
+        self.assertEqual(reward_panel_curation.reference_count, 3)
+        self.assertEqual(reward_panel_curation.provenance.kind.value, "live_capture")
+        self.assertEqual(reward_panel_curation.provenance.locale, "zh-TW")
         self.assertEqual(
             repository.get_primary_curation_reference("daily_ui.reward_panel").reference_id,
             "reward_panel_baseline_v1",
@@ -46,6 +48,10 @@ class AnchorRepositoryTests(unittest.TestCase):
         self.assertEqual(
             repository.get_task_support("daily_ui.claim_rewards")["required_anchor_roles"],
             ["reward_panel", "claim_reward_button", "confirm_state"],
+        )
+        self.assertEqual(
+            repository.get_task_support("daily_ui.claim_rewards")["golden_catalog_path"],
+            "goldens/claim_rewards/catalog.json",
         )
 
     def test_repository_exposes_manifest_and_search_helpers(self) -> None:
