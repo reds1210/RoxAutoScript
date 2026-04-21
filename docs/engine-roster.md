@@ -14,51 +14,50 @@ This repo now uses a fixed 4-engine parallel development model.
 
 - model: `gpt-5.4`
 - primary branch family: `codex/core-runtime-*`
-- standard active branch: `codex/core-runtime-orchestration`
+- standard active branch: `codex/core-runtime-claim-rewards-hardening`
 - owns: `src/roxauto/core/`, `src/roxauto/emulator/`, `src/roxauto/logs/`, `src/roxauto/profiles/`, `tests/core/`, `tests/emulator/`, `tests/profiles/`
 - may edit: `docs/architecture-contracts.md`
-- worktree path: `..\RoxAutoScript-wt-engine-a-runtime`
+- worktree path: `..\RoxAutoScript-wt-core-runtime-claim-rewards`
 
 ### Engine B: GUI
 
 - model: `gpt-5.4`
 - primary branch family: `codex/gui-console-*`
-- standard active branch: `codex/gui-console-operator`
+- standard active branch: `codex/gui-claim-rewards-operator-hardening`
 - owns: `src/roxauto/app/`, `assets/ui/`, `tests/app/`
-- worktree path: `..\RoxAutoScript-wt-engine-b-gui`
+- worktree path: `..\RoxAutoScript-wt-gui-claim-rewards`
 
 ### Engine C: Vision
 
 - model: `gpt-5.4`
 - primary branch family: `codex/vision-lab-*`
-- standard active branch: `codex/vision-lab-calibration-tools`
+- standard active branch: `codex/vision-claim-rewards-curation`
 - owns: `src/roxauto/vision/`, `assets/templates/`, `docs/vision/`, `tests/vision/`
-- worktree path: `..\RoxAutoScript-wt-engine-c-vision`
+- worktree path: `..\RoxAutoScript-wt-vision-claim-rewards`
 
 ### Engine D: Tasks
 
 - model: `gpt-5.4`
 - primary branch family: `codex/task-*` and `codex/plugin-event-framework`
-- standard standby branch: `codex/task-daily-ui`
+- standard active branch: `codex/task-claim-rewards-real-flow`
 - owns: `src/roxauto/tasks/`, `tests/tasks/`, task-specific template assets
-- worktree path: `..\RoxAutoScript-wt-engine-d-tasks`
-- gate: stays on standby until platform Gate 3 is complete
+- worktree path: `..\RoxAutoScript-wt-task-claim-rewards`
 
 ## Active Branch Order
 
 Use this lineup as the default next wave:
 
-1. `codex/core-runtime-orchestration`
-2. `codex/gui-console-operator`
-3. `codex/vision-lab-calibration-tools`
-4. `codex/task-daily-ui`
+1. `codex/core-runtime-claim-rewards-hardening`
+2. `codex/gui-claim-rewards-operator-hardening`
+3. `codex/vision-claim-rewards-curation`
+4. `codex/task-claim-rewards-real-flow`
 
 Later branch progression:
 
-- Engine A: `codex/core-runtime-orchestration` -> `codex/core-runtime-recovery` -> `codex/task-event-runtime`
-- Engine B: `codex/gui-console-operator` -> `codex/gui-console-calibration-tools`
-- Engine C: `codex/vision-lab-calibration-tools` -> `codex/vision-lab-board-ocr` -> `codex/vision-lab-life-skill-assets`
-- Engine D: `codex/task-daily-ui` -> `codex/task-odin` -> `codex/task-board` -> `codex/task-life-skills` -> `codex/plugin-event-framework`
+- Engine A: `codex/core-runtime-claim-rewards-hardening` -> `codex/core-runtime-step-telemetry`
+- Engine B: `codex/gui-claim-rewards-operator-hardening` -> `codex/gui-claim-rewards-editor-persistence`
+- Engine C: `codex/vision-claim-rewards-curation` -> `codex/vision-claim-rewards-goldens`
+- Engine D: `codex/task-claim-rewards-real-flow` -> `codex/task-guild-check-in`
 
 ## Non-Negotiable Rules
 

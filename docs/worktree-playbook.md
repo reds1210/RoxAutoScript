@@ -50,10 +50,10 @@ Model policy:
 
 Use these as the default active lineup:
 
-- `codex/core-runtime-orchestration`
-- `codex/gui-console-operator`
-- `codex/vision-lab-calibration-tools`
-- `codex/task-daily-ui`
+- `codex/core-runtime-claim-rewards-hardening`
+- `codex/gui-claim-rewards-operator-hardening`
+- `codex/vision-claim-rewards-curation`
+- `codex/task-claim-rewards-real-flow`
 
 ## 5. Naming Rules
 
@@ -71,8 +71,10 @@ Later branch families:
 
 If a track needs multiple phases, extend the name:
 
-- `codex/core-runtime-step-runner`
-- `codex/gui-console-instance-grid`
+- `codex/core-runtime-step-telemetry`
+- `codex/gui-claim-rewards-editor-persistence`
+- `codex/vision-claim-rewards-goldens`
+- `codex/task-guild-check-in`
 
 ### Local worktree folder names
 
@@ -80,10 +82,10 @@ Recommended sibling layout:
 
 ```text
 C:\code\RoxAutoScript
-C:\code\RoxAutoScript-wt-engine-a-runtime
-C:\code\RoxAutoScript-wt-engine-b-gui
-C:\code\RoxAutoScript-wt-engine-c-vision
-C:\code\RoxAutoScript-wt-engine-d-tasks
+C:\code\RoxAutoScript-wt-core-runtime-claim-rewards
+C:\code\RoxAutoScript-wt-gui-claim-rewards
+C:\code\RoxAutoScript-wt-vision-claim-rewards
+C:\code\RoxAutoScript-wt-task-claim-rewards
 ```
 
 Rule:
@@ -157,9 +159,9 @@ Reason:
 Merge in this order unless there is a strong reason not to:
 
 1. `Engine A` runtime branches
-2. `Engine B` GUI branches
-3. `Engine C` vision branches
-4. `Engine D` task/plugin branches
+2. `Engine D` first-task branches when they depend on A
+3. `Engine C` vision curation branches
+4. `Engine B` GUI/operator branches
 
 Reason:
 
@@ -176,12 +178,15 @@ Recommended flow:
 5. confirm owned paths before editing
 6. implement only inside owned paths whenever possible
 
-Example:
+Round-5 example:
 
 ```powershell
 git switch main
 git pull
-powershell -ExecutionPolicy Bypass -File .\scripts\bootstrap-four-engines.ps1
+git worktree add ..\RoxAutoScript-wt-core-runtime-claim-rewards -b codex/core-runtime-claim-rewards-hardening main
+git worktree add ..\RoxAutoScript-wt-gui-claim-rewards -b codex/gui-claim-rewards-operator-hardening main
+git worktree add ..\RoxAutoScript-wt-vision-claim-rewards -b codex/vision-claim-rewards-curation main
+git worktree add ..\RoxAutoScript-wt-task-claim-rewards -b codex/task-claim-rewards-real-flow main
 ```
 
 ## 10. Handoff Rules
