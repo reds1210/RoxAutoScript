@@ -206,9 +206,15 @@ class ClaimRewardsEditorView:
 class ClaimRewardsPaneView:
     task_id: str = "daily_ui.claim_rewards"
     task_name: str = "Daily Reward Claim"
+    task_label: str = "每日領獎"
     manifest_path: str = ""
     workflow_status: str = "idle"
     workflow_banner: str = "Select an instance to inspect the claim rewards workflow."
+    preset_summary: str = ""
+    progress_summary: str = ""
+    progress_completed_count: int = 0
+    progress_total_count: int = 0
+    current_step_title: str = ""
     runtime_gate_summary: str = ""
     queue_summary: str = ""
     last_run_summary: str = ""

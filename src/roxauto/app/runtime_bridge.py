@@ -4,6 +4,9 @@ from collections import defaultdict
 from dataclasses import dataclass, field, replace
 from enum import Enum
 from pathlib import Path
+from queue import Empty, Queue
+import threading
+import time
 from typing import Callable
 from uuid import uuid4
 
@@ -12,8 +15,12 @@ from roxauto.app.viewmodels import (
     ClaimRewardsPaneView,
     ClaimRewardsStepView,
     ConsoleSnapshot,
+    InstanceListEntryView,
+    OperatorConsoleState,
     build_console_snapshot_from_runtime,
+    build_instance_list_rows,
     build_manual_control_command,
+    build_operator_console_state,
 )
 from roxauto.core.commands import CommandDispatchResult, InstanceCommandType
 from roxauto.core.models import (
@@ -32,8 +39,20 @@ from roxauto.core.queue import QueuedTask
 from roxauto.core.runtime import RuntimeInspectionResult, TaskStep, step_failure, step_success
 from roxauto.core.time import utc_now
 from roxauto.doctor import build_doctor_report
-from roxauto.emulator import EmulatorActionAdapter, LiveRuntimeSession, LiveRuntimeSnapshot
+from roxauto.emulator import (
+    EmulatorActionAdapter,
+    LiveRuntimeSession,
+    LiveRuntimeSnapshot,
+    build_adb_live_runtime_session,
+)
 from roxauto.tasks import TaskBlueprint, TaskFoundationRepository, TaskReadinessReport, TaskRuntimeBuilderInput
+from roxauto.tasks.daily_ui import (
+    ClaimRewardsInspection,
+    ClaimRewardsNavigationPlan,
+    ClaimRewardsPanelState,
+    build_claim_rewards_runtime_input,
+    build_claim_rewards_task_spec,
+)
 from roxauto.vision import (
     AnchorRepository,
     CalibrationProfile,
@@ -141,6 +160,34 @@ class _ClaimRewardsExecutionRecord:
     match_result: TemplateMatchResult | None = None
     last_run: TaskRun | None = None
     last_queue_result: object | None = None
+    inspection_history: list[tuple[str, ClaimRewardsInspection]] = field(default_factory=list)
+
+
+class _BridgeClaimRewardsVisionGateway:
+    def __init__(self, bridge: "OperatorConsoleRuntimeBridge", *, instance_id: str) -> None:
+        self._bridge = bridge
+        self._instance_id = instance_id
+
+    def inspect(
+        self,
+        *,
+        instance: InstanceState,
+        screenshot_path: Path,
+        anchor_specs,
+        metadata: dict[str, object] | None = None,
+    ) -> ClaimRewardsInspection:
+        inspection = self._bridge._build_claim_rewards_inspection(
+            instance_id=self._instance_id,
+            screenshot_path=screenshot_path,
+            anchor_specs=dict(anchor_specs),
+            metadata=dict(metadata or {}),
+        )
+        self._bridge._record_claim_rewards_inspection(
+            self._instance_id,
+            reason=str((metadata or {}).get("reason", "")),
+            inspection=inspection,
+        )
+        return inspection
 
 
 class OperatorConsoleRuntimeBridge:
@@ -163,13 +210,34 @@ class OperatorConsoleRuntimeBridge:
         self._adb_path = "not found"
         self._packages: dict[str, bool] = {}
         self._claim_rewards_blueprint_cache: TaskBlueprint | None = None
+        self._claim_rewards_runtime_input = None
         self._claim_rewards_drafts: dict[str, _ClaimRewardsWorkflowDraft] = {}
         self._claim_rewards_records: dict[str, _ClaimRewardsExecutionRecord] = {}
-        self._session = session or LiveRuntimeSession(
-            adapter or _OperatorConsoleAdapter(self._workspace_root),
-            discovery=discovery,
-            profile_resolver=profile_resolver or self._default_profile_resolver,
-        )
+        self._lock = threading.RLock()
+        self._presentation_revision = 0
+        self._scheduled_actions: Queue[tuple[str, dict[str, object]]] = Queue()
+        self._schedule_stop = threading.Event()
+        self._schedule_idle = threading.Event()
+        self._schedule_idle.set()
+        self._schedule_thread: threading.Thread | None = None
+        self._schedule_poll_interval_sec = 2.0
+        self._last_scheduled_error = ""
+        resolved_profile_resolver = profile_resolver or self._default_profile_resolver
+        if session is not None:
+            self._session = session
+        elif adapter is not None:
+            self._session = LiveRuntimeSession(
+                adapter,
+                discovery=discovery,
+                profile_resolver=resolved_profile_resolver,
+            )
+        else:
+            self._session = build_adb_live_runtime_session(
+                adb_executable=self._detect_adb_executable(),
+                screenshot_dir=self._workspace_root / "runtime_logs" / "previews",
+                discovery=discovery,
+                profile_resolver=resolved_profile_resolver,
+            )
 
     @property
     def session(self) -> LiveRuntimeSession:
@@ -191,6 +259,214 @@ class OperatorConsoleRuntimeBridge:
     def asset_inventory_path(self) -> Path:
         return self._asset_inventory_path
 
+    def start_live_updates(
+        self,
+        *,
+        poll_interval_sec: float = 2.0,
+        bootstrap: bool = True,
+    ) -> None:
+        if self._schedule_thread is not None and self._schedule_thread.is_alive():
+            return
+        self._schedule_poll_interval_sec = max(0.25, float(poll_interval_sec))
+        self._schedule_stop.clear()
+        self._schedule_idle.set()
+        self._schedule_thread = threading.Thread(
+            target=self._run_schedule_loop,
+            name="roxauto-app-live-runtime",
+            daemon=True,
+        )
+        self._schedule_thread.start()
+        if bootstrap:
+            self.schedule_refresh()
+
+    def stop_live_updates(self, *, join_timeout_sec: float = 2.0) -> None:
+        self._schedule_stop.set()
+        self._scheduled_actions.put(("noop", {}))
+        if self._schedule_thread is not None and self._schedule_thread.is_alive():
+            self._schedule_thread.join(timeout=join_timeout_sec)
+        self._schedule_thread = None
+
+    def wait_for_idle(self, *, timeout_sec: float = 2.0) -> bool:
+        return self._schedule_idle.wait(timeout=max(0.1, float(timeout_sec)))
+
+    def schedule_refresh(
+        self,
+        *,
+        instance_id: str | None = None,
+        run_health_check: bool = True,
+        capture_preview: bool = True,
+    ) -> None:
+        self._enqueue_scheduled_action(
+            "refresh",
+            {
+                "instance_id": instance_id,
+                "run_health_check": run_health_check,
+                "capture_preview": capture_preview,
+            },
+        )
+
+    def schedule_command(
+        self,
+        action_key: str,
+        *,
+        instance_id: str | None = None,
+        payload: dict[str, object] | None = None,
+    ) -> None:
+        self._enqueue_scheduled_action(
+            "command",
+            {
+                "action_key": action_key,
+                "instance_id": instance_id,
+                "payload": dict(payload or {}),
+            },
+        )
+
+    def schedule_claim_rewards_queue(self, instance_id: str) -> None:
+        self._enqueue_scheduled_action("claim_rewards.queue", {"instance_id": instance_id})
+
+    def schedule_claim_rewards_run(self, instance_id: str) -> None:
+        self._enqueue_scheduled_action("claim_rewards.run", {"instance_id": instance_id})
+
+    def schedule_claim_rewards_capture_source(
+        self,
+        instance_id: str,
+        *,
+        source_kind: str = "preview",
+    ) -> None:
+        self._enqueue_scheduled_action(
+            "claim_rewards.capture_source",
+            {"instance_id": instance_id, "source_kind": source_kind},
+        )
+
+    def schedule_claim_rewards_editor_update(
+        self,
+        instance_id: str,
+        *,
+        workflow_mode: str | None = None,
+        crop_region: tuple[int, int, int, int] | None = None,
+        match_region: tuple[int, int, int, int] | None = None,
+        confidence_threshold: float | None = None,
+        capture_scale: float | None = None,
+        capture_offset: tuple[int, int] | None = None,
+    ) -> None:
+        self._enqueue_scheduled_action(
+            "claim_rewards.editor_update",
+            {
+                "instance_id": instance_id,
+                "workflow_mode": workflow_mode,
+                "crop_region": crop_region,
+                "match_region": match_region,
+                "confidence_threshold": confidence_threshold,
+                "capture_scale": capture_scale,
+                "capture_offset": capture_offset,
+            },
+        )
+
+    def schedule_claim_rewards_editor_reset(self, instance_id: str) -> None:
+        self._enqueue_scheduled_action("claim_rewards.editor_reset", {"instance_id": instance_id})
+
+    def get_live_state(self, selected_instance_id: str = "") -> OperatorConsoleState:
+        with self._lock:
+            runtime_snapshot = self.snapshot()
+            console_snapshot = self.console_snapshot()
+            resolved_instance_id = selected_instance_id
+            if not resolved_instance_id and runtime_snapshot.instance_snapshots:
+                resolved_instance_id = runtime_snapshot.instance_snapshots[0].instance_id
+            if not resolved_instance_id and console_snapshot.instances:
+                resolved_instance_id = console_snapshot.instances[0].instance_id
+            vision_state = self.vision_tooling_state(resolved_instance_id)
+            task_readiness_reports = self.task_readiness_reports()
+            task_runtime_builder_inputs = self.task_runtime_builder_inputs()
+            claim_rewards = self.claim_rewards_pane(
+                resolved_instance_id,
+                runtime_snapshot=runtime_snapshot,
+                vision_state=vision_state,
+            )
+            return build_operator_console_state(
+                console_snapshot,
+                runtime_snapshot,
+                vision_state,
+                selected_instance_id=resolved_instance_id,
+                global_emergency_stop_active=self.global_emergency_stop_active(),
+                task_readiness_reports=task_readiness_reports,
+                task_runtime_builder_inputs=task_runtime_builder_inputs,
+                claim_rewards=claim_rewards,
+            )
+
+    def get_instance_summaries(self) -> list[InstanceListEntryView]:
+        with self._lock:
+            return build_instance_list_rows(
+                self.console_snapshot(),
+                self.snapshot(),
+            )
+
+    def _enqueue_scheduled_action(self, action: str, payload: dict[str, object]) -> None:
+        self._schedule_idle.clear()
+        self._scheduled_actions.put((action, payload))
+
+    def _run_schedule_loop(self) -> None:
+        next_refresh_at = time.monotonic()
+        while not self._schedule_stop.is_set():
+            timeout = max(0.0, next_refresh_at - time.monotonic())
+            try:
+                action, payload = self._scheduled_actions.get(timeout=timeout)
+            except Empty:
+                action, payload = ("refresh", {})
+            if self._schedule_stop.is_set():
+                break
+            try:
+                self._execute_scheduled_action(action, payload)
+                self._last_scheduled_error = ""
+            except Exception as exc:
+                self._last_scheduled_error = str(exc)
+            finally:
+                if self._scheduled_actions.empty():
+                    self._schedule_idle.set()
+                next_refresh_at = time.monotonic() + self._schedule_poll_interval_sec
+
+    def _execute_scheduled_action(self, action: str, payload: dict[str, object]) -> None:
+        if action == "noop":
+            return
+        if action == "refresh":
+            self.refresh(
+                instance_id=str(payload.get("instance_id") or "") or None,
+                run_health_check=bool(payload.get("run_health_check", True)),
+                capture_preview=bool(payload.get("capture_preview", True)),
+            )
+            return
+        if action == "command":
+            self.dispatch_manual_action(
+                str(payload.get("action_key", "")),
+                instance_id=str(payload.get("instance_id") or "") or None,
+                payload=dict(payload.get("payload", {})) if isinstance(payload.get("payload", {}), dict) else None,
+            )
+            return
+        if action == "claim_rewards.queue":
+            self.queue_claim_rewards(str(payload.get("instance_id", "")))
+            return
+        if action == "claim_rewards.run":
+            self.run_claim_rewards(str(payload.get("instance_id", "")))
+            return
+        if action == "claim_rewards.capture_source":
+            self.capture_claim_rewards_source(
+                str(payload.get("instance_id", "")),
+                source_kind=str(payload.get("source_kind", "preview")),
+            )
+            return
+        if action == "claim_rewards.editor_update":
+            self.update_claim_rewards_workflow(
+                str(payload.get("instance_id", "")),
+                workflow_mode=str(payload.get("workflow_mode")) if payload.get("workflow_mode") is not None else None,
+                crop_region=payload.get("crop_region"),
+                match_region=payload.get("match_region"),
+                confidence_threshold=payload.get("confidence_threshold"),
+                capture_scale=payload.get("capture_scale"),
+                capture_offset=payload.get("capture_offset"),
+            )
+            return
+        if action == "claim_rewards.editor_reset":
+            self.reset_claim_rewards_workflow(str(payload.get("instance_id", "")))
+
     def refresh(
         self,
         *,
@@ -198,13 +474,16 @@ class OperatorConsoleRuntimeBridge:
         run_health_check: bool = True,
         capture_preview: bool = True,
     ) -> LiveRuntimeSnapshot:
-        self._load_environment_report()
-        return self._session.poll(
-            instance_id=instance_id,
-            refresh_runtime=True,
-            run_health_check=run_health_check,
-            capture_preview=capture_preview,
-        )
+        with self._lock:
+            self._load_environment_report()
+            snapshot = self._session.poll(
+                instance_id=instance_id,
+                refresh_runtime=True,
+                run_health_check=run_health_check,
+                capture_preview=capture_preview,
+            )
+            self._touch_presentation_state()
+            return snapshot
 
     def refresh_runtime_contexts(
         self,
@@ -213,13 +492,15 @@ class OperatorConsoleRuntimeBridge:
         run_health_check: bool = True,
         capture_preview: bool = True,
     ) -> LiveRuntimeSnapshot:
-        self._load_environment_report()
-        self._session.refresh_runtime_contexts(
-            instance_id=instance_id,
-            run_health_check=run_health_check,
-            capture_preview=capture_preview,
-        )
-        return self.snapshot()
+        with self._lock:
+            self._load_environment_report()
+            self._session.refresh_runtime_contexts(
+                instance_id=instance_id,
+                run_health_check=run_health_check,
+                capture_preview=capture_preview,
+            )
+            self._touch_presentation_state()
+            return self.snapshot()
 
     def snapshot(self) -> LiveRuntimeSnapshot:
         return self._session.last_snapshot
@@ -272,27 +553,31 @@ class OperatorConsoleRuntimeBridge:
         selected_source_image: str | None = None,
         selected_source_kind: str | None = None,
     ) -> None:
-        draft = self._claim_rewards_draft(instance_id)
-        if workflow_mode is not None:
-            draft.workflow_mode = _ClaimRewardsWorkflowMode(str(workflow_mode))
-        if crop_region is not None:
-            draft.crop_region = crop_region
-        if match_region is not None:
-            draft.match_region = match_region
-        if confidence_threshold is not None:
-            draft.confidence_threshold = confidence_threshold
-        if capture_scale is not None:
-            draft.capture_scale = capture_scale
-        if capture_offset is not None:
-            draft.capture_offset = capture_offset
-        if selected_source_image is not None:
-            draft.selected_source_image = selected_source_image
-        if selected_source_kind is not None:
-            draft.selected_source_kind = selected_source_kind
-        draft.last_applied_at = utc_now()
+        with self._lock:
+            draft = self._claim_rewards_draft(instance_id)
+            if workflow_mode is not None:
+                draft.workflow_mode = _ClaimRewardsWorkflowMode(str(workflow_mode))
+            if crop_region is not None:
+                draft.crop_region = crop_region
+            if match_region is not None:
+                draft.match_region = match_region
+            if confidence_threshold is not None:
+                draft.confidence_threshold = confidence_threshold
+            if capture_scale is not None:
+                draft.capture_scale = capture_scale
+            if capture_offset is not None:
+                draft.capture_offset = capture_offset
+            if selected_source_image is not None:
+                draft.selected_source_image = selected_source_image
+            if selected_source_kind is not None:
+                draft.selected_source_kind = selected_source_kind
+            draft.last_applied_at = utc_now()
+            self._touch_presentation_state()
 
     def reset_claim_rewards_workflow(self, instance_id: str) -> None:
-        self._claim_rewards_drafts.pop(instance_id, None)
+        with self._lock:
+            self._claim_rewards_drafts.pop(instance_id, None)
+            self._touch_presentation_state()
 
     def capture_claim_rewards_source(
         self,
@@ -300,36 +585,38 @@ class OperatorConsoleRuntimeBridge:
         *,
         source_kind: str = "preview",
     ) -> str:
-        instance_snapshot = self.snapshot().get_instance_snapshot(instance_id)
-        inspection_result = self.selected_inspection_result(instance_id)
-        source_image = self._resolve_claim_rewards_source_image(
-            instance_snapshot,
-            inspection_result=inspection_result,
-            source_kind=source_kind,
-            draft=self._claim_rewards_draft(instance_id),
-        )
-        if not source_image:
-            return ""
-        crop_region = self._claim_rewards_crop_region(
-            instance_snapshot,
-            inspection_result=inspection_result,
-            draft=self._claim_rewards_draft(instance_id),
-        )
-        draft = self._claim_rewards_draft(instance_id)
-        artifact = _ClaimRewardsArtifactDraft(
-            artifact_id=f"claim_rewards:{source_kind}:{len(draft.artifacts) + 1}",
-            image_path=source_image,
-            source_kind=source_kind,
-            crop_region=crop_region,
-            metadata={"task_id": _CLAIM_REWARDS_TASK_ID},
-        )
-        draft.artifacts.append(artifact)
-        draft.selected_source_kind = source_kind
-        draft.selected_source_image = source_image
-        if draft.crop_region is None:
-            draft.crop_region = crop_region
-        draft.last_applied_at = utc_now()
-        return source_image
+        with self._lock:
+            instance_snapshot = self.snapshot().get_instance_snapshot(instance_id)
+            inspection_result = self.selected_inspection_result(instance_id)
+            source_image = self._resolve_claim_rewards_source_image(
+                instance_snapshot,
+                inspection_result=inspection_result,
+                source_kind=source_kind,
+                draft=self._claim_rewards_draft(instance_id),
+            )
+            if not source_image:
+                return ""
+            crop_region = self._claim_rewards_crop_region(
+                instance_snapshot,
+                inspection_result=inspection_result,
+                draft=self._claim_rewards_draft(instance_id),
+            )
+            draft = self._claim_rewards_draft(instance_id)
+            artifact = _ClaimRewardsArtifactDraft(
+                artifact_id=f"claim_rewards:{source_kind}:{len(draft.artifacts) + 1}",
+                image_path=source_image,
+                source_kind=source_kind,
+                crop_region=crop_region,
+                metadata={"task_id": _CLAIM_REWARDS_TASK_ID},
+            )
+            draft.artifacts.append(artifact)
+            draft.selected_source_kind = source_kind
+            draft.selected_source_image = source_image
+            if draft.crop_region is None:
+                draft.crop_region = crop_region
+            draft.last_applied_at = utc_now()
+            self._touch_presentation_state()
+            return source_image
 
     def queue_claim_rewards(
         self,
@@ -337,50 +624,56 @@ class OperatorConsoleRuntimeBridge:
         *,
         priority: int = _CLAIM_REWARDS_PRIORITY,
     ) -> QueuedTask:
-        existing = self._queued_claim_rewards_item(instance_id)
-        if existing is not None:
-            record = self._claim_rewards_record(instance_id)
-            record.queue_id = existing.queue_id
-            record.queued_at = existing.enqueued_at
-            if not record.source_image:
-                record.source_image = self._resolve_claim_rewards_source_image(
-                    self.snapshot().get_instance_snapshot(instance_id),
-                    inspection_result=self.selected_inspection_result(instance_id),
-                    draft=self._claim_rewards_draft(instance_id),
+        with self._lock:
+            existing = self._queued_claim_rewards_item(instance_id)
+            if existing is not None:
+                record = self._claim_rewards_record(instance_id)
+                record.queue_id = existing.queue_id
+                record.queued_at = existing.enqueued_at
+                if not record.source_image:
+                    record.source_image = self._resolve_claim_rewards_source_image(
+                        self.snapshot().get_instance_snapshot(instance_id),
+                        inspection_result=self.selected_inspection_result(instance_id),
+                        draft=self._claim_rewards_draft(instance_id),
+                    )
+                self._touch_presentation_state()
+                return existing
+            spec = self._build_claim_rewards_task_spec(instance_id)
+            queued = self._session.enqueue(
+                QueuedTask(
+                    instance_id=instance_id,
+                    spec=spec,
+                    priority=priority,
+                    metadata={
+                        "operator_workflow": "claim_rewards",
+                        "workflow_mode": self._claim_rewards_draft(instance_id).workflow_mode.value,
+                    },
                 )
-            return existing
-        spec = self._build_claim_rewards_task_spec(instance_id)
-        queued = self._session.enqueue(
-            QueuedTask(
-                instance_id=instance_id,
-                spec=spec,
-                priority=priority,
-                metadata={
-                    "operator_workflow": "claim_rewards",
-                    "workflow_mode": self._claim_rewards_draft(instance_id).workflow_mode.value,
-                },
             )
-        )
-        record = self._claim_rewards_record(instance_id)
-        record.queue_id = queued.queue_id
-        record.queued_at = queued.enqueued_at
-        record.source_image = self._resolve_claim_rewards_source_image(
-            self.snapshot().get_instance_snapshot(instance_id),
-            inspection_result=self.selected_inspection_result(instance_id),
-            draft=self._claim_rewards_draft(instance_id),
-        )
-        record.match_result = self._build_claim_rewards_match_result(
-            instance_id,
-            self.snapshot().get_instance_snapshot(instance_id),
-            inspection_result=self.selected_inspection_result(instance_id),
-        )
-        return queued
+            record = self._claim_rewards_record(instance_id)
+            record.queue_id = queued.queue_id
+            record.queued_at = queued.enqueued_at
+            record.source_image = self._resolve_claim_rewards_source_image(
+                self.snapshot().get_instance_snapshot(instance_id),
+                inspection_result=self.selected_inspection_result(instance_id),
+                draft=self._claim_rewards_draft(instance_id),
+            )
+            record.match_result = self._build_claim_rewards_match_result(
+                instance_id,
+                self.snapshot().get_instance_snapshot(instance_id),
+                inspection_result=self.selected_inspection_result(instance_id),
+            )
+            record.inspection_history.clear()
+            self._touch_presentation_state()
+            return queued
 
     def run_claim_rewards(self, instance_id: str) -> CommandDispatchResult:
-        self.queue_claim_rewards(instance_id)
-        result = self.dispatch_manual_action("start_queue", instance_id=instance_id)
-        self._sync_claim_rewards_record(instance_id)
-        return result
+        with self._lock:
+            self.queue_claim_rewards(instance_id)
+            result = self.dispatch_manual_action("start_queue", instance_id=instance_id)
+            self._sync_claim_rewards_record(instance_id)
+            self._touch_presentation_state()
+            return result
 
     def claim_rewards_pane(
         self,
@@ -389,159 +682,175 @@ class OperatorConsoleRuntimeBridge:
         runtime_snapshot: LiveRuntimeSnapshot | None = None,
         vision_state: VisionToolingState | None = None,
     ) -> ClaimRewardsPaneView:
-        blueprint = self._claim_rewards_blueprint()
-        builder_input = self._task_foundations.build_runtime_builder_input(_CLAIM_REWARDS_TASK_ID)
-        readiness = self._task_foundations.evaluate_task_readiness(_CLAIM_REWARDS_TASK_ID)
-        snapshot = runtime_snapshot or self.snapshot()
-        selected_snapshot = snapshot.get_instance_snapshot(instance_id) if instance_id else None
-        inspection_result = self.selected_inspection_result(instance_id) if instance_id else None
-        if vision_state is None and instance_id:
-            vision_state = self.vision_tooling_state(instance_id)
+        with self._lock:
+            runtime_input = self._claim_rewards_runtime_input_spec()
+            readiness = self._task_foundations.evaluate_task_readiness(_CLAIM_REWARDS_TASK_ID)
+            snapshot = runtime_snapshot or self.snapshot()
+            selected_snapshot = snapshot.get_instance_snapshot(instance_id) if instance_id else None
+            inspection_result = self.selected_inspection_result(instance_id) if instance_id else None
+            if vision_state is None and instance_id:
+                vision_state = self.vision_tooling_state(instance_id)
 
-        queued_items = [
-            item for item in self.queue_items(instance_id) if item.task_id == _CLAIM_REWARDS_TASK_ID
-        ] if instance_id else []
-        record = self._claim_rewards_records.get(instance_id)
-        draft = self._claim_rewards_drafts.get(instance_id)
-        workflow_status = self._claim_rewards_workflow_status(
-            selected_snapshot,
-            queued_items=queued_items,
-            record=record,
-        )
-        step_rows = self._claim_rewards_step_rows(blueprint, record)
-        failure_snapshot = record.last_run.failure_snapshot if record is not None and record.last_run is not None else None
-        source_image = self._resolve_claim_rewards_source_image(
-            selected_snapshot,
-            inspection_result=inspection_result,
-            draft=draft,
-        )
-        selected_resolution = (
-            vision_state.calibration.selected_resolution
-            if vision_state is not None and vision_state.calibration is not None
-            else None
-        )
-        selected_anchor_id = (
-            draft.selected_anchor_id
-            if draft is not None
-            else (
-                vision_state.anchors.selected_anchor_id
-                if vision_state is not None and vision_state.anchors is not None
-                else _CLAIM_REWARDS_ANCHOR_ID
-            )
-        )
-        runtime_blockers = [
-            requirement.summary
-            for requirement in readiness.implementation_requirements
-            if requirement.blocking and not requirement.satisfied
-        ]
-        last_run = record.last_run if record is not None else None
-        editor = ClaimRewardsEditorView(
-            workflow_mode=(draft.workflow_mode.value if draft is not None else _ClaimRewardsWorkflowMode.CLAIMABLE.value),
-            selected_source_kind=(draft.selected_source_kind if draft is not None else "preview"),
-            selected_source_image=source_image,
-            selected_anchor_id=selected_anchor_id,
-            crop_region_text=self._format_region(
-                draft.crop_region if draft is not None else (
-                    selected_resolution.capture_crop_region.to_tuple()
-                    if selected_resolution is not None and selected_resolution.capture_crop_region is not None
-                    else None
-                )
-            ),
-            match_region_text=self._format_region(
-                draft.match_region if draft is not None else (
-                    selected_resolution.effective_match_region if selected_resolution is not None else None
-                )
-            ),
-            confidence_threshold_text=self._format_optional_float(
-                draft.confidence_threshold if draft is not None else (
-                    selected_resolution.effective_confidence_threshold if selected_resolution is not None else None
-                )
-            ),
-            capture_scale_text=self._format_optional_float(
-                draft.capture_scale if draft is not None else (
-                    selected_snapshot.profile_binding.capture_scale
-                    if selected_snapshot is not None and selected_snapshot.profile_binding is not None
-                    else None
-                )
-            ),
-            capture_offset_text=self._format_point(
-                draft.capture_offset if draft is not None else (
-                    selected_snapshot.profile_binding.capture_offset
-                    if selected_snapshot is not None and selected_snapshot.profile_binding is not None
-                    else None
-                )
-            ),
-            artifact_count=len(draft.artifacts) if draft is not None else 0,
-            last_applied_summary=(
-                "Session-scoped claim rewards editor applied."
-                if draft is not None and draft.last_applied_at is not None
-                else ""
-            ),
-        )
-        return ClaimRewardsPaneView(
-            task_id=blueprint.task_id,
-            task_name=blueprint.manifest.name,
-            manifest_path=builder_input.manifest_path,
-            workflow_status=workflow_status,
-            workflow_banner=self._claim_rewards_banner(
+            queued_items = [
+                item for item in self.queue_items(instance_id) if item.task_id == _CLAIM_REWARDS_TASK_ID
+            ] if instance_id else []
+            record = self._claim_rewards_records.get(instance_id)
+            draft = self._claim_rewards_drafts.get(instance_id)
+            workflow_status = self._claim_rewards_workflow_status(
                 selected_snapshot,
-                readiness=readiness,
-                workflow_status=workflow_status,
                 queued_items=queued_items,
-            ),
-            runtime_gate_summary=(
-                "; ".join(runtime_blockers)
-                if runtime_blockers
-                else "No blocking runtime readiness requirement recorded."
-            ),
-            queue_summary=(
-                f"claim_rewards queued={len(queued_items)} | instance queue depth={selected_snapshot.queue_depth}"
-                if selected_snapshot is not None
-                else "Select an instance to queue claim rewards."
-            ),
-            last_run_summary=self._claim_rewards_last_run_summary(last_run),
-            active_step_summary=self._claim_rewards_active_step_summary(
+                record=record,
+            )
+            step_rows = self._claim_rewards_step_rows(runtime_input, record)
+            failure_snapshot = record.last_run.failure_snapshot if record is not None and record.last_run is not None else None
+            source_image = self._resolve_claim_rewards_source_image(
+                selected_snapshot,
+                inspection_result=inspection_result,
+                draft=draft,
+            )
+            selected_resolution = (
+                vision_state.calibration.selected_resolution
+                if vision_state is not None and vision_state.calibration is not None
+                else None
+            )
+            selected_anchor_id = (
+                draft.selected_anchor_id
+                if draft is not None
+                else (
+                    vision_state.anchors.selected_anchor_id
+                    if vision_state is not None and vision_state.anchors is not None
+                    else _CLAIM_REWARDS_ANCHOR_ID
+                )
+            )
+            runtime_blockers = [
+                requirement.summary
+                for requirement in readiness.implementation_requirements
+                if requirement.blocking and not requirement.satisfied
+            ]
+            last_run = record.last_run if record is not None else None
+            completed_count = sum(1 for row in step_rows if row.status == "succeeded")
+            current_step_title = self._claim_rewards_current_step_title(
                 workflow_status,
                 step_rows=step_rows,
-                last_run=last_run,
-            ),
-            failure_summary=self._claim_rewards_failure_summary(failure_snapshot, last_run),
-            preview_summary=(
-                source_image
-                or (
-                    vision_state.preview.image_path
-                    if vision_state is not None and vision_state.preview is not None
+            )
+            editor = ClaimRewardsEditorView(
+                workflow_mode=(draft.workflow_mode.value if draft is not None else _ClaimRewardsWorkflowMode.CLAIMABLE.value),
+                selected_source_kind=(draft.selected_source_kind if draft is not None else "preview"),
+                selected_source_image=source_image,
+                selected_anchor_id=selected_anchor_id,
+                crop_region_text=self._format_region(
+                    draft.crop_region if draft is not None else (
+                        selected_resolution.capture_crop_region.to_tuple()
+                        if selected_resolution is not None and selected_resolution.capture_crop_region is not None
+                        else None
+                    )
+                ),
+                match_region_text=self._format_region(
+                    draft.match_region if draft is not None else (
+                        selected_resolution.effective_match_region if selected_resolution is not None else None
+                    )
+                ),
+                confidence_threshold_text=self._format_optional_float(
+                    draft.confidence_threshold if draft is not None else (
+                        selected_resolution.effective_confidence_threshold if selected_resolution is not None else None
+                    )
+                ),
+                capture_scale_text=self._format_optional_float(
+                    draft.capture_scale if draft is not None else (
+                        selected_snapshot.profile_binding.capture_scale
+                        if selected_snapshot is not None and selected_snapshot.profile_binding is not None
+                        else None
+                    )
+                ),
+                capture_offset_text=self._format_point(
+                    draft.capture_offset if draft is not None else (
+                        selected_snapshot.profile_binding.capture_offset
+                        if selected_snapshot is not None and selected_snapshot.profile_binding is not None
+                        else None
+                    )
+                ),
+                artifact_count=len(draft.artifacts) if draft is not None else 0,
+                last_applied_summary=(
+                    "Session-scoped claim rewards editor applied."
+                    if draft is not None and draft.last_applied_at is not None
                     else ""
-                )
-            ),
-            selected_anchor_summary=self._claim_rewards_anchor_summary(
-                selected_anchor_id,
-                selected_resolution=selected_resolution,
-            ),
-            selected_scope_summary=self._claim_rewards_scope_summary(
-                selected_snapshot,
-                queued_items=queued_items,
-            ),
-            can_queue=bool(selected_snapshot is not None),
-            can_run_now=bool(selected_snapshot is not None),
-            is_queued=bool(queued_items),
-            queue_depth=selected_snapshot.queue_depth if selected_snapshot is not None else 0,
-            last_run_id=last_run.run_id if last_run is not None else "",
-            last_run_status=last_run.status.value if last_run is not None else "",
-            failure_reason=(
-                failure_snapshot.reason.value
-                if failure_snapshot is not None
-                else ""
-            ),
-            failure_step_id=failure_snapshot.step_id if failure_snapshot is not None and failure_snapshot.step_id else "",
-            failure_snapshot_id=failure_snapshot.snapshot_id if failure_snapshot is not None else "",
-            step_rows=step_rows,
-            editor=editor,
-        )
+                ),
+            )
+            return ClaimRewardsPaneView(
+                task_id=runtime_input.task_id,
+                task_name=runtime_input.manifest.name,
+                task_label="每日領獎",
+                manifest_path=runtime_input.manifest_path,
+                workflow_status=workflow_status,
+                workflow_banner=self._claim_rewards_banner(
+                    selected_snapshot,
+                    readiness=readiness,
+                    workflow_status=workflow_status,
+                    queued_items=queued_items,
+                ),
+                preset_summary=(
+                    f"{runtime_input.fixture_profile.display_name} | "
+                    f"{runtime_input.fixture_profile.locale} | "
+                    f"{runtime_input.fixture_profile.resolution[0]}x{runtime_input.fixture_profile.resolution[1]}"
+                ),
+                progress_summary=f"{completed_count}/{len(step_rows)} steps completed",
+                progress_completed_count=completed_count,
+                progress_total_count=len(step_rows),
+                current_step_title=current_step_title,
+                runtime_gate_summary=(
+                    "; ".join(runtime_blockers)
+                    if runtime_blockers
+                    else "No blocking runtime readiness requirement recorded."
+                ),
+                queue_summary=(
+                    f"claim_rewards queued={len(queued_items)} | instance queue depth={selected_snapshot.queue_depth}"
+                    if selected_snapshot is not None
+                    else "Select an instance to queue claim rewards."
+                ),
+                last_run_summary=self._claim_rewards_last_run_summary(last_run),
+                active_step_summary=self._claim_rewards_active_step_summary(
+                    workflow_status,
+                    step_rows=step_rows,
+                    last_run=last_run,
+                ),
+                failure_summary=self._claim_rewards_failure_summary(failure_snapshot, last_run),
+                preview_summary=(
+                    source_image
+                    or (
+                        vision_state.preview.image_path
+                        if vision_state is not None and vision_state.preview is not None
+                        else ""
+                    )
+                ),
+                selected_anchor_summary=self._claim_rewards_anchor_summary(
+                    selected_anchor_id,
+                    selected_resolution=selected_resolution,
+                ),
+                selected_scope_summary=self._claim_rewards_scope_summary(
+                    selected_snapshot,
+                    queued_items=queued_items,
+                ),
+                can_queue=bool(selected_snapshot is not None),
+                can_run_now=bool(selected_snapshot is not None),
+                is_queued=bool(queued_items),
+                queue_depth=selected_snapshot.queue_depth if selected_snapshot is not None else 0,
+                last_run_id=last_run.run_id if last_run is not None else "",
+                last_run_status=last_run.status.value if last_run is not None else "",
+                failure_reason=(
+                    failure_snapshot.reason.value
+                    if failure_snapshot is not None
+                    else ""
+                ),
+                failure_step_id=failure_snapshot.step_id if failure_snapshot is not None and failure_snapshot.step_id else "",
+                failure_snapshot_id=failure_snapshot.snapshot_id if failure_snapshot is not None else "",
+                step_rows=step_rows,
+                editor=editor,
+            )
 
     def global_emergency_stop_active(self) -> bool:
-        snapshots = self.snapshot().instance_snapshots
-        return bool(snapshots) and all(item.context is not None and item.context.stop_requested for item in snapshots)
+        with self._lock:
+            snapshots = self.snapshot().instance_snapshots
+            return bool(snapshots) and all(item.context is not None and item.context.stop_requested for item in snapshots)
 
     def dispatch_manual_action(
         self,
@@ -550,16 +859,18 @@ class OperatorConsoleRuntimeBridge:
         instance_id: str | None = None,
         payload: dict[str, object] | None = None,
     ) -> CommandDispatchResult:
-        command = build_manual_control_command(
-            action_key,
-            instance_id=instance_id,
-            payload=payload,
-        )
-        result = self._session.dispatch_command(command)
-        self._refresh_after_command(command.command_type, instance_id=instance_id)
-        if command.command_type == InstanceCommandType.START_QUEUE and instance_id:
-            self._sync_claim_rewards_record(instance_id)
-        return result
+        with self._lock:
+            command = build_manual_control_command(
+                action_key,
+                instance_id=instance_id,
+                payload=payload,
+            )
+            result = self._session.dispatch_command(command)
+            self._refresh_after_command(command.command_type, instance_id=instance_id)
+            if command.command_type == InstanceCommandType.START_QUEUE and instance_id:
+                self._sync_claim_rewards_record(instance_id)
+            self._touch_presentation_state()
+            return result
 
     def vision_workspace_catalog(self, *, selected_repository_id: str = ""):
         return build_template_workspace_catalog(
@@ -664,69 +975,253 @@ class OperatorConsoleRuntimeBridge:
         return None
 
     def _build_claim_rewards_task_spec(self, instance_id: str) -> TaskSpec:
-        blueprint = self._claim_rewards_blueprint()
+        runtime_input = self._claim_rewards_runtime_input_spec()
         draft = replace(self._claim_rewards_draft(instance_id))
         instance_snapshot = self.snapshot().get_instance_snapshot(instance_id)
+        if instance_snapshot is None:
+            raise ValueError(f"instance {instance_id} is not available in the live runtime snapshot")
         inspection_result = self.selected_inspection_result(instance_id)
         source_image = self._resolve_claim_rewards_source_image(
             instance_snapshot,
             inspection_result=inspection_result,
             draft=draft,
         )
-        match_result = self._build_claim_rewards_match_result(
-            instance_id,
-            instance_snapshot,
-            inspection_result=inspection_result,
+        navigation_plan = self._claim_rewards_navigation_plan(instance_snapshot)
+        spec = build_claim_rewards_task_spec(
+            adapter=self.session.adapter,
+            navigation_plan=navigation_plan,
+            runtime_input=runtime_input,
+            vision_gateway=_BridgeClaimRewardsVisionGateway(self, instance_id=instance_id),
         )
-        step_blueprints = {step.step_id: step for step in blueprint.steps}
         manifest = replace(
-            blueprint.manifest,
+            spec.manifest,
             metadata={
-                **dict(blueprint.manifest.metadata),
+                **dict(spec.manifest.metadata),
                 "operator_workflow": "claim_rewards",
                 "source_image": source_image,
             },
-        )
-        steps = [
-            TaskStep(
-                step_id="open_reward_panel",
-                description=self._claim_rewards_step_title(step_blueprints["open_reward_panel"]),
-                handler=lambda context, step_blueprint=step_blueprints["open_reward_panel"], resolved_source=source_image: self._claim_rewards_open_panel_step(
-                    context,
-                    step_blueprint=step_blueprint,
-                    source_image=resolved_source,
-                    workflow_mode=draft.workflow_mode,
-                ),
-            ),
-            TaskStep(
-                step_id="verify_claim_affordance",
-                description=self._claim_rewards_step_title(step_blueprints["verify_claim_affordance"]),
-                handler=lambda context, step_blueprint=step_blueprints["verify_claim_affordance"], resolved_source=source_image, resolved_match=match_result: self._claim_rewards_verify_affordance_step(
-                    context,
-                    step_blueprint=step_blueprint,
-                    source_image=resolved_source,
-                    workflow_mode=draft.workflow_mode,
-                    match_result=resolved_match,
-                ),
-            ),
-        ]
-        return TaskSpec(
-            task_id=blueprint.task_id,
-            name=blueprint.manifest.name,
-            version=blueprint.manifest.version,
-            entry_state="ready",
-            steps=steps,
+        ) if spec.manifest is not None else None
+        return replace(
+            spec,
             manifest=manifest,
             metadata={
-                **dict(blueprint.metadata),
+                **dict(spec.metadata),
                 "operator_workflow": "claim_rewards",
-                "manifest_path": "packs/daily_ui/daily_claim_rewards.task.json",
+                "workflow_mode": draft.workflow_mode.value,
                 "source_image": source_image,
+                "navigation_plan": navigation_plan.to_dict(),
             },
         )
 
     def _claim_rewards_step_title(self, step_blueprint) -> str:
         return step_blueprint.step_id.replace("_", " ").title()
+
+    def _claim_rewards_runtime_input_spec(self):
+        if self._claim_rewards_runtime_input is None:
+            self._claim_rewards_runtime_input = build_claim_rewards_runtime_input(
+                foundation_repository=self._task_foundations,
+                templates_root=self._templates_root,
+            )
+        return self._claim_rewards_runtime_input
+
+    def _claim_rewards_navigation_plan(self, instance_snapshot) -> ClaimRewardsNavigationPlan:
+        runtime_input = self._claim_rewards_runtime_input_spec()
+        width, height = runtime_input.fixture_profile.resolution
+        bindings: list[dict[str, object]] = []
+        if instance_snapshot is not None:
+            bindings.append(dict(instance_snapshot.instance.metadata))
+            if instance_snapshot.profile_binding is not None:
+                bindings.append(dict(instance_snapshot.profile_binding.settings))
+                bindings.append(dict(instance_snapshot.profile_binding.metadata))
+        for binding in bindings:
+            daily_ui_settings = binding.get("daily_ui")
+            if isinstance(daily_ui_settings, dict):
+                bindings.append(dict(daily_ui_settings))
+        for binding in bindings:
+            for key in (
+                "claim_rewards_open_panel_point",
+                "daily_ui_claim_rewards_open_panel_point",
+                "open_panel_point",
+            ):
+                point = self._coerce_point(binding.get(key))
+                if point is not None:
+                    return ClaimRewardsNavigationPlan(open_panel_point=point)
+        return ClaimRewardsNavigationPlan(
+            open_panel_point=(max(48, width - 96), min(height - 48, 96)),
+        )
+
+    def _build_claim_rewards_inspection(
+        self,
+        *,
+        instance_id: str,
+        screenshot_path: Path,
+        anchor_specs: dict[str, object],
+        metadata: dict[str, object] | None = None,
+    ) -> ClaimRewardsInspection:
+        instance_snapshot = self.snapshot().get_instance_snapshot(instance_id)
+        calibration_profile = self._build_calibration_profile(instance_snapshot)
+        draft = replace(self._claim_rewards_draft(instance_id))
+        reason = str((metadata or {}).get("reason") or "")
+        panel_state = self._claim_rewards_state_for_reason(draft.workflow_mode, reason=reason)
+        source_image = str(screenshot_path)
+        match_results: dict[str, TemplateMatchResult] = {}
+
+        def add_result(anchor_id: str, *, matched: bool, message: str) -> TemplateMatchResult | None:
+            anchor = anchor_specs.get(anchor_id)
+            if anchor is None:
+                return None
+            result = self._claim_rewards_anchor_result(
+                anchor=anchor,
+                source_image=source_image,
+                calibration_profile=calibration_profile,
+                matched=matched,
+                message=message,
+            )
+            match_results[anchor_id] = result
+            return result
+
+        claim_result = add_result(
+            "daily_ui.claim_reward",
+            matched=panel_state in {
+                ClaimRewardsPanelState.CLAIMABLE,
+                ClaimRewardsPanelState.CONFIRM_REQUIRED,
+            },
+            message=self._claim_rewards_claim_button_message(panel_state),
+        )
+        confirm_result = add_result(
+            "common.confirm_button",
+            matched=panel_state is ClaimRewardsPanelState.CONFIRM_REQUIRED,
+            message=self._claim_rewards_confirm_button_message(panel_state),
+        )
+        close_result = add_result(
+            "common.close_button",
+            matched=panel_state is ClaimRewardsPanelState.CLAIMED,
+            message=self._claim_rewards_close_button_message(panel_state),
+        )
+        return ClaimRewardsInspection(
+            state=panel_state,
+            screenshot_path=source_image,
+            message=self._claim_rewards_inspection_message(panel_state),
+            match_results=match_results,
+            claim_point=self._claim_rewards_match_point(claim_result),
+            confirm_point=self._claim_rewards_match_point(confirm_result),
+            close_point=self._claim_rewards_match_point(close_result),
+            metadata={
+                "instance_id": instance_id,
+                "reason": reason,
+                "workflow_mode": draft.workflow_mode.value,
+                **dict(metadata or {}),
+            },
+        )
+
+    def _record_claim_rewards_inspection(
+        self,
+        instance_id: str,
+        *,
+        reason: str,
+        inspection: ClaimRewardsInspection,
+    ) -> None:
+        record = self._claim_rewards_record(instance_id)
+        record.source_image = inspection.screenshot_path or record.source_image
+        record.inspection_history.append((reason, inspection))
+        if len(record.inspection_history) > 16:
+            record.inspection_history = record.inspection_history[-16:]
+
+    def _claim_rewards_state_for_reason(
+        self,
+        workflow_mode: _ClaimRewardsWorkflowMode,
+        *,
+        reason: str,
+    ) -> ClaimRewardsPanelState:
+        if workflow_mode == _ClaimRewardsWorkflowMode.PANEL_MISSING:
+            return ClaimRewardsPanelState.UNAVAILABLE
+        if workflow_mode == _ClaimRewardsWorkflowMode.ALREADY_CLAIMED:
+            return ClaimRewardsPanelState.CLAIMED
+        if workflow_mode == _ClaimRewardsWorkflowMode.AMBIGUOUS:
+            if reason == "open_reward_panel":
+                return ClaimRewardsPanelState.CONFIRM_REQUIRED
+            return ClaimRewardsPanelState.UNAVAILABLE
+        if reason in {
+            "claim_reward.post_tap",
+            "confirm_reward_claim.precheck",
+            "confirm_reward_claim.post_tap",
+            "verify_claimed",
+        }:
+            return ClaimRewardsPanelState.CLAIMED
+        return ClaimRewardsPanelState.CLAIMABLE
+
+    def _claim_rewards_anchor_result(
+        self,
+        *,
+        anchor,
+        source_image: str,
+        calibration_profile: CalibrationProfile | None,
+        matched: bool,
+        message: str,
+    ) -> TemplateMatchResult:
+        resolution = resolve_calibration_override(
+            anchor=anchor,
+            calibration_profile=calibration_profile,
+        )
+        runtime_input = self._claim_rewards_runtime_input_spec()
+        width, height = runtime_input.fixture_profile.resolution
+        bbox = resolution.effective_match_region or anchor.match_region or (0, 0, width, height)
+        candidates = [
+            VisionMatch(
+                anchor_id=anchor.anchor_id,
+                confidence=min(0.99, resolution.effective_confidence_threshold + 0.05),
+                bbox=bbox,
+                source_image=source_image,
+            )
+        ] if matched else []
+        result = build_match_result(
+            source_image=source_image,
+            candidates=candidates,
+            expected_anchor=anchor,
+            threshold=resolution.effective_confidence_threshold,
+            message=message,
+        )
+        result.metadata.update({"task_id": _CLAIM_REWARDS_TASK_ID})
+        return result
+
+    def _claim_rewards_match_point(
+        self,
+        result: TemplateMatchResult | None,
+    ) -> tuple[int, int] | None:
+        candidate = result.matched_candidate() if result is not None else None
+        if candidate is None:
+            return None
+        left, top, width, height = candidate.bbox
+        return (left + width // 2, top + height // 2)
+
+    def _claim_rewards_inspection_message(self, panel_state: ClaimRewardsPanelState) -> str:
+        if panel_state is ClaimRewardsPanelState.CLAIMABLE:
+            return "Claim button detected."
+        if panel_state is ClaimRewardsPanelState.CLAIMED:
+            return "Claimed reward state detected."
+        if panel_state is ClaimRewardsPanelState.CONFIRM_REQUIRED:
+            return "Confirmation modal is visible."
+        return "Reward panel could not be confirmed."
+
+    def _claim_rewards_claim_button_message(self, panel_state: ClaimRewardsPanelState) -> str:
+        if panel_state in {
+            ClaimRewardsPanelState.CLAIMABLE,
+            ClaimRewardsPanelState.CONFIRM_REQUIRED,
+        }:
+            return "Claim reward affordance detected."
+        if panel_state is ClaimRewardsPanelState.CLAIMED:
+            return "Claim button is no longer available."
+        return "Claim reward affordance was not detected."
+
+    def _claim_rewards_confirm_button_message(self, panel_state: ClaimRewardsPanelState) -> str:
+        if panel_state is ClaimRewardsPanelState.CONFIRM_REQUIRED:
+            return "Claim confirmation is required."
+        return "No confirmation modal detected."
+
+    def _claim_rewards_close_button_message(self, panel_state: ClaimRewardsPanelState) -> str:
+        if panel_state is ClaimRewardsPanelState.CLAIMED:
+            return "Claimed state exposes the close affordance."
+        return "Close affordance is not expected in the current panel state."
 
     def _claim_rewards_open_panel_step(
         self,
@@ -986,6 +1481,14 @@ class OperatorConsoleRuntimeBridge:
                 failure_snapshot.metadata.setdefault("crop_region", crop_region)
             if failure_snapshot.reason == FailureSnapshotReason.STEP_FAILED and not failure_snapshot.step_id and claim_run.step_results:
                 failure_snapshot.step_id = claim_run.step_results[-1].step_id
+            claim_rewards_failure = self._claim_rewards_failure_payload(
+                instance_id,
+                failure_step_id=failure_snapshot.step_id or "",
+                source_image=str(failure_snapshot.metadata.get("source_image") or record.source_image or ""),
+                inspection_history=list(record.inspection_history),
+            )
+            if claim_rewards_failure:
+                failure_snapshot.metadata["claim_rewards"] = claim_rewards_failure
 
     def _claim_rewards_workflow_status(
         self,
@@ -1006,7 +1509,7 @@ class OperatorConsoleRuntimeBridge:
 
     def _claim_rewards_step_rows(
         self,
-        blueprint: TaskBlueprint,
+        runtime_input,
         record: _ClaimRewardsExecutionRecord | None,
     ) -> list[ClaimRewardsStepView]:
         results_by_step = {
@@ -1020,26 +1523,32 @@ class OperatorConsoleRuntimeBridge:
             and record.last_run.failure_snapshot is not None
             else ""
         )
+        current_step_id = failure_step_id or next(
+            (
+                step.step_id
+                for step in runtime_input.step_specs
+                if step.step_id not in results_by_step
+            ),
+            "",
+        )
         rows: list[ClaimRewardsStepView] = []
-        for step_blueprint in blueprint.steps:
-            result = results_by_step.get(step_blueprint.step_id)
+        for step_spec in runtime_input.step_specs:
+            result = results_by_step.get(step_spec.step_id)
             rows.append(
                 ClaimRewardsStepView(
-                    step_id=step_blueprint.step_id,
-                    title=self._claim_rewards_step_title(step_blueprint),
-                    action=step_blueprint.action,
+                    step_id=step_spec.step_id,
+                    title=step_spec.description or step_spec.step_id.replace("_", " ").title(),
+                    action=step_spec.action,
                     status=result.status.value if result is not None else "pending",
                     summary=(
                         result.message
                         if result is not None
-                        else step_blueprint.notes or step_blueprint.success_condition
+                        else step_spec.notes or step_spec.success_condition or step_spec.description
                     ),
-                    success_condition=step_blueprint.success_condition,
-                    failure_condition=step_blueprint.failure_condition,
+                    success_condition=step_spec.success_condition,
+                    failure_condition=step_spec.failure_condition,
                     screenshot_path=(result.screenshot_path or "") if result is not None else "",
-                    is_current=(
-                        bool(failure_step_id) and failure_step_id == step_blueprint.step_id
-                    ),
+                    is_current=bool(current_step_id) and current_step_id == step_spec.step_id,
                 )
             )
         return rows
@@ -1150,6 +1659,188 @@ class OperatorConsoleRuntimeBridge:
             scope_parts.append(f"profile={selected_snapshot.profile_binding.profile_id}")
         return " | ".join(scope_parts)
 
+    def _claim_rewards_current_step_title(
+        self,
+        workflow_status: str,
+        *,
+        step_rows: list[ClaimRewardsStepView],
+    ) -> str:
+        if not step_rows:
+            return ""
+        if workflow_status == "queued":
+            return step_rows[0].title or step_rows[0].step_id
+        failed = next((row for row in step_rows if row.status == "failed"), None)
+        if failed is not None:
+            return failed.title or failed.step_id
+        pending = next((row for row in step_rows if row.status == "pending"), None)
+        if pending is not None:
+            return pending.title or pending.step_id
+        completed = next((row for row in reversed(step_rows) if row.status == "succeeded"), None)
+        if completed is not None:
+            return completed.title or completed.step_id
+        return step_rows[0].title or step_rows[0].step_id
+
+    def _claim_rewards_failure_payload(
+        self,
+        instance_id: str,
+        *,
+        failure_step_id: str,
+        source_image: str,
+        inspection_history: list[tuple[str, ClaimRewardsInspection]],
+    ) -> dict[str, object]:
+        if not inspection_history:
+            return {}
+        reason, inspection = inspection_history[-1]
+        repository = self._claim_rewards_repository()
+        if repository is None:
+            return {}
+        state = inspection.state
+        draft = self._claim_rewards_draft(instance_id)
+        claim_result = inspection.match_results.get("daily_ui.claim_reward")
+        reward_panel_result = self._claim_rewards_repository_result(
+            instance_id=instance_id,
+            anchor_id="daily_ui.reward_panel",
+            source_image=source_image or inspection.screenshot_path,
+            matched=state is not ClaimRewardsPanelState.UNAVAILABLE,
+            message=(
+                "Reward panel detected."
+                if state is not ClaimRewardsPanelState.UNAVAILABLE
+                else "Reward panel is not visible."
+            ),
+        )
+        confirm_result = self._claim_rewards_repository_result(
+            instance_id=instance_id,
+            anchor_id="daily_ui.reward_confirm_state",
+            source_image=source_image or inspection.screenshot_path,
+            matched=state is ClaimRewardsPanelState.CONFIRM_REQUIRED,
+            message=(
+                "Confirmation modal detected."
+                if state is ClaimRewardsPanelState.CONFIRM_REQUIRED
+                else "Confirmation modal is not visible."
+            ),
+        )
+        checks = {
+            "reward_panel": self._claim_rewards_check_payload(
+                reward_panel_result,
+                source_image=source_image or inspection.screenshot_path,
+                message=reward_panel_result.message if reward_panel_result is not None else "",
+                metadata={
+                    "workflow_mode": draft.workflow_mode.value,
+                    "panel_state": state.value,
+                    "inspection_reason": reason,
+                },
+            ),
+            "claim_reward_button": self._claim_rewards_check_payload(
+                claim_result,
+                source_image=source_image or inspection.screenshot_path,
+                message=self._claim_rewards_claim_button_message(state),
+                metadata={
+                    "workflow_mode": draft.workflow_mode.value,
+                    "panel_state": state.value,
+                    "inspection_reason": reason,
+                },
+            ),
+            "confirm_state": self._claim_rewards_check_payload(
+                confirm_result,
+                source_image=source_image or inspection.screenshot_path,
+                message=confirm_result.message if confirm_result is not None else "",
+                metadata={
+                    "workflow_mode": draft.workflow_mode.value,
+                    "panel_state": state.value,
+                    "inspection_reason": reason,
+                },
+            ),
+        }
+        current_check_id = self._claim_rewards_check_id_for_step(failure_step_id)
+        if not current_check_id:
+            current_check_id = self._claim_rewards_check_id_for_reason(reason)
+        if failure_step_id == "verify_claim_affordance" and state is ClaimRewardsPanelState.CONFIRM_REQUIRED:
+            current_check_id = "confirm_state"
+        return {
+            "task_id": _CLAIM_REWARDS_TASK_ID,
+            "workflow_mode": draft.workflow_mode.value,
+            "panel_state": state.value,
+            "inspection_reason": reason,
+            "current_check_id": current_check_id,
+            "selected_check_id": current_check_id,
+            "checks": checks,
+        }
+
+    def _claim_rewards_repository_result(
+        self,
+        *,
+        instance_id: str,
+        anchor_id: str,
+        source_image: str,
+        matched: bool,
+        message: str,
+    ) -> TemplateMatchResult | None:
+        repository = self._claim_rewards_repository()
+        if repository is None or not repository.has_anchor(anchor_id):
+            return None
+        instance_snapshot = self.snapshot().get_instance_snapshot(instance_id)
+        return self._claim_rewards_anchor_result(
+            anchor=repository.get_anchor(anchor_id),
+            source_image=source_image,
+            calibration_profile=self._build_calibration_profile(instance_snapshot),
+            matched=matched,
+            message=message,
+        )
+
+    def _claim_rewards_check_payload(
+        self,
+        result: TemplateMatchResult | None,
+        *,
+        source_image: str,
+        message: str,
+        metadata: dict[str, object] | None = None,
+    ) -> dict[str, object]:
+        candidates = []
+        resolved_source = source_image
+        payload: dict[str, object] = {
+            "source_image": resolved_source,
+            "message": message or (result.message if result is not None else ""),
+            "candidates": candidates,
+            "metadata": dict(metadata or {}),
+        }
+        if result is not None:
+            resolved_source = result.source_image or resolved_source
+            candidates = [
+                {
+                    "anchor_id": candidate.anchor_id,
+                    "confidence": candidate.confidence,
+                    "bbox": list(candidate.bbox),
+                    "source_image": candidate.source_image,
+                }
+                for candidate in result.candidates
+            ]
+            payload["threshold"] = result.threshold
+        payload["source_image"] = resolved_source
+        payload["candidates"] = candidates
+        return payload
+
+    def _claim_rewards_check_id_for_step(self, step_id: str) -> str:
+        mapping = {
+            "open_reward_panel": "reward_panel",
+            "verify_claim_affordance": "claim_reward_button",
+            "claim_reward": "claim_reward_button",
+            "confirm_reward_claim": "confirm_state",
+            "verify_claimed": "reward_panel",
+        }
+        return mapping.get(step_id, "")
+
+    def _claim_rewards_check_id_for_reason(self, reason: str) -> str:
+        mapping = {
+            "open_reward_panel": "reward_panel",
+            "verify_claim_affordance": "claim_reward_button",
+            "claim_reward.precheck": "claim_reward_button",
+            "claim_reward.post_tap": "claim_reward_button",
+            "confirm_reward_claim.precheck": "confirm_state",
+            "confirm_reward_claim.post_tap": "confirm_state",
+            "verify_claimed": "reward_panel",
+        }
+        return mapping.get(reason, "")
+
     def _format_region(
         self,
         region: tuple[int, int, int, int] | None,
@@ -1165,6 +1856,28 @@ class OperatorConsoleRuntimeBridge:
         if value is None:
             return ""
         return f"{value[0]},{value[1]}"
+
+    def _coerce_point(self, value: object) -> tuple[int, int] | None:
+        if not isinstance(value, (list, tuple)) or len(value) != 2:
+            return None
+        try:
+            return int(value[0]), int(value[1])
+        except (TypeError, ValueError):
+            return None
+
+    def _touch_presentation_state(self) -> None:
+        self._presentation_revision += 1
+
+    def _detect_adb_executable(self) -> Path | str | None:
+        try:
+            report = self._doctor_report_provider()
+        except Exception:
+            return None
+        adb = report.get("adb", {})
+        value = adb.get("path")
+        if not value:
+            return None
+        return str(value)
 
     def _load_environment_report(self) -> None:
         try:
