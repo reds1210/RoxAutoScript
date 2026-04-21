@@ -46,9 +46,95 @@ class AuditSink(Protocol):
 
 
 @dataclass(slots=True)
+class TaskActionDispatchResult:
+    command_id: str
+    command_type: InstanceCommandType
+    instance_id: str
+    status: str
+    message: str = ""
+    payload: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class TaskHealthCheckResult:
+    instance_id: str
+    healthy: bool
+    message: str = ""
+    checked_at: object = field(default_factory=utc_now)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+class TaskActionBridge(Protocol):
+    instance_id: str
+    task_id: str
+    queue_id: str | None
+
+    def dispatch(
+        self,
+        command: InstanceCommand,
+        *,
+        step_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> TaskActionDispatchResult:
+        """Dispatch one task-scoped runtime command."""
+
+    def tap(
+        self,
+        point: tuple[int, int],
+        *,
+        step_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> TaskActionDispatchResult:
+        """Tap one coordinate through the runtime command path."""
+
+    def swipe(
+        self,
+        start: tuple[int, int],
+        end: tuple[int, int],
+        *,
+        duration_ms: int = 250,
+        step_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> TaskActionDispatchResult:
+        """Swipe through the runtime command path."""
+
+    def input_text(
+        self,
+        text: str,
+        *,
+        step_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> TaskActionDispatchResult:
+        """Input text through the runtime command path."""
+
+    def capture_preview(
+        self,
+        *,
+        step_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> PreviewFrame | None:
+        """Capture one preview frame within the current task run."""
+
+    def check_health(
+        self,
+        *,
+        step_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> TaskHealthCheckResult:
+        """Run one task-scoped health check and sync runtime state."""
+
+
+@dataclass(slots=True)
 class TaskExecutionContext:
     instance: InstanceState
+    action_bridge: TaskActionBridge | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+
+    def require_action_bridge(self) -> TaskActionBridge:
+        if self.action_bridge is None:
+            raise RuntimeError("task action bridge is unavailable")
+        return self.action_bridge
 
 
 class StepHandler(Protocol):
@@ -139,6 +225,248 @@ class RuntimeInspectionResult:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass(slots=True)
+class _RuntimeTaskActionBridge:
+    coordinator: RuntimeCoordinator
+    instance: InstanceState
+    runtime_context: InstanceRuntimeContext
+    task_id: str
+    queue_id: str | None
+    task_metadata: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def instance_id(self) -> str:
+        return self.instance.instance_id
+
+    def __post_init__(self) -> None:
+        self._sync_task_metadata()
+
+    def dispatch(
+        self,
+        command: InstanceCommand,
+        *,
+        step_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> TaskActionDispatchResult:
+        if command.instance_id and command.instance_id != self.instance.instance_id:
+            raise ValueError(
+                f"Task action bridge is bound to {self.instance.instance_id}, not {command.instance_id}"
+            )
+        bound_command = replace(command, instance_id=self.instance.instance_id)
+        if self.coordinator._command_executor is None:
+            result = TaskActionDispatchResult(
+                command_id=bound_command.command_id,
+                command_type=bound_command.command_type,
+                instance_id=self.instance.instance_id,
+                status=CommandDispatchStatus.REJECTED.value,
+                message="command executor unavailable",
+                payload=dict(bound_command.payload),
+                metadata=self._result_metadata(step_id=step_id, metadata=metadata),
+            )
+        else:
+            raw_result = self.coordinator._command_executor.execute(self.instance, bound_command)
+            result = self._normalize_dispatch_result(
+                bound_command,
+                raw_result,
+                step_id=step_id,
+                metadata=metadata,
+            )
+        self.runtime_context.metadata["last_task_action_command_id"] = result.command_id
+        self.runtime_context.metadata["last_task_action_type"] = result.command_type.value
+        self.runtime_context.metadata["last_task_action_status"] = result.status
+        self.runtime_context.metadata["last_task_action_message"] = result.message
+        if step_id is not None:
+            self.runtime_context.metadata["last_task_action_step_id"] = step_id
+        self.task_metadata["last_task_action"] = result
+        self._sync_task_metadata()
+        return result
+
+    def tap(
+        self,
+        point: tuple[int, int],
+        *,
+        step_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> TaskActionDispatchResult:
+        return self.dispatch(
+            InstanceCommand(
+                command_type=InstanceCommandType.TAP,
+                instance_id=self.instance.instance_id,
+                payload={"point": point},
+            ),
+            step_id=step_id,
+            metadata=metadata,
+        )
+
+    def swipe(
+        self,
+        start: tuple[int, int],
+        end: tuple[int, int],
+        *,
+        duration_ms: int = 250,
+        step_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> TaskActionDispatchResult:
+        return self.dispatch(
+            InstanceCommand(
+                command_type=InstanceCommandType.SWIPE,
+                instance_id=self.instance.instance_id,
+                payload={"start": start, "end": end, "duration_ms": duration_ms},
+            ),
+            step_id=step_id,
+            metadata=metadata,
+        )
+
+    def input_text(
+        self,
+        text: str,
+        *,
+        step_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> TaskActionDispatchResult:
+        return self.dispatch(
+            InstanceCommand(
+                command_type=InstanceCommandType.INPUT_TEXT,
+                instance_id=self.instance.instance_id,
+                payload={"text": text},
+            ),
+            step_id=step_id,
+            metadata=metadata,
+        )
+
+    def capture_preview(
+        self,
+        *,
+        step_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> PreviewFrame | None:
+        preview_frame = self.coordinator._capture_preview_frame(
+            self.instance,
+            None,
+            task_id=self.task_id,
+            queue_id=self.queue_id,
+            step_id=step_id,
+            metadata=metadata,
+        )
+        self.coordinator._update_preview_context(
+            self.runtime_context,
+            preview_frame,
+            task_id=self.task_id,
+            queue_id=self.queue_id,
+            step_id=step_id,
+        )
+        self.task_metadata["last_task_preview_frame"] = preview_frame
+        self._sync_task_metadata()
+        return preview_frame
+
+    def check_health(
+        self,
+        *,
+        step_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> TaskHealthCheckResult:
+        health_result = self.coordinator._check_instance_health(
+            self.instance,
+            None,
+            task_id=self.task_id,
+            queue_id=self.queue_id,
+            step_id=step_id,
+            metadata=metadata,
+        )
+        self.coordinator._update_health_context(
+            self.runtime_context,
+            health_result,
+            task_id=self.task_id,
+            queue_id=self.queue_id,
+            step_id=step_id,
+        )
+        if health_result["healthy"]:
+            self.coordinator._clear_runtime_health_failure_snapshot(self.runtime_context)
+        else:
+            self.coordinator._record_runtime_health_failure_snapshot(
+                self.instance,
+                self.runtime_context,
+                message=str(health_result["message"] or "health check failed"),
+            )
+        next_status = self.coordinator._derive_inspection_status(
+            self.instance,
+            self.runtime_context,
+            health_result["healthy"],
+        )
+        if self.instance.status != next_status:
+            self.coordinator._registry.transition_status(self.instance.instance_id, next_status, force=True)
+            self.instance = self.coordinator._require_instance(self.instance.instance_id)
+        self.runtime_context.status = next_status
+        result = TaskHealthCheckResult(
+            instance_id=self.instance.instance_id,
+            healthy=bool(health_result["healthy"]),
+            message=str(health_result["message"]),
+            checked_at=health_result["checked_at"],
+            metadata=self._result_metadata(step_id=step_id, metadata=metadata),
+        )
+        self.task_metadata["last_task_health_check"] = result
+        self._sync_task_metadata()
+        return result
+
+    def _normalize_dispatch_result(
+        self,
+        command: InstanceCommand,
+        raw_result: Any,
+        *,
+        step_id: str | None,
+        metadata: dict[str, Any] | None,
+    ) -> TaskActionDispatchResult:
+        status = self.coordinator._normalize_result_status(raw_result) or "executed"
+        if isinstance(raw_result, dict):
+            message = str(raw_result.get("message", ""))
+            payload = dict(raw_result.get("payload", {})) if isinstance(raw_result.get("payload"), dict) else {}
+        else:
+            message = str(getattr(raw_result, "message", ""))
+            raw_payload = getattr(raw_result, "payload", None)
+            payload = dict(raw_payload) if isinstance(raw_payload, dict) else {}
+        if not payload:
+            payload = dict(command.payload)
+        return TaskActionDispatchResult(
+            command_id=command.command_id,
+            command_type=command.command_type,
+            instance_id=self.instance.instance_id,
+            status=status,
+            message=message,
+            payload=payload,
+            metadata=self._result_metadata(step_id=step_id, metadata=metadata),
+        )
+
+    def _result_metadata(
+        self,
+        *,
+        step_id: str | None,
+        metadata: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        result_metadata = {
+            "task_id": self.task_id,
+            "queue_id": self.queue_id,
+        }
+        if step_id is not None:
+            result_metadata["step_id"] = step_id
+        if metadata:
+            result_metadata.update(dict(metadata))
+        return result_metadata
+
+    def _sync_task_metadata(self) -> None:
+        self.task_metadata["action_bridge"] = self
+        self.task_metadata["task_id"] = self.task_id
+        self.task_metadata["queue_id"] = self.queue_id
+        self.task_metadata["profile_binding"] = self.runtime_context.profile_binding
+        self.task_metadata["runtime_context"] = self.runtime_context
+        self.task_metadata["health_check_ok"] = self.runtime_context.health_check_ok
+        self.task_metadata["health_check_message"] = str(
+            self.runtime_context.metadata.get("last_health_check_message", "")
+        )
+        self.task_metadata["preview_frame"] = self.runtime_context.preview_frame
+        self.task_metadata["failure_snapshot"] = self.runtime_context.failure_snapshot
+        self.task_metadata["stop_requested"] = self.runtime_context.stop_requested
+
+
 class TaskRunner:
     def __init__(self, event_bus: EventBus | None = None, audit_sink: AuditSink | None = None) -> None:
         self._event_bus = event_bus or EventBus()
@@ -151,6 +479,11 @@ class TaskRunner:
             task_id=spec.task_id,
             status=TaskRunStatus.RUNNING,
         )
+        context.metadata["run_id"] = run.run_id
+        context.metadata["task_id"] = run.task_id
+        runtime_context = context.metadata.get("runtime_context")
+        if isinstance(runtime_context, InstanceRuntimeContext):
+            runtime_context.active_run_id = run.run_id
         self._event_bus.publish(
             EVENT_TASK_STARTED,
             {
@@ -181,6 +514,7 @@ class TaskRunner:
                 context=context,
             )
             run.finished_at = utc_now()
+            context.metadata["run_status"] = run.status.value
             self._finish_run(run)
             return run
 
@@ -224,11 +558,13 @@ class TaskRunner:
                     screenshot_path=result.screenshot_path,
                 )
                 run.finished_at = utc_now()
+                context.metadata["run_status"] = run.status.value
                 self._finish_run(run)
                 return run
 
         run.status = TaskRunStatus.SUCCEEDED
         run.finished_at = utc_now()
+        context.metadata["run_status"] = run.status.value
         self._finish_run(run)
         return run
 
@@ -602,17 +938,28 @@ class RuntimeCoordinator:
             queue_id=item.queue_id,
             task_id=item.task_id,
         )
+        task_metadata = {
+            "queue_id": item.queue_id,
+            "profile_binding": context.profile_binding,
+            "runtime_context": context,
+            "health_check_ok": context.health_check_ok,
+            "health_check_message": context.metadata.get("last_health_check_message", ""),
+            "preview_frame": context.preview_frame,
+            "failure_snapshot": context.failure_snapshot,
+            "stop_requested": context.stop_requested,
+        }
+        action_bridge = _RuntimeTaskActionBridge(
+            self,
+            instance,
+            context,
+            task_id=item.task_id,
+            queue_id=item.queue_id,
+            task_metadata=task_metadata,
+        )
         task_context = TaskExecutionContext(
             instance=instance,
-            metadata={
-                "queue_id": item.queue_id,
-                "profile_binding": context.profile_binding,
-                "runtime_context": context,
-                "health_check_ok": context.health_check_ok,
-                "health_check_message": context.metadata.get("last_health_check_message", ""),
-                "preview_frame": context.preview_frame,
-                "stop_requested": context.stop_requested,
-            },
+            action_bridge=action_bridge,
+            metadata=task_metadata,
         )
         run = self._task_runner.run_task(
             spec=self._with_runtime_stop_conditions(item.spec),
@@ -771,22 +1118,40 @@ class RuntimeCoordinator:
         item: QueuedTask | None,
         *,
         command_id: str | None = None,
+        task_id: str | None = None,
+        queue_id: str | None = None,
+        step_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        effective_queue_id = item.queue_id if item is not None else queue_id
+        effective_task_id = item.task_id if item is not None else task_id
+        request_metadata = {
+            "queue_id": effective_queue_id,
+            "task_id": effective_task_id,
+            "command_id": command_id,
+        }
+        if step_id is not None:
+            request_metadata["step_id"] = step_id
+        if metadata:
+            request_metadata.update(dict(metadata))
         if self._health_checker is None:
-            return {"healthy": True, "message": "health checker unavailable"}
+            return {
+                "healthy": True,
+                "message": "health checker unavailable",
+                "checked_at": utc_now(),
+                "result": None,
+                "metadata": request_metadata,
+            }
         result = self._health_checker.check(
             instance,
-            metadata={
-                "queue_id": item.queue_id if item is not None else None,
-                "task_id": item.task_id if item is not None else None,
-                "command_id": command_id,
-            },
+            metadata=request_metadata,
         )
         return {
             "healthy": bool(getattr(result, "healthy", True)),
             "message": getattr(result, "message", ""),
             "checked_at": getattr(result, "checked_at", utc_now()),
             "result": result,
+            "metadata": request_metadata,
         }
 
     def _capture_preview_frame(
@@ -795,29 +1160,48 @@ class RuntimeCoordinator:
         item: QueuedTask | None,
         *,
         command_id: str | None = None,
+        task_id: str | None = None,
+        queue_id: str | None = None,
+        step_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> PreviewFrame | None:
+        effective_queue_id = item.queue_id if item is not None else queue_id
+        effective_task_id = item.task_id if item is not None else task_id
+        capture_metadata = {
+            "queue_id": effective_queue_id,
+            "command_id": command_id,
+        }
+        if step_id is not None:
+            capture_metadata["step_id"] = step_id
+        if metadata:
+            capture_metadata.update(dict(metadata))
         if self._preview_capture is None:
             return None
         try:
             return self._preview_capture.capture(
                 instance,
-                task_id=item.task_id if item is not None else None,
-                metadata={
-                    "queue_id": item.queue_id if item is not None else None,
-                    "command_id": command_id,
-                },
+                run_id=self._active_run_id_for_instance(instance.instance_id),
+                task_id=effective_task_id,
+                metadata=capture_metadata,
             )
         except Exception as exc:
             self._write_audit(
                 "runtime.preview_capture_failed",
                 {
                     "instance_id": instance.instance_id,
-                    "task_id": item.task_id if item is not None else None,
+                    "task_id": effective_task_id,
                     "command_id": command_id,
+                    "step_id": step_id,
                     "error": str(exc),
                 },
             )
             return None
+
+    def _active_run_id_for_instance(self, instance_id: str) -> str | None:
+        context = self._contexts.get(instance_id)
+        if context is None or context.active_run_id is None:
+            return None
+        return str(context.active_run_id)
 
     def _with_runtime_stop_conditions(self, spec: TaskSpec) -> TaskSpec:
         stop_conditions = list(spec.stop_conditions)
@@ -917,6 +1301,7 @@ class RuntimeCoordinator:
         task_id: str | None = None,
         queue_id: str | None = None,
         command_id: str | None = None,
+        step_id: str | None = None,
     ) -> None:
         context.health_check_ok = result["healthy"]
         context.metadata["last_health_check_ok"] = result["healthy"]
@@ -928,6 +1313,8 @@ class RuntimeCoordinator:
             context.metadata["last_health_check_queue_id"] = queue_id
         if command_id is not None:
             context.metadata["last_health_check_command_id"] = command_id
+        if step_id is not None:
+            context.metadata["last_health_check_step_id"] = step_id
 
     def _update_preview_context(
         self,
@@ -937,6 +1324,7 @@ class RuntimeCoordinator:
         task_id: str | None = None,
         queue_id: str | None = None,
         command_id: str | None = None,
+        step_id: str | None = None,
     ) -> None:
         if preview_frame is None:
             return
@@ -949,6 +1337,8 @@ class RuntimeCoordinator:
             context.metadata["last_preview_queue_id"] = queue_id
         if command_id is not None:
             context.metadata["last_preview_command_id"] = command_id
+        if step_id is not None:
+            context.metadata["last_preview_step_id"] = step_id
 
     def _record_runtime_health_failure_snapshot(
         self,

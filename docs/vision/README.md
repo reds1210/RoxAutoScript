@@ -69,6 +69,7 @@ Rules:
 - asset names stay lowercase and use underscores.
 - the repo loader treats the manifest as the source of truth.
 - placeholder template anchors may set `metadata.placeholder=true` so readiness tooling can distinguish scaffold assets from fully-ready captures.
+- template packs may declare `metadata.task_support` so vision validation can assert that one task has the full set of required inspection roles before GUI/runtime consumes the pack.
 
 ## Template Validation
 
@@ -89,6 +90,7 @@ Validation only enforces rules that are already part of the documented contracts
 - `match_region` width and height must be positive when present.
 - `template_path` must stay relative to the repository root and resolve to an existing file.
 - template file names should stay lowercase and use underscores.
+- task-specific support contracts declared in `metadata.task_support` must resolve to anchors with unique `metadata.inspection_role` values.
 
 The validator intentionally returns warnings for naming/grouping drift and errors for load-breaking conditions.
 
@@ -134,15 +136,56 @@ The vision package now exposes service-layer builders so the GUI can stop invent
 - `build_vision_tooling_state()` stitches the workspace catalog, readiness report, match/anchor/calibration/capture/replay/failure states into one aggregate contract.
 - `resolve_calibration_override()` centralizes per-anchor threshold/region/crop resolution so GUI and tooling do not each re-implement override logic.
 - `build_image_inspection_state()` turns match/crop/calibration context into a shared `ImageInspectionState` that preview, capture, and failure panes can all consume directly.
+- `FailureInspectorState.claim_rewards` now exposes a claim-specific checklist for `daily_ui.claim_rewards`, including per-check match summaries and one `ImageInspectionState` per check so GUI can focus directly on panel/button/confirm failures.
 
 These builders stay inside the vision layer and do not depend on `app`, `core` runtime orchestration details, or emulator transport implementations.
 
 Current sample coverage:
 
-- `daily_ui.claim_reward` placeholder template exists
+- `daily_ui.reward_panel` placeholder template exists
+- `daily_ui.claim_reward` placeholder template exists with a tighter button-focused match region
+- `daily_ui.reward_confirm_state` placeholder template exists
 - `daily_ui.guild_check_in_button` placeholder template now exists under `assets/templates/daily_ui/`
 - `odin.start_button` placeholder template exists
 - task asset inventory currently marks all three template dependencies as `placeholder`, so readiness tooling stays aligned with the current template workspace
+
+## Claim Rewards Support
+
+`assets/templates/daily_ui/manifest.json` now declares a claim-rewards support contract:
+
+- task id: `daily_ui.claim_rewards`
+- required inspection roles:
+  - `reward_panel`
+  - `claim_reward_button`
+  - `confirm_state`
+
+Each anchor participating in that contract carries:
+
+- `metadata.task_id`
+- `metadata.inspection_role`
+- `metadata.stage`
+
+This gives the vision layer enough information to:
+
+- validate that the pack has all three required claim-rewards checks
+- resolve a stable per-check expected anchor for overlays
+- build claim-specific failure payloads without importing task runtime code
+
+## GUI Consumption
+
+When the failure metadata includes a nested `claim_rewards` payload, Engine B should consume:
+
+- `FailureInspectorState.claim_rewards.checks`: the ordered per-check list for `reward_panel`, `claim_reward_button`, and `confirm_state`
+- `FailureInspectorState.claim_rewards.selected_check`: the currently failing or selected check
+- `FailureInspectorState.claim_rewards.selected_check.inspection`: the overlay-ready image state for the selected check
+- `FailureInspectorState.claim_rewards.selected_check_summary`: a one-line summary for the selected check
+- `FailureInspectorState.inspection`: the same selected-check inspection promoted to the generic failure pane for backward-compatible fallback rendering
+
+Recommended GUI behavior:
+
+- show the checklist in claim flow order
+- default focus to `current_check_id` when provided
+- render `selected_check.inspection` overlays even when the generic top-level `match_result` is absent
 
 ## Capture/Crop Workflow Skeleton
 

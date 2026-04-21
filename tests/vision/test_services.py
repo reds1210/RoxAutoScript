@@ -137,6 +137,27 @@ class VisionServiceTests(unittest.TestCase):
         self.assertEqual(inspection.message, "below threshold")
         self.assertEqual(inspection.best_candidate().confidence, 0.82)
 
+    def test_build_failure_inspection_infers_claim_rewards_anchor_from_metadata(self) -> None:
+        inspection = build_failure_inspection(
+            failure_id="failure-claim",
+            instance_id="mumu-1",
+            screenshot_path="captures/reward-failure.png",
+            metadata={
+                "claim_rewards": {
+                    "current_check_id": "confirm_state",
+                    "checks": {
+                        "confirm_state": {
+                            "anchor_id": "daily_ui.reward_confirm_state",
+                            "message": "Confirm state could not be verified.",
+                        }
+                    },
+                }
+            },
+        )
+
+        self.assertEqual(inspection.anchor_id, "daily_ui.reward_confirm_state")
+        self.assertEqual(inspection.message, "Confirm state could not be verified.")
+
     def test_resolve_calibration_override_applies_profile_and_anchor_values(self) -> None:
         anchor = AnchorSpec(
             anchor_id="common.close_button",

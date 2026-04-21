@@ -222,6 +222,36 @@ Minimum fields:
 - `message`
 - `screenshot_path`
 
+### `TaskExecutionContext`
+
+Minimum fields:
+
+- `instance`
+- `action_bridge` optional
+- `metadata`
+
+Rules:
+
+- runtime-owned task execution should populate `action_bridge` before step handlers run
+- `metadata` should carry the current `runtime_context`, `profile_binding`, latest `preview_frame`, and latest health state
+
+### `TaskActionBridge`
+
+Minimum methods:
+
+- `dispatch(command)`
+- `tap(point)`
+- `swipe(start, end, duration_ms)`
+- `input_text(text)`
+- `capture_preview()`
+- `check_health()`
+
+Rules:
+
+- task packs may use this bridge for deterministic emulator interactions during headless execution
+- bridge calls must flow through the runtime/emulator layer rather than importing GUI helpers or bypassing runtime context updates
+- bridge calls should keep runtime context observability in sync for preview, health, and last action metadata
+
 ### `VisionMatch`
 
 Minimum fields:
@@ -392,6 +422,20 @@ Minimum methods:
 - `input_text(instance, text)`
 - `launch_app(instance, package_name)`
 - `health_check(instance)`
+
+### `RuntimeExecutionPath`
+
+Minimum fields:
+
+- `adapter`
+- `command_executor`
+- `health_checker`
+- `preview_capture`
+
+Rules:
+
+- production runtime wiring may be bundled as one `RuntimeExecutionPath` so GUI and runtime code reuse the same adapter-backed services
+- `command_executor`, `health_checker`, and `preview_capture` should all be built from the same emulator adapter instance
 
 ### `RuntimeCoordinator`
 

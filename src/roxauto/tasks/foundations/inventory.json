@@ -9,7 +9,7 @@
         "fixture_profiles/default_tw_daily.fixture.json"
       ],
       "golden_root": "daily_ui/daily_ui_claim_rewards/{screen_slug}",
-      "implementation_state": "spec_only",
+      "implementation_state": "fixtured",
       "manifest_path": "packs/daily_ui/daily_claim_rewards.task.json",
       "runtime_requirement_ids": [
         "runtime.daily_ui.dispatch_bridge"
@@ -20,6 +20,7 @@
       "pack_id": "daily_ui",
       "required_anchors": [
         "common.close_button",
+        "common.confirm_button",
         "daily_ui.claim_reward"
       ],
       "task_id": "daily_ui.claim_rewards"

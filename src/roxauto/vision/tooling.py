@@ -4,6 +4,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+from roxauto.core.models import VisionMatch
 from roxauto.core.serde import to_primitive
 from roxauto.core.time import utc_now
 from roxauto.vision.models import (
@@ -25,6 +26,7 @@ from roxauto.vision.models import (
 from roxauto.vision.repository import AnchorRepository
 from roxauto.vision.services import (
     build_image_inspection_state,
+    build_match_result,
     build_replay_view,
     resolve_calibration_override,
 )
@@ -234,6 +236,49 @@ class FailureInspectorState:
     best_candidate_summary: str = ""
     calibration_resolution: CalibrationOverrideResolution | None = None
     inspection: ImageInspectionState | None = None
+    claim_rewards: ClaimRewardsInspectorState | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return to_primitive(asdict(self))
+
+
+@dataclass(slots=True)
+class ClaimRewardsCheckState:
+    check_id: str
+    label: str
+    anchor_id: str
+    stage: str = ""
+    status: MatchStatus = MatchStatus.MISSED
+    threshold: float = 0.85
+    message: str = ""
+    candidate_count: int = 0
+    matched_candidate: MatchCandidateView | None = None
+    best_candidate: MatchCandidateView | None = None
+    candidates: list[MatchCandidateView] = field(default_factory=list)
+    matched_candidate_summary: str = ""
+    best_candidate_summary: str = ""
+    calibration_resolution: CalibrationOverrideResolution | None = None
+    inspection: ImageInspectionState | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return to_primitive(asdict(self))
+
+
+@dataclass(slots=True)
+class ClaimRewardsInspectorState:
+    task_id: str
+    current_check_id: str = ""
+    selected_check_id: str = ""
+    selected_check: ClaimRewardsCheckState | None = None
+    checks: list[ClaimRewardsCheckState] = field(default_factory=list)
+    available_check_ids: list[str] = field(default_factory=list)
+    check_count: int = 0
+    matched_check_count: int = 0
+    missing_check_count: int = 0
+    selected_check_summary: str = ""
+    workflow_summary: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -556,34 +601,69 @@ def build_failure_inspector(
         calibration_profile=calibration_profile,
         selected_anchor_id=failure_record.anchor_id,
     )
+    resolved_anchor_id = failure_record.anchor_id
     calibration_resolution = match_state.calibration_resolution or _resolve_selected_calibration(
         repository=repository,
         calibration_profile=calibration_profile,
-        expected_anchor_id=failure_record.anchor_id,
+        expected_anchor_id=resolved_anchor_id,
     )
+    claim_rewards = _build_claim_rewards_inspector(
+        failure_record=failure_record,
+        repository=repository,
+        calibration_profile=calibration_profile,
+    )
+    selected_claim_check = claim_rewards.selected_check if claim_rewards is not None else None
+    failure_best_candidate = match_state.best_candidate
+    failure_candidates = match_state.candidates
+    failure_candidate_count = len(match_state.candidates)
+    failure_best_summary = match_state.best_candidate_summary
+    failure_status = match_state.status
+    failure_inspection = build_image_inspection_state(
+        inspection_id=f"failure:{failure_record.failure_id}",
+        image_path=failure_record.preview_image_path or failure_record.screenshot_path,
+        source_image=failure_record.screenshot_path,
+        match_result=failure_record.match_result,
+        calibration=calibration_resolution,
+        metadata={"kind": "failure_inspection", "failure_id": failure_record.failure_id},
+    )
+    failure_message = failure_record.message or match_state.message or message
+
+    if selected_claim_check is not None:
+        if not resolved_anchor_id:
+            resolved_anchor_id = selected_claim_check.anchor_id
+        if calibration_resolution is None:
+            calibration_resolution = selected_claim_check.calibration_resolution
+        if (
+            failure_record.match_result is None
+            or not match_state.candidates
+            or (failure_record.match_result.expected_anchor_id and not match_state.best_candidate)
+        ):
+            failure_status = selected_claim_check.status
+            failure_best_candidate = selected_claim_check.best_candidate
+            failure_candidates = list(selected_claim_check.candidates)
+            if selected_claim_check.inspection is not None:
+                failure_inspection = selected_claim_check.inspection
+            failure_candidate_count = selected_claim_check.candidate_count
+            failure_best_summary = selected_claim_check.best_candidate_summary
+        if not failure_message:
+            failure_message = selected_claim_check.message
 
     return FailureInspectorState(
         failure_id=failure_record.failure_id,
         instance_id=failure_record.instance_id,
         screenshot_path=failure_record.screenshot_path,
         preview_image_path=failure_record.preview_image_path,
-        anchor_id=failure_record.anchor_id,
-        status=match_state.status,
-        message=failure_record.message or match_state.message or message,
+        anchor_id=resolved_anchor_id,
+        status=failure_status,
+        message=failure_message,
         selected_anchor=anchor_state.selected_anchor,
-        best_candidate=match_state.best_candidate,
-        candidates=match_state.candidates,
-        candidate_count=len(match_state.candidates),
-        best_candidate_summary=match_state.best_candidate_summary,
+        best_candidate=failure_best_candidate,
+        candidates=failure_candidates,
+        candidate_count=failure_candidate_count,
+        best_candidate_summary=failure_best_summary,
         calibration_resolution=calibration_resolution,
-        inspection=build_image_inspection_state(
-            inspection_id=f"failure:{failure_record.failure_id}",
-            image_path=failure_record.preview_image_path or failure_record.screenshot_path,
-            source_image=failure_record.screenshot_path,
-            match_result=failure_record.match_result,
-            calibration=calibration_resolution,
-            metadata={"kind": "failure_inspection", "failure_id": failure_record.failure_id},
-        ),
+        inspection=failure_inspection,
+        claim_rewards=claim_rewards,
         metadata=dict(failure_record.metadata),
     )
 
@@ -906,12 +986,195 @@ def _candidate_summary(candidate: MatchCandidateView | None) -> str:
     )
 
 
+def _claim_rewards_check_summary(check: ClaimRewardsCheckState | None) -> str:
+    if check is None:
+        return ""
+    return (
+        f"{check.label} | anchor={check.anchor_id} | status={check.status.value} | "
+        f"candidates={check.candidate_count} | message={check.message or 'n/a'}"
+    )
+
+
+def _claim_rewards_workflow_summary(checks: list[ClaimRewardsCheckState], *, current_check_id: str) -> str:
+    if not checks:
+        return ""
+    parts = [f"current={current_check_id or checks[0].check_id}"]
+    parts.append(f"matched={sum(1 for check in checks if check.status == MatchStatus.MATCHED)}")
+    parts.append(f"missing={sum(1 for check in checks if check.status != MatchStatus.MATCHED)}")
+    return " | ".join(parts)
+
+
+def _build_claim_rewards_inspector(
+    *,
+    failure_record: FailureInspectionRecord,
+    repository: AnchorRepository | None,
+    calibration_profile: CalibrationProfile | None,
+) -> ClaimRewardsInspectorState | None:
+    if repository is None or repository.repository_id != "daily_ui":
+        return None
+
+    task_support = _claim_rewards_task_support(repository)
+    if not task_support:
+        return None
+
+    claim_metadata = failure_record.metadata.get("claim_rewards")
+    if not isinstance(claim_metadata, dict):
+        return None
+
+    current_check_id = str(claim_metadata.get("current_check_id") or "")
+    selected_check_id = str(claim_metadata.get("selected_check_id") or current_check_id)
+    check_payloads = dict(claim_metadata.get("checks", {})) if isinstance(claim_metadata.get("checks", {}), dict) else {}
+    checks: list[ClaimRewardsCheckState] = []
+
+    for check_id in [str(item) for item in task_support.get("required_anchor_roles", []) if str(item)]:
+        anchor = _find_task_anchor_by_role(repository, task_id="daily_ui.claim_rewards", role=check_id)
+        if anchor is None:
+            continue
+        payload = check_payloads.get(check_id, {})
+        if not isinstance(payload, dict):
+            payload = {}
+        stage = str(payload.get("stage") or anchor.metadata.get("stage") or "")
+        calibration_resolution = resolve_calibration_override(
+            anchor=anchor,
+            calibration_profile=calibration_profile,
+        )
+        source_image = str(
+            payload.get("source_image")
+            or failure_record.preview_image_path
+            or failure_record.screenshot_path
+        )
+        match_result = build_match_result(
+            source_image=source_image,
+            candidates=_vision_matches_from_payload(payload.get("candidates")),
+            expected_anchor=anchor,
+            threshold=_float_or_default(
+                payload.get("threshold"),
+                default=calibration_resolution.effective_confidence_threshold,
+            ),
+            message=str(payload.get("message") or ""),
+        )
+        match_state = build_match_inspector(
+            repository=repository,
+            match_result=match_result,
+            calibration_profile=calibration_profile,
+            source_image=source_image,
+            message=str(payload.get("message") or ""),
+        )
+        checks.append(
+            ClaimRewardsCheckState(
+                check_id=check_id,
+                label=str(payload.get("label") or anchor.label or check_id.replace("_", " ")),
+                anchor_id=anchor.anchor_id,
+                stage=stage,
+                status=match_state.status,
+                threshold=match_state.threshold,
+                message=match_state.message,
+                candidate_count=match_state.candidate_count,
+                matched_candidate=match_state.matched_candidate,
+                best_candidate=match_state.best_candidate,
+                candidates=list(match_state.candidates),
+                matched_candidate_summary=match_state.matched_candidate_summary,
+                best_candidate_summary=match_state.best_candidate_summary,
+                calibration_resolution=match_state.calibration_resolution,
+                inspection=match_state.inspection,
+                metadata={**dict(anchor.metadata), **dict(payload.get("metadata", {}))},
+            )
+        )
+
+    if not checks:
+        return None
+
+    selected_check = _select_claim_rewards_check(checks, selected_check_id or current_check_id)
+    return ClaimRewardsInspectorState(
+        task_id="daily_ui.claim_rewards",
+        current_check_id=current_check_id or (selected_check.check_id if selected_check is not None else ""),
+        selected_check_id=selected_check.check_id if selected_check is not None else "",
+        selected_check=selected_check,
+        checks=checks,
+        available_check_ids=[check.check_id for check in checks],
+        check_count=len(checks),
+        matched_check_count=sum(1 for check in checks if check.status == MatchStatus.MATCHED),
+        missing_check_count=sum(1 for check in checks if check.status != MatchStatus.MATCHED),
+        selected_check_summary=_claim_rewards_check_summary(selected_check),
+        workflow_summary=_claim_rewards_workflow_summary(checks, current_check_id=current_check_id),
+        metadata={key: value for key, value in claim_metadata.items() if key != "checks"},
+    )
+
+
+def _claim_rewards_task_support(repository: AnchorRepository) -> dict[str, Any]:
+    task_support = repository.manifest.metadata.get("task_support", {})
+    if not isinstance(task_support, dict):
+        return {}
+    support = task_support.get("daily_ui.claim_rewards", {})
+    return dict(support) if isinstance(support, dict) else {}
+
+
+def _find_task_anchor_by_role(
+    repository: AnchorRepository,
+    *,
+    task_id: str,
+    role: str,
+):
+    for anchor in repository.list_anchors():
+        metadata = dict(anchor.metadata)
+        raw_task_ids = metadata.get("task_ids", [])
+        task_ids = [str(metadata.get("task_id", ""))] if metadata.get("task_id") else []
+        if isinstance(raw_task_ids, list):
+            task_ids.extend(str(item) for item in raw_task_ids if str(item))
+        if task_id in task_ids and str(metadata.get("inspection_role", "")) == role:
+            return anchor
+    return None
+
+
+def _vision_matches_from_payload(value: Any) -> list[VisionMatch]:
+    if not isinstance(value, list):
+        return []
+    matches: list[VisionMatch] = []
+    for entry in value:
+        if not isinstance(entry, dict):
+            continue
+        bbox = entry.get("bbox", (0, 0, 0, 0))
+        if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
+            bbox = (0, 0, 0, 0)
+        matches.append(
+            VisionMatch(
+                anchor_id=str(entry.get("anchor_id", "")),
+                confidence=float(entry.get("confidence", 0.0)),
+                bbox=tuple(int(item) for item in bbox),
+                source_image=str(entry.get("source_image", "")),
+            )
+        )
+    return matches
+
+
+def _select_claim_rewards_check(
+    checks: list[ClaimRewardsCheckState],
+    selected_check_id: str,
+) -> ClaimRewardsCheckState | None:
+    for check in checks:
+        if check.check_id == selected_check_id:
+            return check
+    for check in checks:
+        if check.status != MatchStatus.MATCHED:
+            return check
+    return checks[0] if checks else None
+
+
 def _path_exists(value: str) -> bool:
     if not value:
         return False
     if "://" in value:
         return False
     return Path(value).exists()
+
+
+def _float_or_default(value: Any, *, default: float) -> float:
+    try:
+        if value is None:
+            return default
+        return float(value)
+    except (TypeError, ValueError):
+        return default
 
 
 def _resolve_selected_calibration(

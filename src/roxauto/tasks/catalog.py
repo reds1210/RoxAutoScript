@@ -48,7 +48,7 @@ _REQUIREMENT_SPECS: dict[str, _RequirementSpec] = {
     "runtime.daily_ui.dispatch_bridge": _RequirementSpec(
         requirement_id="runtime.daily_ui.dispatch_bridge",
         domain=TaskGapDomain.RUNTIME,
-        summary="Daily UI fixed-flow tasks still need a production runtime action-dispatch bridge.",
+        summary="Daily UI fixed-flow tasks require a production runtime action-dispatch bridge.",
         implementation_blocking=True,
     ),
     "calibration.odin.idle_state_profile": _RequirementSpec(
@@ -378,6 +378,12 @@ class TaskFoundationRepository:
                 if record.metadata.get("anchor_id") == spec.asset_anchor_id:
                     return record.status is TaskAssetStatus.PRESENT
             return False
+        if spec.requirement_id == "runtime.daily_ui.dispatch_bridge":
+            try:
+                from roxauto.tasks.daily_ui import has_claim_rewards_runtime_bridge
+            except ImportError:
+                return False
+            return has_claim_rewards_runtime_bridge()
         return False
 
     def _requirement_details(
@@ -394,6 +400,14 @@ class TaskFoundationRepository:
                         f"source_path={record.source_path or 'n/a'}"
                     )
             return "asset_status=missing source_path=n/a"
+        if spec.requirement_id == "runtime.daily_ui.dispatch_bridge":
+            status = "implemented" if satisfied else "missing"
+            return (
+                "runtime_bridge="
+                f"{status} "
+                "runtime_input_builder=roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_input "
+                "task_spec_builder=roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_task_spec"
+            )
         return "Requirement is not yet satisfied by current task foundations."
 
     def _warning_requirements(

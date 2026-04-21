@@ -6,16 +6,16 @@
       "task_id": "daily_ui.claim_rewards",
       "pack_id": "daily_ui",
       "builder_readiness_state": "ready",
-      "implementation_readiness_state": "blocked_by_runtime",
+      "implementation_readiness_state": "ready",
       "builder_requirements": [],
       "implementation_requirements": [
         {
           "requirement_id": "runtime.daily_ui.dispatch_bridge",
           "domain": "runtime",
-          "summary": "Daily UI fixed-flow tasks still need a production runtime action-dispatch bridge.",
-          "satisfied": false,
+          "summary": "Daily UI fixed-flow tasks require a production runtime action-dispatch bridge.",
+          "satisfied": true,
           "blocking": true,
-          "details": "Requirement is not yet satisfied by current task foundations.",
+          "details": "runtime_bridge=implemented runtime_input_builder=roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_input task_spec_builder=roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_task_spec",
           "metadata": {
             "domain": "runtime"
           }
@@ -51,7 +51,7 @@
         }
       ],
       "metadata": {
-        "implementation_state": "spec_only"
+        "implementation_state": "fixtured"
       }
     },
     {

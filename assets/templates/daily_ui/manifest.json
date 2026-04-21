@@ -4,20 +4,65 @@
   "version": "0.1.0",
   "metadata": {
     "owner": "vision-lab",
-    "purpose": "anchors for fixed UI daily flows"
+    "purpose": "anchors for fixed UI daily flows",
+    "task_support": {
+      "daily_ui.claim_rewards": {
+        "required_anchor_roles": [
+          "reward_panel",
+          "claim_reward_button",
+          "confirm_state"
+        ],
+        "workflow": "daily-ui-claim-rewards"
+      }
+    }
   },
   "anchors": [
+    {
+      "anchor_id": "daily_ui.reward_panel",
+      "label": "Reward Panel Frame",
+      "template_path": "anchors/daily_reward_panel.svg",
+      "confidence_threshold": 0.93,
+      "match_region": [420, 120, 1080, 840],
+      "description": "Stable frame for the daily reward panel before the reward button is classified.",
+      "tags": ["daily", "reward", "panel", "claim_rewards"],
+      "metadata": {
+        "workflow": "daily-ui",
+        "placeholder": true,
+        "task_id": "daily_ui.claim_rewards",
+        "inspection_role": "reward_panel",
+        "stage": "open_reward_panel"
+      }
+    },
     {
       "anchor_id": "daily_ui.claim_reward",
       "label": "Claim Reward Button",
       "template_path": "anchors/daily_claim_button.svg",
       "confidence_threshold": 0.91,
-      "match_region": [0, 0, 1920, 1080],
+      "match_region": [720, 720, 480, 220],
       "description": "Daily reward claim action.",
-      "tags": ["daily", "reward"],
+      "tags": ["daily", "reward", "button", "claim_rewards"],
       "metadata": {
         "workflow": "daily-ui",
-        "placeholder": true
+        "placeholder": true,
+        "task_id": "daily_ui.claim_rewards",
+        "inspection_role": "claim_reward_button",
+        "stage": "verify_claim_affordance"
+      }
+    },
+    {
+      "anchor_id": "daily_ui.reward_confirm_state",
+      "label": "Reward Confirm State",
+      "template_path": "anchors/daily_reward_confirm_state.svg",
+      "confidence_threshold": 0.92,
+      "match_region": [520, 220, 880, 520],
+      "description": "Confirmation modal state used to verify the reward-claim confirmation step.",
+      "tags": ["daily", "reward", "confirm", "claim_rewards"],
+      "metadata": {
+        "workflow": "daily-ui",
+        "placeholder": true,
+        "task_id": "daily_ui.claim_rewards",
+        "inspection_role": "confirm_state",
+        "stage": "verify_claim_affordance"
       }
     },
     {
