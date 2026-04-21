@@ -67,7 +67,7 @@
 - `python -m unittest discover -s tests/app -t .`
 - `python -m unittest discover -s tests -t .`
 - `python -c "import tests._bootstrap; import roxauto.app.shell"`
-- Result: `113` tests passed
+- Result: `133` tests passed after merging latest `main`
 
 ## What shipped
 
@@ -168,11 +168,11 @@
 
 ## Blockers
 
-- The app still owns a thin fallback `EmulatorActionAdapter` because the production emulator execution stack is not exposed to Engine B yet; screenshot paths and interaction side effects are therefore only as real as the injected adapter.
-- The `claim_rewards` queue/run flow is app-owned operator scaffolding, not the production runtime bridge; the readiness report still correctly shows `runtime.daily_ui.dispatch_bridge` as the blocking requirement.
+- The app still owns a thin fallback `EmulatorActionAdapter` seam; although runtime and task foundations now expose a production execution path, Engine B still depends on the injected adapter implementation being real.
+- The `claim_rewards` queue/run flow remains app-owned operator scaffolding; it has not yet been replaced with production runtime step telemetry from the task/runtime lines.
 - No live image annotation or persistent calibration authoring was added; the editor only holds session-scoped values needed to exercise the first task surface.
 - This handoff intentionally does not wire any second task into GUI state.
 
 ## Next recommended step
 
-- Land the production `runtime.daily_ui.dispatch_bridge` for `daily_ui.claim_rewards`, then replace the app-owned queue/run scaffold with real runtime step telemetry while keeping the GUI scope limited to the first task until that path is stable.
+- Replace the app-owned `claim_rewards` queue/run scaffold with production task/runtime telemetry, while keeping the GUI scope limited to the first task until that path is stable.

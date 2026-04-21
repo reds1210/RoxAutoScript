@@ -191,11 +191,17 @@ class OperatorConsoleRuntimeBridgeTests(unittest.TestCase):
             self.assertTrue(queued_pane.is_queued)
             self.assertEqual(queued_pane.editor.artifact_count, 1)
             self.assertEqual(queued_pane.editor.crop_region_text, "1,2,120,80")
-            self.assertIn("action-dispatch bridge", queued_pane.runtime_gate_summary)
+            self.assertEqual(
+                queued_pane.runtime_gate_summary,
+                "No blocking runtime readiness requirement recorded.",
+            )
             self.assertEqual(dispatch.command_type.value, "start_queue")
             self.assertEqual(pane.workflow_status, "succeeded")
             self.assertEqual(pane.last_run_status, "succeeded")
-            self.assertEqual([row.status for row in pane.step_rows], ["succeeded", "succeeded"])
+            self.assertEqual(
+                [row.status for row in pane.step_rows],
+                ["succeeded", "succeeded", "pending", "pending", "pending"],
+            )
             self.assertEqual(vision.workspace.selected_repository_id, "daily_ui")
             self.assertIsNotNone(vision.calibration.selected_resolution)
             self.assertEqual(
@@ -228,6 +234,10 @@ class OperatorConsoleRuntimeBridgeTests(unittest.TestCase):
             self.assertIn("ambiguous", pane.failure_summary)
             self.assertEqual(pane.step_rows[0].status, "succeeded")
             self.assertEqual(pane.step_rows[1].status, "failed")
+            self.assertEqual(
+                [row.status for row in pane.step_rows[2:]],
+                ["pending", "pending", "pending"],
+            )
             self.assertTrue(vision.failure.failure_id)
             self.assertEqual(vision.failure.anchor_id, "daily_ui.claim_reward")
             self.assertEqual(vision.failure.status.value, "missed")
