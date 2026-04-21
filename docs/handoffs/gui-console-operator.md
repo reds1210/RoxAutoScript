@@ -2,177 +2,110 @@
 
 ## Scope
 
-- Keep this round strictly inside Engine B ownership: `src/roxauto/app/`, `tests/app/`, and this handoff.
-- Only advance the first task, `daily_ui.claim_rewards`.
-- Expose a usable operator surface for queue / run / preview / failure / readiness / step tracking.
-- Add the smallest capture / calibration editor workflow needed for `claim_rewards`, without extending GUI wiring to `guild_check_in`, `odin`, or other gameplay automation.
+- Engine B ownership only: `src/roxauto/app/`, `assets/ui/`, `tests/app/`, `docs/handoffs/`.
+- This round only advanced the first visible task: `daily_ui.claim_rewards`.
+- The goal was an MVP product console, not more debug-panel surface.
 
 ## Changed files
 
 - `src/roxauto/app/runtime_bridge.py`
-- `src/roxauto/app/viewmodels.py`
 - `src/roxauto/app/shell.py`
-- `src/roxauto/app/__init__.py`
+- `src/roxauto/app/viewmodels.py`
+- `assets/ui/operator_console.qss`
 - `tests/app/test_runtime_bridge.py`
-- `tests/app/test_viewmodels.py`
 - `docs/handoffs/gui-console-operator.md`
 
-## Public APIs added or changed
+## What changed
 
-- `OperatorConsoleRuntimeBridge.refresh(...)` now drives GUI refresh through `LiveRuntimeSession.poll(refresh_runtime=True, ...)` instead of `poll()` plus app-side per-instance `refresh()` stitching.
-- `OperatorConsoleRuntimeBridge.refresh_runtime_contexts(...)` exposes the session-owned runtime inspection loop directly to the GUI layer.
-- `OperatorConsoleRuntimeBridge.update_claim_rewards_workflow(...)` stores session-scoped editor inputs for the app-owned `claim_rewards` workflow:
+- `OperatorConsoleRuntimeBridge` now exposes a non-blocking app-owned live controller:
+  - `start_live_updates(...)`
+  - `stop_live_updates(...)`
+  - `schedule_refresh(...)`
+  - `schedule_command(...)`
+  - `schedule_claim_rewards_*`
+  - `get_live_state(...)`
+  - `get_instance_summaries()`
+- GUI startup now instantiates `OperatorConsoleRuntimeBridge(workspace_root=...)` without injecting a fake session/adapter, so the default path uses `build_adb_live_runtime_session(...)` when running the real app.
+- The UI thread no longer calls `refresh()` on a timer. Background work happens in the bridge schedule loop; the UI timer only reads `get_live_state(...)`.
+- `daily_ui.claim_rewards` queue/run now uses the real task-side builder contract:
+  - `build_claim_rewards_runtime_input(...)`
+  - `build_claim_rewards_task_spec(...)`
+  - D-line step telemetry is projected as the visible 5-step flow
+- The bridge now records claim-rewards inspection history and projects failure metadata in the C-line flattened shape expected by `vision.failure.claim_rewards`.
+- The shell was rebuilt into a Traditional Chinese MVP console with:
+  - emulator card list
+  - connection/profile/runtime summary
+  - refresh/start/stop/global-stop controls
+  - a primary `每日領獎` panel with progress, current step, recent run, failure reason, scope, and preset
+  - secondary tabs for preview, failure analysis, readiness, and calibration/capture editor
+- Styling moved away from the old engineering-panel feel and now uses card/tabs/progress-bar presentation tuned for the new layout.
+
+## Runtime / task integration details
+
+- `claim_rewards` step rows now come from task-side runtime step specs rather than the old app-local 2-step stub.
+- Successful runs now show all 5 steps as completed.
+- Failure projection now includes:
+  - failure snapshot id / step id / message
+  - flattened `claim_rewards` checks for the failure tab
+  - selected check summary / workflow summary via `vision.failure.claim_rewards`
+- The bridge still keeps a session-scoped editor draft for:
   - workflow mode
   - crop region
   - match region
   - confidence threshold
-  - capture scale / offset
-  - selected source image / source kind
-- `OperatorConsoleRuntimeBridge.reset_claim_rewards_workflow(...)` clears the session-scoped `claim_rewards` editor state for one instance.
-- `OperatorConsoleRuntimeBridge.capture_claim_rewards_source(...)` snapshots the current preview or failure image into the `claim_rewards` editor workflow.
-- `OperatorConsoleRuntimeBridge.queue_claim_rewards(...)` authors and enqueues an app-owned `daily_ui.claim_rewards` task spec so the GUI can operate the first task without touching `src/roxauto/tasks/`.
-- `OperatorConsoleRuntimeBridge.run_claim_rewards(...)` queues and executes that app-owned `claim_rewards` workflow through the existing queue command surface.
-- `OperatorConsoleRuntimeBridge.claim_rewards_pane(...)` projects queue status, last run, active step, failure summary, preview source, anchor summary, scope summary, and editor state into one GUI-facing pane model.
-- `build_task_readiness_pane(...)` now scopes selected-task emphasis to runtime-owned active or queued tasks that actually exist in task readiness reports, instead of widening the selected scope from profile `allowed_tasks`.
-- `TaskReadinessRowView` now carries `fixture_profile_paths` and `scope_reasons` so the GUI can render focused operator diagnostics for the selected runtime task.
-- `ClaimRewardsStepView`, `ClaimRewardsEditorView`, and `ClaimRewardsPaneView` were added to `roxauto.app.viewmodels` and exported from `roxauto.app`.
-- `OperatorConsoleRuntimeBridge` now directly consumes:
-  - `LiveRuntimeSession.last_snapshot`
-  - `LiveRuntimeSession.last_inspection_results`
-  - `LiveRuntimeSession.last_command_result`
-  - `LiveRuntimeSession.last_queue_result`
-  - `build_template_workspace_catalog(...)`
-  - `build_vision_workspace_readiness_report(...)`
-  - `build_vision_tooling_state(...)`
-  - `build_image_inspection_state(...)`
-  - `TaskFoundationRepository.evaluate_task_readinesses()`
-  - `TaskFoundationRepository.build_runtime_builder_inputs()`
-- `OperatorConsoleState` now carries:
-  - `LiveRuntimeSnapshot`
-  - `LiveRuntimeInstanceSnapshot | None`
-  - `RuntimeInspectionResult | None`
-  - `VisionToolingState`
-  - `TaskReadinessPaneView`
-- `build_task_readiness_pane(...)` was added so the GUI can project foundation-owned builder / implementation readiness and gap domains without rebuilding task state.
+  - capture scale
+  - capture offset
+  - selected preview/failure source capture
 
-## Assumptions
+## GUI behavior now
 
-- A thin app-owned execution adapter is still acceptable until the emulator/runtime line exposes a production `EmulatorActionAdapter`; the important ownership boundary is that GUI state now comes from `LiveRuntimeSession`, not app-local sample feeds.
-- The selected template repository can be inferred from runtime context, bound profile metadata, failure anchor ids, or fall back to `common` when no better signal is present.
-- The `claim_rewards` execution path in this round is intentionally app-owned and synthetic: it mirrors the first task's manifest/step contract for operator validation, but it is not the production runtime/task implementation.
-- Capture / calibration edits remain session-scoped operator inputs; they do not write back to task packs, vision assets, or persistent calibration files.
+- Main surface:
+  - `模擬器卡片`
+  - `當前模擬器`
+  - `每日領獎`
+- Secondary surface:
+  - `預覽`
+  - `失敗分析`
+  - `就緒檢查`
+  - `校正 / 擷取`
+- The UI timer only reads state and never performs runtime refresh directly.
+- Buttons dispatch work through `schedule_*` methods only.
+
+## Operable now
+
+- Select a live instance from the emulator card list.
+- Refresh runtime state without blocking the UI thread.
+- Start queue / stop task / global emergency stop from the selected instance surface.
+- Queue `daily_ui.claim_rewards`.
+- Run `daily_ui.claim_rewards`.
+- Read current step, progress, last run status, failure reason, and scope for `daily_ui.claim_rewards`.
+- Capture preview/failure sources into the claim-rewards editor.
+- Apply/reset the session-scoped claim-rewards editor overrides needed for the first task.
+
+## Viewer-only now
+
+- Preview image pane
+- Flattened failure inspector pane
+- Readiness details pane
+- Calibration/capture diagnostics pane
+- Generic runtime/log diagnostics beyond the first-task workflow
+- Any persistence of editor values back into packs/assets/calibration profiles
+
+## Known limitations
+
+- The editor workflow is still session-scoped operator tooling, not persistent authoring.
+- The workflow-mode control remains an app-side operator aid; it is not a production gameplay setting.
+- No second task is wired into the GUI.
+- The shell still depends on the production environment having working ADB/runtime access when launched outside tests.
 
 ## Verification
 
+- `python -m py_compile src/roxauto/app/shell.py src/roxauto/app/runtime_bridge.py src/roxauto/app/viewmodels.py`
+- `python -c "import tests._bootstrap; import roxauto.app; import roxauto.app.shell"`
 - `python -m unittest discover -s tests/app -t .`
 - `python -m unittest discover -s tests -t .`
-- `python -c "import tests._bootstrap; import roxauto.app.shell"`
-- Result: `133` tests passed after merging latest `main`
+- Result: `135` tests passed
 
-## What shipped
+## Recommended next step
 
-- Replaced the old app-local refresh stitching with session-owned polling:
-  - GUI startup and timer refresh now use `LiveRuntimeSession.poll(refresh_runtime=True)`
-  - command aftermath uses `refresh_runtime_contexts(...)` so interaction / stop / queue state lands back in `last_inspection_results`
-- Reworked viewmodels so queue/detail/log/manual-control state now projects directly from:
-  - `last_snapshot.instance_snapshots`
-  - `last_inspection_results`
-  - `last_command_result`
-  - `last_queue_result`
-  - `recent_events`
-- Connected preview / capture / failure / anchor / calibration panes to shared inspection payloads:
-  - `VisionToolingState.preview`, `capture`, `failure`, `anchors`, `calibration`
-  - `build_image_inspection_state(...)` for the runtime preview viewer
-  - shared calibration resolution / overlay state instead of app-local merge rules
-- Added task readiness projection from foundations:
-  - builder ready / blocked
-  - implementation ready / blocked
-  - blocked by asset / runtime / calibration / foundation
-- Tightened selected task scope so the GUI only emphasizes runtime-owned active or queued work:
-  - `daily_ui.claim_rewards` now stays focused when it is the actual active task
-  - unrelated profile allowances like `odin.preset_entry` no longer bleed into the selected readiness scope
-- Expanded selected-task diagnostics in the Readiness pane for the focused runtime task:
-  - manifest path
-  - required anchors
-  - fixture profile paths
-  - runtime / asset / calibration / foundation requirement ids
-  - builder blockers, implementation blockers, and warnings
-- Updated preview context lines to show the narrowed selected task scope with runtime-derived reasons such as `active` or `queued`.
-- Added a dedicated `Claim Rewards` operator group to the shell with first-task-only controls:
-  - queue the app-owned `daily_ui.claim_rewards` task
-  - run it immediately through the existing queue command
-  - capture the current preview image into the workflow
-  - capture the latest failure screenshot into the workflow
-  - edit crop region, match region, threshold, capture scale, and capture offset
-  - reset the session-scoped claim editor
-- Added a dedicated `Claim Rewards` observability tab so operators can read, in one place:
-  - workflow status
-  - runtime readiness gate
-  - selected runtime scope
-  - preview source path
-  - last run id / status
-  - active step summary
-  - failure reason / failure step / failure snapshot id
-  - per-step status, summary, success condition, failure condition, and screenshot path
-- Wired `claim_rewards` into the shared vision/capture/calibration surfaces just far enough for the first task:
-  - selecting the `daily_ui` repository when the workflow is active, queued, or being edited
-  - projecting session-scoped crop/match/threshold edits through `CalibrationProfile`
-  - surfacing captured preview/failure images as capture-session artifacts
-  - producing an anchor match / failure surface that explains why the workflow succeeded or failed
-- Added app tests for:
-  - queueing and running the first task through the bridge
-  - projecting failed-step and failure-surface state for ambiguous matches
-  - preserving the new `claim_rewards` pane contract in `build_operator_console_state(...)`
-
-## Shared surfaces now consumed by GUI
-
-- Runtime:
-  - `LiveRuntimeSession.poll(refresh_runtime=True)`
-  - `LiveRuntimeSession.refresh_runtime_contexts()`
-  - `LiveRuntimeSession.last_snapshot`
-  - `LiveRuntimeSession.last_inspection_results`
-  - `LiveRuntimeSession.last_command_result`
-  - `LiveRuntimeSession.last_queue_result`
-- Vision:
-  - `build_image_inspection_state()`
-  - `build_vision_tooling_state()`
-  - `build_vision_workspace_readiness_report()`
-- Task foundations:
-  - `TaskFoundationRepository.evaluate_task_readinesses()`
-  - `TaskFoundationRepository.build_runtime_builder_inputs()`
-
-## Pane status
-
-- Operable now for `daily_ui.claim_rewards`:
-  - queue
-  - run
-  - preview-source capture
-  - failure-source capture
-  - session-scoped crop / match / threshold / scale / offset editor
-  - step / failure / readiness / preview diagnostics
-- Inspection-driven viewer surfaces:
-  - Preview
-  - Capture
-  - Failures
-  - Anchors
-  - Calibration
-  - Workspace readiness
-  - Task readiness / gaps
-- Still viewer-only:
-  - generic preview tab rendering
-  - generic capture artifact browser
-  - generic failure viewer
-  - generic anchor browser
-  - generic calibration pane
-  - any persistence of editor changes back into packs/assets/profiles
-
-## Blockers
-
-- The app still owns a thin fallback `EmulatorActionAdapter` seam; although runtime and task foundations now expose a production execution path, Engine B still depends on the injected adapter implementation being real.
-- The `claim_rewards` queue/run flow remains app-owned operator scaffolding; it has not yet been replaced with production runtime step telemetry from the task/runtime lines.
-- No live image annotation or persistent calibration authoring was added; the editor only holds session-scoped values needed to exercise the first task surface.
-- This handoff intentionally does not wire any second task into GUI state.
-
-## Next recommended step
-
-- Replace the app-owned `claim_rewards` queue/run scaffold with production task/runtime telemetry, while keeping the GUI scope limited to the first task until that path is stable.
+- Keep GUI scope on `daily_ui.claim_rewards`, but replace the remaining session-scoped editor assumptions with runtime-owned production signals once the runtime/task lines expose them.

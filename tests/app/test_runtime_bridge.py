@@ -200,7 +200,7 @@ class OperatorConsoleRuntimeBridgeTests(unittest.TestCase):
             self.assertEqual(pane.last_run_status, "succeeded")
             self.assertEqual(
                 [row.status for row in pane.step_rows],
-                ["succeeded", "succeeded", "pending", "pending", "pending"],
+                ["succeeded", "succeeded", "succeeded", "succeeded", "succeeded"],
             )
             self.assertEqual(vision.workspace.selected_repository_id, "daily_ui")
             self.assertIsNotNone(vision.calibration.selected_resolution)
@@ -241,6 +241,54 @@ class OperatorConsoleRuntimeBridgeTests(unittest.TestCase):
             self.assertTrue(vision.failure.failure_id)
             self.assertEqual(vision.failure.anchor_id, "daily_ui.claim_reward")
             self.assertEqual(vision.failure.status.value, "missed")
+            self.assertIsNotNone(vision.failure.claim_rewards)
+            self.assertEqual(vision.failure.claim_rewards.selected_check_id, "confirm_state")
+            self.assertIn("current=confirm_state", vision.failure.claim_rewards.workflow_summary)
+
+    def test_get_live_state_projects_cached_state_without_refreshing_runtime(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            adapter = FakeAdapter(Path(temp_dir), healthy=True)
+            bridge = OperatorConsoleRuntimeBridge(
+                workspace_root=Path(__file__).resolve().parents[2],
+                doctor_report_provider=_doctor_report,
+                adapter=adapter,
+                discovery=lambda: [_instance("mumu-0")],
+                profile_resolver=lambda instance: _profile_binding(instance.instance_id),
+            )
+            bridge.refresh()
+
+            state = bridge.get_live_state("mumu-0")
+
+            self.assertEqual(adapter.health_checks, 1)
+            self.assertEqual(adapter.screenshot_requests, 1)
+            self.assertEqual(state.selected_instance_id, "mumu-0")
+            self.assertEqual(state.claim_rewards.task_id, "daily_ui.claim_rewards")
+
+    def test_scheduled_claim_rewards_run_updates_live_state(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            adapter = FakeAdapter(Path(temp_dir), healthy=True)
+            bridge = OperatorConsoleRuntimeBridge(
+                workspace_root=Path(__file__).resolve().parents[2],
+                doctor_report_provider=_doctor_report,
+                adapter=adapter,
+                discovery=lambda: [_instance("mumu-0")],
+                profile_resolver=lambda instance: _profile_binding(instance.instance_id),
+            )
+            bridge.refresh()
+            bridge.start_live_updates(poll_interval_sec=60.0, bootstrap=False)
+            try:
+                bridge.schedule_claim_rewards_run("mumu-0")
+                self.assertTrue(bridge.wait_for_idle(timeout_sec=5.0))
+
+                state = bridge.get_live_state("mumu-0")
+
+                self.assertEqual(state.claim_rewards.workflow_status, "succeeded")
+                self.assertEqual(
+                    [row.status for row in state.claim_rewards.step_rows],
+                    ["succeeded", "succeeded", "succeeded", "succeeded", "succeeded"],
+                )
+            finally:
+                bridge.stop_live_updates()
 
 
 def _instance(instance_id: str) -> InstanceState:
