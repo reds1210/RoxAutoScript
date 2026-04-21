@@ -5,7 +5,12 @@ from json import dumps, loads
 from pathlib import Path
 from typing import Any, Self
 
-from roxauto.vision.models import AnchorSpec, TemplateRepositoryManifest
+from roxauto.vision.models import (
+    AnchorCurationProfile,
+    AnchorCurationReference,
+    AnchorSpec,
+    TemplateRepositoryManifest,
+)
 
 
 @dataclass(slots=True)
@@ -91,11 +96,36 @@ class AnchorRepository:
 
         return matched
 
+    def resolve_repository_path(self, relative_path: str | Path) -> Path:
+        return self.root / Path(relative_path)
+
     def resolve_template_path(self, template_path: str | Path) -> Path:
-        return self.root / Path(template_path)
+        return self.resolve_repository_path(template_path)
 
     def resolve_asset_path(self, anchor_id: str) -> Path:
         return self.resolve_template_path(self.get_anchor(anchor_id).template_path)
+
+    def get_anchor_curation(self, anchor_id: str) -> AnchorCurationProfile | None:
+        return AnchorCurationProfile.from_metadata(self.get_anchor(anchor_id).metadata)
+
+    def get_primary_curation_reference(self, anchor_id: str) -> AnchorCurationReference | None:
+        curation = self.get_anchor_curation(anchor_id)
+        if curation is None or not curation.references:
+            return None
+        return curation.references[0]
+
+    def resolve_curation_reference_path(self, anchor_id: str) -> Path | None:
+        reference = self.get_primary_curation_reference(anchor_id)
+        if reference is None or not reference.image_path:
+            return None
+        return self.resolve_repository_path(reference.image_path)
+
+    def get_task_support(self, task_id: str) -> dict[str, Any]:
+        task_support = self.manifest.metadata.get("task_support", {})
+        if not isinstance(task_support, dict):
+            return {}
+        support = task_support.get(task_id, {})
+        return dict(support) if isinstance(support, dict) else {}
 
     def to_dict(self) -> dict[str, Any]:
         return {

@@ -55,6 +55,9 @@ class TemplateValidationTests(unittest.TestCase):
         self.assertNotIn("missing_task_support_anchor_role", issue_codes)
         self.assertNotIn("duplicate_task_support_anchor_role", issue_codes)
         self.assertNotIn("missing_anchor_task_support_role", issue_codes)
+        self.assertNotIn("missing_anchor_curation_metadata", issue_codes)
+        self.assertNotIn("missing_anchor_curation_field", issue_codes)
+        self.assertNotIn("missing_curation_reference_asset", issue_codes)
 
     def test_validate_template_repository_reports_invalid_anchor_configuration(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -149,6 +152,80 @@ class TemplateValidationTests(unittest.TestCase):
         self.assertFalse(report.is_valid)
         self.assertEqual(missing_roles, {"reward_panel", "confirm_state"})
 
+    def test_validate_template_repository_requires_claim_rewards_curation_metadata(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            repository_root = Path(temp_dir) / "daily_ui"
+            anchors_root = repository_root / "anchors"
+            anchors_root.mkdir(parents=True)
+            (anchors_root / "reward_panel.svg").write_text("<svg />", encoding="utf-8")
+            manifest = {
+                "repository_id": "daily_ui",
+                "display_name": "Daily UI Templates",
+                "version": "0.1.0",
+                "anchors": [
+                    {
+                        "anchor_id": "daily_ui.reward_panel",
+                        "label": "Reward Panel",
+                        "template_path": "anchors/reward_panel.svg",
+                        "confidence_threshold": 0.93,
+                        "match_region": [1, 2, 3, 4],
+                        "metadata": {
+                            "task_id": "daily_ui.claim_rewards",
+                            "inspection_role": "reward_panel",
+                            "placeholder": True,
+                        },
+                    }
+                ],
+            }
+            (repository_root / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+            report = validate_template_repository(AnchorRepository.load(repository_root))
+
+        issue_codes = {issue.code for issue in report.issues}
+        self.assertFalse(report.is_valid)
+        self.assertIn("missing_anchor_curation_metadata", issue_codes)
+
+    def test_validate_template_repository_rejects_curated_claim_rewards_svg_without_references(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            repository_root = Path(temp_dir) / "daily_ui"
+            anchors_root = repository_root / "anchors"
+            anchors_root.mkdir(parents=True)
+            (anchors_root / "reward_panel.svg").write_text("<svg />", encoding="utf-8")
+            manifest = {
+                "repository_id": "daily_ui",
+                "display_name": "Daily UI Templates",
+                "version": "0.1.0",
+                "anchors": [
+                    {
+                        "anchor_id": "daily_ui.reward_panel",
+                        "label": "Reward Panel",
+                        "template_path": "anchors/reward_panel.svg",
+                        "confidence_threshold": 0.93,
+                        "match_region": [1, 2, 3, 4],
+                        "metadata": {
+                            "task_id": "daily_ui.claim_rewards",
+                            "inspection_role": "reward_panel",
+                            "placeholder": False,
+                            "curation": {
+                                "status": "curated",
+                                "intent_id": "claim_rewards_reward_panel",
+                                "scene_id": "reward_panel_open",
+                                "variant_id": "tw_baseline",
+                                "references": [],
+                            },
+                        },
+                    }
+                ],
+            }
+            (repository_root / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+            report = validate_template_repository(AnchorRepository.load(repository_root))
+
+        issue_codes = {issue.code for issue in report.issues}
+        self.assertFalse(report.is_valid)
+        self.assertIn("curated_anchor_missing_references", issue_codes)
+        self.assertIn("curated_anchor_requires_raster_template", issue_codes)
+
     def test_validate_template_workspace_reports_missing_and_invalid_manifests(self) -> None:
         with TemporaryDirectory() as temp_dir:
             templates_root = Path(temp_dir)
@@ -217,15 +294,22 @@ class TemplateValidationTests(unittest.TestCase):
             dependency.anchor_id: dependency for dependency in report.template_dependencies
         }
         guild_dependency = dependency_by_anchor["daily_ui.guild_check_in_button"]
+        claim_dependency = dependency_by_anchor["daily_ui.claim_reward"]
 
         self.assertEqual(report.template_dependency_count, 3)
-        self.assertEqual(report.placeholder_count, 3)
+        self.assertEqual(report.ready_count, 1)
+        self.assertEqual(report.placeholder_count, 2)
         self.assertEqual(report.missing_count, 0)
-        self.assertEqual(report.inventory_mismatch_count, 0)
+        self.assertEqual(report.inventory_mismatch_count, 1)
         self.assertEqual(guild_dependency.readiness_status, TemplateReadinessStatus.PLACEHOLDER)
         self.assertTrue(guild_dependency.anchor_present)
         self.assertTrue(guild_dependency.asset_exists)
         self.assertFalse(guild_dependency.inventory_mismatch)
+        self.assertEqual(claim_dependency.readiness_status, TemplateReadinessStatus.READY)
+        self.assertTrue(claim_dependency.inventory_mismatch)
+        self.assertEqual(claim_dependency.curation_status.value, "curated")
+        self.assertEqual(claim_dependency.curation_reference_count, 1)
+        self.assertIn("scene=reward_panel_claimable", claim_dependency.curation_summary)
 
         restored = VisionWorkspaceReadinessReport.from_dict(report.to_dict())
         self.assertEqual(restored.inventory_mismatch_count, report.inventory_mismatch_count)
