@@ -197,7 +197,15 @@ class LiveRuntimeSessionTests(unittest.TestCase):
                     entry_state="ready",
                     steps=[
                         TaskStep("open_reward_panel", "Open reward panel", lambda ctx: step_success("open_reward_panel", "opened")),
-                        TaskStep("claim_reward", "Claim reward", lambda ctx: step_failure("claim_reward", "tap had no effect")),
+                        TaskStep(
+                            "claim_reward",
+                            "Claim reward",
+                            lambda ctx: step_failure(
+                                "claim_reward",
+                                "tap had no effect",
+                                data=_claim_rewards_failure_data(),
+                            ),
+                        ),
                     ],
                 ),
                 priority=100,
@@ -214,8 +222,20 @@ class LiveRuntimeSessionTests(unittest.TestCase):
         self.assertEqual(state.selected_instance.last_step_count, 2)
         self.assertEqual(state.selected_instance.last_completed_step_count, 2)
         self.assertTrue(state.selected_instance.failure_snapshot_id)
+        self.assertEqual(state.selected_instance.failure_step_id, "claim_reward")
+        self.assertEqual(state.selected_instance.failure_reason_id, "claim_tap_no_effect")
+        self.assertEqual(state.selected_instance.failure_outcome_code, "claim_tap_no_effect")
+        self.assertEqual(state.selected_instance.failure_inspection_attempt_count, 2)
+        self.assertEqual(state.selected_instance.last_step_id, "claim_reward")
+        self.assertEqual(state.selected_instance.last_step_status, "failed")
+        self.assertEqual(state.selected_instance.last_step_failure_reason_id, "claim_tap_no_effect")
+        self.assertEqual(state.selected_instance.last_step_outcome_code, "claim_tap_no_effect")
         self.assertEqual(state.selected_instance.last_failure_snapshot_id, state.selected_instance.failure_snapshot_id)
         self.assertEqual(state.selected_instance.last_failure_reason, "step_failed")
+        self.assertEqual(state.selected_instance.last_failure_step_id, "claim_reward")
+        self.assertEqual(state.selected_instance.last_failure_reason_id, "claim_tap_no_effect")
+        self.assertEqual(state.selected_instance.last_failure_outcome_code, "claim_tap_no_effect")
+        self.assertEqual(state.selected_instance.last_failure_inspection_attempt_count, 2)
 
     def test_live_state_preserves_last_failure_summary_after_successful_retry(self) -> None:
         adapter = FakeAdapter(healthy=True)
@@ -229,7 +249,15 @@ class LiveRuntimeSessionTests(unittest.TestCase):
             entry_state="ready",
             steps=[
                 TaskStep("open_reward_panel", "Open reward panel", lambda ctx: step_success("open_reward_panel", "opened")),
-                TaskStep("claim_reward", "Claim reward", lambda ctx: step_failure("claim_reward", "tap had no effect")),
+                TaskStep(
+                    "claim_reward",
+                    "Claim reward",
+                    lambda ctx: step_failure(
+                        "claim_reward",
+                        "tap had no effect",
+                        data=_claim_rewards_failure_data(),
+                    ),
+                ),
             ],
         )
         success_spec = TaskSpec(
@@ -262,6 +290,69 @@ class LiveRuntimeSessionTests(unittest.TestCase):
             failed_state.selected_instance.last_failure_snapshot_id,
         )
         self.assertEqual(recovered_state.selected_instance.last_failure_reason, "step_failed")
+        self.assertEqual(recovered_state.selected_instance.last_failure_reason_id, "claim_tap_no_effect")
+        self.assertEqual(recovered_state.selected_instance.last_failure_outcome_code, "claim_tap_no_effect")
+        self.assertEqual(recovered_state.selected_instance.last_failure_inspection_attempt_count, 2)
+
+    def test_reconnect_preserves_runtime_authority_for_last_run_and_failure_snapshot(self) -> None:
+        adapter = FakeAdapter(healthy=True)
+        discovered: dict[str, list[InstanceState]] = {"states": [self.instance]}
+        session = LiveRuntimeSession(adapter, discovery=lambda: list(discovered["states"]))
+        session.sync_instances()
+        session.enqueue(
+            QueuedTask(
+                instance_id="mumu-0",
+                spec=TaskSpec(
+                    task_id="daily_ui.claim_rewards",
+                    name="Daily Reward Claim",
+                    version="0.1.0",
+                    entry_state="ready",
+                    steps=[
+                        TaskStep("open_reward_panel", "Open reward panel", lambda ctx: step_success("open_reward_panel", "opened")),
+                        TaskStep(
+                            "claim_reward",
+                            "Claim reward",
+                            lambda ctx: step_failure(
+                                "claim_reward",
+                                "tap had no effect",
+                                data=_claim_rewards_failure_data(),
+                            ),
+                        ),
+                    ],
+                ),
+                priority=100,
+            )
+        )
+
+        failed = session.start_queue("mumu-0")
+        disconnected = session.disconnect_instance("mumu-0", reason="transport reset")
+        reconnecting = session.reconnect_instance("mumu-0", rediscover=False)
+        discovered["states"] = [
+            InstanceState(
+                instance_id="mumu-0",
+                label="MuMu 0",
+                adb_serial="127.0.0.1:16384",
+                status=InstanceStatus.READY,
+            )
+        ]
+        session.rediscover_instances()
+        snapshot = session.get_instance_snapshot("mumu-0")
+        state = session.get_live_state(instance_id="mumu-0")
+
+        self.assertEqual(failed.runs[0].status, TaskRunStatus.FAILED)
+        self.assertEqual(disconnected.status, "disconnected")
+        self.assertEqual(reconnecting.status, "connecting")
+        self.assertIsNotNone(snapshot)
+        self.assertIsNotNone(snapshot.last_task_run)
+        self.assertEqual(snapshot.last_task_run.status.value, "failed")
+        self.assertEqual(snapshot.last_task_run.steps[-1].data["failure_reason_id"], "claim_tap_no_effect")
+        self.assertIsNotNone(snapshot.last_failure_snapshot)
+        self.assertEqual(snapshot.last_failure_snapshot.metadata["failure_reason_id"], "claim_tap_no_effect")
+        self.assertIsNotNone(state.selected_instance)
+        self.assertEqual(state.selected_instance.status, "ready")
+        self.assertEqual(state.selected_instance.last_run_status, "failed")
+        self.assertEqual(state.selected_instance.last_failure_reason_id, "claim_tap_no_effect")
+        self.assertEqual(state.selected_instance.last_failure_outcome_code, "claim_tap_no_effect")
 
     def test_build_registered_task_spec_uses_runtime_claim_rewards_context(self) -> None:
         adapter = FakeAdapter(healthy=True)
@@ -772,3 +863,36 @@ def _result(
         stdout=stdout,
         stderr=stderr,
     )
+
+
+def _claim_rewards_failure_data() -> dict[str, object]:
+    return {
+        "failure_reason_id": "claim_tap_no_effect",
+        "outcome_code": "claim_tap_no_effect",
+        "inspection_attempts": [
+            {
+                "attempt": 1,
+                "state": "claimable",
+                "screenshot_path": "captures/mumu-0.png",
+            },
+            {
+                "attempt": 2,
+                "state": "claimable",
+                "screenshot_path": "captures/mumu-0.png",
+            },
+        ],
+        "step_outcome": {
+            "kind": "verification_failed",
+            "failure_reason_id": "claim_tap_no_effect",
+        },
+        "task_action": {
+            "action": "tap_claim_reward",
+            "status": "executed",
+        },
+        "telemetry": {
+            "inspection": {
+                "workflow_mode": "claimable",
+                "expected_panel_states": ["claimed", "confirm_required"],
+            }
+        },
+    }

@@ -606,6 +606,7 @@ class TaskRunner:
                     step_id=result.step_id,
                     context=context,
                     screenshot_path=result.screenshot_path,
+                    step_result=result,
                 )
                 run.finished_at = utc_now()
                 context.metadata["run_status"] = run.status.value
@@ -840,6 +841,7 @@ class TaskRunner:
         step_id: str | None,
         context: TaskExecutionContext,
         screenshot_path: str | None = None,
+        step_result: TaskStepResult | None = None,
     ) -> FailureSnapshotMetadata:
         preview_frame = self._resolve_preview_frame(context, run, screenshot_path)
         snapshot = FailureSnapshotMetadata(
@@ -851,10 +853,11 @@ class TaskRunner:
             screenshot_path=screenshot_path or (preview_frame.image_path if preview_frame else None),
             step_id=step_id,
             preview_frame=preview_frame,
-            metadata={
-                "message": message,
-                "instance_label": context.instance.label,
-            },
+            metadata=self._build_failure_snapshot_metadata(
+                message=message,
+                context=context,
+                step_result=step_result,
+            ),
         )
         run.preview_frame = preview_frame
         run.failure_snapshot = snapshot
@@ -884,6 +887,59 @@ class TaskRunner:
         )
         self._write_audit("task.failure_snapshot", payload)
         return snapshot
+
+    def _build_failure_snapshot_metadata(
+        self,
+        *,
+        message: str,
+        context: TaskExecutionContext,
+        step_result: TaskStepResult | None,
+    ) -> dict[str, Any]:
+        metadata: dict[str, Any] = {
+            "message": message,
+            "instance_label": context.instance.label,
+        }
+        metadata.update(self._project_step_failure_metadata(step_result))
+        return metadata
+
+    def _project_step_failure_metadata(
+        self,
+        step_result: TaskStepResult | None,
+    ) -> dict[str, Any]:
+        if step_result is None or not isinstance(step_result.data, dict) or not step_result.data:
+            return {}
+        step_data = to_primitive(step_result.data)
+        if not isinstance(step_data, dict):
+            return {}
+
+        projected: dict[str, Any] = {
+            "step_data": step_data,
+        }
+        step_outcome = step_data.get("step_outcome")
+        if isinstance(step_outcome, dict) and step_outcome:
+            projected["step_outcome"] = dict(step_outcome)
+        task_action = step_data.get("task_action")
+        if isinstance(task_action, dict) and task_action:
+            projected["task_action"] = dict(task_action)
+        inspection_attempts = step_data.get("inspection_attempts")
+        if isinstance(inspection_attempts, list) and inspection_attempts:
+            projected["inspection_attempts"] = list(inspection_attempts)
+        telemetry = step_data.get("telemetry")
+        if isinstance(telemetry, dict):
+            inspection = telemetry.get("inspection")
+            if isinstance(inspection, dict) and inspection:
+                projected["inspection"] = dict(inspection)
+
+        failure_reason_id = str(step_data.get("failure_reason_id", "")).strip()
+        if not failure_reason_id and isinstance(step_outcome, dict):
+            failure_reason_id = str(step_outcome.get("failure_reason_id", "")).strip()
+        if failure_reason_id:
+            projected["failure_reason_id"] = failure_reason_id
+
+        outcome_code = str(step_data.get("outcome_code", "")).strip()
+        if outcome_code:
+            projected["outcome_code"] = outcome_code
+        return projected
 
     def _resolve_preview_frame(
         self,
