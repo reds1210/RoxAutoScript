@@ -499,6 +499,7 @@ def launch_placeholder_gui() -> int:
                     [
                         f"目前步驟：{claim.current_step_title or '-'}",
                         f"視覺檢查：{claim.failure_check_summary or '目前沒有需要人工確認的視覺檢查。'}",
+                        f"診斷焦點：{claim.selected_anchor_summary or '-'}",
                         f"下一步建議：{claim.next_action_summary or '-'}",
                         f"執行條件：{claim.runtime_gate_summary or '-'}",
                         f"最近執行：{claim.last_run_summary or '-'}",
@@ -551,17 +552,33 @@ def launch_placeholder_gui() -> int:
             selected = claim_failure.selected_check
             lines = [
                 f"視覺檢查：{state.claim_rewards.failure_check_summary or '-'}",
+                f"診斷焦點：{state.claim_rewards.selected_anchor_summary or '-'}",
                 f"下一步：{state.claim_rewards.next_action_summary or '-'}",
                 f"診斷摘要：{state.claim_rewards.failure_check_summary or state.claim_rewards.failure_summary or '-'}",
                 f"檢查進度：已命中 {claim_failure.matched_check_count} / 缺失 {claim_failure.missing_check_count}",
+                "說明：下列模板、參考圖、門檻與區域是 viewer-first 診斷資訊，不代表 app 另外發明了 runtime signal。",
             ]
             if selected is not None:
+                resolution = selected.calibration_resolution
+                threshold = (
+                    resolution.effective_confidence_threshold
+                    if resolution is not None
+                    else selected.threshold
+                )
+                region = (
+                    ",".join(str(value) for value in resolution.effective_match_region)
+                    if resolution is not None and resolution.effective_match_region is not None
+                    else "-"
+                )
                 lines.extend(
                     [
-                        f"錨點：{selected.anchor_id}",
+                        f"錨點：{selected.anchor_label or selected.label or '-'} | {selected.anchor_id}",
                         f"階段：{state.claim_rewards.current_step_title or selected.stage or '-'}",
                         f"狀態：{_zh_match_status(selected.status.value)}",
-                        f"門檻：{selected.threshold:.2f}",
+                        f"門檻：{threshold:.2f}",
+                        f"比對區域：{region}",
+                        f"模板：{selected.selected_template_path or '-'}",
+                        f"參考圖：{selected.selected_reference_image_path or '-'}",
                         f"最佳候選：{selected.best_candidate_summary or '-'}",
                         f"命中候選：{selected.matched_candidate_summary or '-'}",
                         f"疊圖：{selected.inspection.selected_overlay_summary if selected.inspection is not None else '-'}",

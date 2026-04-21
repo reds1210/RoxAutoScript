@@ -6,7 +6,17 @@ from tempfile import TemporaryDirectory
 
 import tests._bootstrap  # noqa: F401
 from roxauto.app.runtime_bridge import OperatorConsoleRuntimeBridge
-from roxauto.core.models import InstanceState, InstanceStatus, ProfileBinding, TaskManifest, TaskSpec
+from roxauto.core.models import (
+    InstanceState,
+    InstanceStatus,
+    ProfileBinding,
+    TaskManifest,
+    TaskRunStatus,
+    TaskRunTelemetry,
+    TaskSpec,
+    TaskStepTelemetry,
+    TaskStepTelemetryStatus,
+)
 from roxauto.core.queue import QueuedTask
 from roxauto.core.runtime import TaskStep, step_success
 from roxauto.profiles import JsonProfileStore
@@ -259,10 +269,13 @@ class OperatorConsoleRuntimeBridgeTests(unittest.TestCase):
                 pane.failure_check_summary,
                 "確認彈窗 | 對應步驟：確認獎勵狀態 | 檢查結果：已命中 | 已看到確認彈窗。",
             )
-            self.assertEqual(
-                pane.next_action_summary,
-                "先確認是否真的出現確認彈窗；若有，重擷取失敗畫面並檢查確認按鈕的比對區域後再執行。",
-            )
+            self.assertTrue(pane.next_action_summary.startswith("先確認是否真的出現確認彈窗；若有，"))
+            self.assertIn("門檻", pane.next_action_summary)
+            self.assertIn("比對區域", pane.next_action_summary)
+            self.assertIn("daily_ui.reward_confirm_state", pane.next_action_summary)
+            self.assertIn("daily_ui.reward_confirm_state", pane.selected_anchor_summary)
+            self.assertIn("門檻=", pane.selected_anchor_summary)
+            self.assertIn("區域=", pane.selected_anchor_summary)
             self.assertEqual(pane.step_rows[0].status, "succeeded")
             self.assertEqual(pane.step_rows[1].status, "failed")
             self.assertEqual(pane.step_rows[1].title, "確認獎勵狀態")
@@ -296,6 +309,103 @@ class OperatorConsoleRuntimeBridgeTests(unittest.TestCase):
             self.assertEqual(adapter.screenshot_requests, 1)
             self.assertEqual(state.selected_instance_id, "mumu-0")
             self.assertEqual(state.claim_rewards.task_id, "daily_ui.claim_rewards")
+
+    def test_claim_rewards_pane_uses_runtime_owned_last_run_when_bridge_record_is_empty(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            adapter = FakeAdapter(Path(temp_dir), healthy=True)
+            bridge = OperatorConsoleRuntimeBridge(
+                workspace_root=Path(__file__).resolve().parents[2],
+                doctor_report_provider=_doctor_report,
+                adapter=adapter,
+                discovery=lambda: [_instance("mumu-0")],
+                profile_resolver=lambda instance: _profile_binding(instance.instance_id),
+            )
+            bridge.refresh()
+            bridge.run_claim_rewards("mumu-0")
+            bridge._claim_rewards_records.clear()
+
+            pane = bridge.claim_rewards_pane("mumu-0")
+
+            self.assertEqual(pane.workflow_status, "succeeded")
+            self.assertEqual(pane.last_run_status, "succeeded")
+            self.assertTrue(pane.last_run_id)
+            self.assertEqual(
+                [row.status for row in pane.step_rows],
+                ["succeeded", "succeeded", "succeeded", "succeeded", "succeeded"],
+            )
+
+    def test_claim_rewards_pane_uses_runtime_owned_active_run_when_bridge_record_is_empty(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            adapter = FakeAdapter(Path(temp_dir), healthy=True)
+            bridge = OperatorConsoleRuntimeBridge(
+                workspace_root=Path(__file__).resolve().parents[2],
+                doctor_report_provider=_doctor_report,
+                adapter=adapter,
+                discovery=lambda: [_instance("mumu-0")],
+                profile_resolver=lambda instance: _profile_binding(instance.instance_id),
+            )
+            bridge.refresh()
+            snapshot = bridge.snapshot().get_instance_snapshot("mumu-0")
+            assert snapshot is not None
+            assert snapshot.context is not None
+            snapshot.context.active_task_id = "daily_ui.claim_rewards"
+            snapshot.context.active_run_id = "run-active"
+            snapshot.context.active_task_run = _running_claim_rewards_telemetry()
+            bridge._claim_rewards_records.clear()
+
+            pane = bridge.claim_rewards_pane("mumu-0")
+
+            self.assertEqual(pane.workflow_status, "running")
+            self.assertEqual(
+                [row.status for row in pane.step_rows],
+                ["succeeded", "succeeded", "running", "pending", "pending"],
+            )
+            self.assertTrue(pane.step_rows[2].is_current)
+            self.assertEqual(pane.current_step_title, pane.step_rows[2].title)
+
+    def test_vision_tooling_rebuilds_claim_failure_from_runtime_last_run_when_metadata_is_missing(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            adapter = FakeAdapter(Path(temp_dir), healthy=True)
+            bridge = OperatorConsoleRuntimeBridge(
+                workspace_root=Path(__file__).resolve().parents[2],
+                doctor_report_provider=_doctor_report,
+                adapter=adapter,
+                discovery=lambda: [_instance("mumu-0")],
+                profile_resolver=lambda instance: _profile_binding(instance.instance_id),
+            )
+            bridge.refresh()
+            bridge.capture_claim_rewards_source("mumu-0", source_kind="preview")
+            bridge.update_claim_rewards_workflow("mumu-0", workflow_mode="ambiguous")
+            bridge.run_claim_rewards("mumu-0")
+
+            snapshot = bridge.snapshot().get_instance_snapshot("mumu-0")
+            assert snapshot is not None
+            assert snapshot.context is not None
+            assert snapshot.context.last_failure_snapshot is not None
+            snapshot.context.last_failure_snapshot.metadata.pop("claim_rewards", None)
+            snapshot.context.last_failure_snapshot.metadata.pop("anchor_id", None)
+            snapshot.context.last_failure_snapshot.metadata.pop("expected_anchor_id", None)
+            bridge._claim_rewards_records.clear()
+
+            vision = bridge.vision_tooling_state("mumu-0")
+            pane = bridge.claim_rewards_pane("mumu-0")
+
+            self.assertEqual(vision.workspace.selected_repository_id, "daily_ui")
+            self.assertIsNotNone(vision.failure.claim_rewards)
+            assert vision.failure.claim_rewards is not None
+            self.assertEqual(vision.failure.claim_rewards.selected_check_id, "confirm_state")
+            self.assertEqual(
+                vision.failure.claim_rewards.selected_anchor_id,
+                "daily_ui.reward_confirm_state",
+            )
+            self.assertTrue(vision.failure.claim_rewards.selected_template_path.endswith("daily_reward_confirm_state.png"))
+            self.assertEqual(pane.workflow_status, "failed")
+            self.assertEqual(pane.failure_step_id, "verify_claim_affordance")
+            self.assertIn("daily_ui.reward_confirm_state", pane.selected_anchor_summary)
+            self.assertIn("門檻=", pane.selected_anchor_summary)
+            self.assertIn("區域=", pane.selected_anchor_summary)
+            self.assertIn("門檻", pane.next_action_summary)
+            self.assertIn("比對區域", pane.next_action_summary)
 
     def test_scheduled_claim_rewards_run_updates_live_state(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -408,6 +518,48 @@ def _instance(instance_id: str) -> InstanceState:
         label=instance_id.replace("mumu", "MuMu "),
         adb_serial=f"127.0.0.1:{16384 + int(instance_id.split('-')[1]) * 32}",
         status=InstanceStatus.READY,
+    )
+
+
+def _running_claim_rewards_telemetry() -> TaskRunTelemetry:
+    return TaskRunTelemetry(
+        task_id="daily_ui.claim_rewards",
+        run_id="run-active",
+        status=TaskRunStatus.RUNNING,
+        step_count=5,
+        completed_step_count=2,
+        current_step_id="claim_reward",
+        current_step_index=2,
+        steps=[
+            TaskStepTelemetry(
+                step_id="open_reward_panel",
+                description="Open reward panel",
+                status=TaskStepTelemetryStatus.SUCCEEDED,
+                message="ok",
+            ),
+            TaskStepTelemetry(
+                step_id="verify_claim_affordance",
+                description="Verify claim affordance",
+                status=TaskStepTelemetryStatus.SUCCEEDED,
+                message="ok",
+            ),
+            TaskStepTelemetry(
+                step_id="claim_reward",
+                description="Claim reward",
+                status=TaskStepTelemetryStatus.RUNNING,
+                message="running",
+            ),
+            TaskStepTelemetry(
+                step_id="confirm_reward_claim",
+                description="Confirm reward",
+                status=TaskStepTelemetryStatus.PENDING,
+            ),
+            TaskStepTelemetry(
+                step_id="verify_claimed",
+                description="Verify claimed",
+                status=TaskStepTelemetryStatus.PENDING,
+            ),
+        ],
     )
 
 
