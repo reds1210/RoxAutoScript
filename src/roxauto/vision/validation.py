@@ -562,8 +562,13 @@ def build_vision_workspace_readiness_report(
         source_path = str(record.get("source_path", ""))
         metadata = dict(record.get("metadata", {}))
         anchor_id = str(metadata.get("anchor_id", ""))
-        repository = repositories_by_id.get(pack_id)
-        validation_entry = validation_by_id.get(pack_id)
+        repository_id = _resolve_inventory_repository_id(
+            pack_id=pack_id,
+            anchor_id=anchor_id,
+            source_path=source_path,
+        )
+        repository = repositories_by_id.get(repository_id)
+        validation_entry = validation_by_id.get(repository_id)
 
         repository_present = repository is not None or validation_entry is not None
         anchor_present = bool(repository is not None and anchor_id and repository.has_anchor(anchor_id))
@@ -592,7 +597,7 @@ def build_vision_workspace_readiness_report(
 
         expected_source_path = ""
         if anchor_id and repository_present:
-            expected_source_path = f"assets/templates/{pack_id}/manifest.json#{anchor_id}"
+            expected_source_path = f"assets/templates/{repository_id}/manifest.json#{anchor_id}"
         inventory_mismatch = bool(expected_source_path and source_path != expected_source_path)
         if inventory_status == "missing" and anchor_present and asset_exists:
             inventory_mismatch = True
@@ -626,6 +631,7 @@ def build_vision_workspace_readiness_report(
                 message=message,
                 metadata={
                     **metadata,
+                    "repository_id": repository_id,
                     "expected_source_path": expected_source_path,
                 },
             )
@@ -1234,6 +1240,23 @@ def _build_anchor_issue_code_map(
                 continue
             result.setdefault(issue.anchor_id, []).append(issue.code)
     return result
+
+
+def _resolve_inventory_repository_id(
+    *,
+    pack_id: str,
+    anchor_id: str,
+    source_path: str,
+) -> str:
+    manifest_path = source_path.split("#", 1)[0].replace("\\", "/")
+    parts = [part for part in Path(manifest_path).parts if part]
+    if "templates" in parts:
+        templates_index = parts.index("templates")
+        if len(parts) > templates_index + 1:
+            return str(parts[templates_index + 1])
+    if anchor_id and "." in anchor_id:
+        return anchor_id.split(".", 1)[0]
+    return pack_id
 
 
 def _validate_task_support_contract(

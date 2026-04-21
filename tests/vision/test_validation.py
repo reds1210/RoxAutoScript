@@ -360,17 +360,17 @@ class TemplateValidationTests(unittest.TestCase):
         guild_dependency = dependency_by_anchor["daily_ui.guild_check_in_button"]
         claim_dependency = dependency_by_anchor["daily_ui.claim_reward"]
 
-        self.assertEqual(report.template_dependency_count, 3)
-        self.assertEqual(report.ready_count, 1)
+        self.assertEqual(report.template_dependency_count, 9)
+        self.assertEqual(report.ready_count, 7)
         self.assertEqual(report.placeholder_count, 2)
         self.assertEqual(report.missing_count, 0)
-        self.assertEqual(report.inventory_mismatch_count, 1)
+        self.assertEqual(report.inventory_mismatch_count, 0)
         self.assertEqual(guild_dependency.readiness_status, TemplateReadinessStatus.PLACEHOLDER)
         self.assertTrue(guild_dependency.anchor_present)
         self.assertTrue(guild_dependency.asset_exists)
         self.assertFalse(guild_dependency.inventory_mismatch)
         self.assertEqual(claim_dependency.readiness_status, TemplateReadinessStatus.READY)
-        self.assertTrue(claim_dependency.inventory_mismatch)
+        self.assertFalse(claim_dependency.inventory_mismatch)
         self.assertEqual(claim_dependency.curation_status.value, "curated")
         self.assertEqual(claim_dependency.provenance_kind, AnchorAssetProvenanceKind.CURATED_STAND_IN)
         self.assertEqual(claim_dependency.curation_reference_count, 1)
