@@ -23,21 +23,42 @@
       ]
     }
   ],
-  "implementation_state": "spec_only",
+  "implementation_state": "fixtured",
   "steps": [
     {
       "step_id": "open_reward_panel",
       "action": "deterministic_navigation",
       "success_condition": "The reward panel is visible with a stable claim affordance.",
       "failure_condition": "Reward panel could not be confirmed after deterministic navigation.",
-      "notes": "Navigation contract only. No tap coordinates or automation logic are encoded here."
+      "notes": "Runtime bridge opens the fixed panel through deterministic navigation before vision checks start."
     },
     {
       "step_id": "verify_claim_affordance",
       "action": "vision_verify",
       "success_condition": "A claimable or already-claimed reward state can be distinguished.",
       "failure_condition": "Claim button state remains ambiguous.",
-      "notes": "Depends on future fixed UI templates and goldens."
+      "notes": "Bridge classifies claimable, claimed, and confirm-required panel states from fixed anchors."
+    },
+    {
+      "step_id": "claim_reward",
+      "action": "tap_anchor",
+      "success_condition": "The claim tap advances the panel into a claimed or confirm-required state.",
+      "failure_condition": "Claim tap does not change the reward panel state.",
+      "notes": "Claim button coordinates come from the matched reward anchor."
+    },
+    {
+      "step_id": "confirm_reward_claim",
+      "action": "tap_anchor",
+      "success_condition": "A confirmation modal is accepted when the client presents one.",
+      "failure_condition": "Confirmation modal cannot be verified or resolved after the claim tap.",
+      "notes": "Uses the shared common.confirm_button anchor when the modal is present."
+    },
+    {
+      "step_id": "verify_claimed",
+      "action": "vision_verify",
+      "success_condition": "A claimed state indicator is visible and no actionable claim button remains in the same panel.",
+      "failure_condition": "The post-claim panel cannot be verified as claimed.",
+      "notes": "Final verification always captures a fresh screenshot."
     }
   ],
   "metadata": {
@@ -47,17 +68,18 @@
     ],
     "task_pack_owner": "engine_d"
   },
-  "notes": "Specification-only blueprint for a future fixed-UI reward claim task.",
+  "notes": "Fixtured fixed-UI reward claim task with a headless runtime bridge and deterministic panel flow.",
   "pack_id": "daily_ui",
   "required_anchors": [
     "common.close_button",
+    "common.confirm_button",
     "daily_ui.claim_reward"
   ],
   "task_manifest": {
     "entry_condition": "Home HUD is visible and the fixed reward panel can be opened through deterministic UI navigation.",
     "failure_condition": "The reward panel, claim button, or confirmation modal cannot be verified within retry budget.",
     "metadata": {
-      "implementation_state": "spec_only",
+      "implementation_state": "fixtured",
       "phase": "pre_gate_3"
     },
     "name": "Daily Reward Claim",

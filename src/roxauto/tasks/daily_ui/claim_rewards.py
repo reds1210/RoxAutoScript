@@ -1,0 +1,636 @@
+from __future__ import annotations
+
+from dataclasses import dataclass, field, replace
+from enum import Enum
+from pathlib import Path
+from typing import Any, Iterable, Protocol
+
+from roxauto.core.models import InstanceState, TaskManifest, TaskSpec, VisionMatch
+from roxauto.core.runtime import TaskExecutionContext, TaskStep, step_failure, step_success
+from roxauto.emulator.execution import EmulatorActionAdapter
+from roxauto.tasks.catalog import TaskFoundationRepository
+from roxauto.tasks.models import (
+    TaskBlueprint,
+    TaskFixtureProfile,
+    TaskReadinessReport,
+    TaskReadinessState,
+    TaskRuntimeBuilderInput,
+    TaskStepBlueprint,
+)
+from roxauto.vision import AnchorRepository, AnchorSpec, TemplateMatchResult, build_match_result
+
+_CLAIM_REWARD_ANCHOR_ID = "daily_ui.claim_reward"
+_CLOSE_BUTTON_ANCHOR_ID = "common.close_button"
+_CONFIRM_BUTTON_ANCHOR_ID = "common.confirm_button"
+_INSPECTION_CONTEXT_KEY = "daily_ui.claim_rewards.inspection"
+_INSPECTION_HISTORY_KEY = "daily_ui.claim_rewards.inspection_history"
+
+
+class ClaimRewardsPanelState(str, Enum):
+    CLAIMABLE = "claimable"
+    CLAIMED = "claimed"
+    CONFIRM_REQUIRED = "confirm_required"
+    UNAVAILABLE = "unavailable"
+
+
+@dataclass(slots=True)
+class ClaimRewardsNavigationPlan:
+    open_panel_point: tuple[int, int]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"open_panel_point": self.open_panel_point}
+
+
+@dataclass(slots=True)
+class ClaimRewardsInspection:
+    state: ClaimRewardsPanelState
+    screenshot_path: str
+    message: str = ""
+    match_results: dict[str, TemplateMatchResult] = field(default_factory=dict)
+    claim_point: tuple[int, int] | None = None
+    confirm_point: tuple[int, int] | None = None
+    close_point: tuple[int, int] | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "state": self.state.value,
+            "screenshot_path": self.screenshot_path,
+            "message": self.message,
+            "claim_point": self.claim_point,
+            "confirm_point": self.confirm_point,
+            "close_point": self.close_point,
+            "matched_anchor_ids": [
+                anchor_id
+                for anchor_id, result in self.match_results.items()
+                if result.is_match()
+            ],
+            "metadata": dict(self.metadata),
+        }
+
+
+@dataclass(slots=True)
+class ClaimRewardsRuntimeStepSpec:
+    step_id: str
+    action: str
+    description: str
+    success_condition: str
+    failure_condition: str = ""
+    notes: str = ""
+    anchor_id: str = ""
+    expected_panel_states: tuple[ClaimRewardsPanelState, ...] = ()
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "step_id": self.step_id,
+            "action": self.action,
+            "description": self.description,
+            "success_condition": self.success_condition,
+            "failure_condition": self.failure_condition,
+            "notes": self.notes,
+            "anchor_id": self.anchor_id,
+            "expected_panel_states": [state.value for state in self.expected_panel_states],
+            "metadata": dict(self.metadata),
+        }
+
+
+@dataclass(slots=True)
+class ClaimRewardsRuntimeInput:
+    task_id: str
+    pack_id: str
+    manifest_path: str
+    manifest: TaskManifest
+    builder_input: TaskRuntimeBuilderInput
+    readiness_report: TaskReadinessReport
+    blueprint: TaskBlueprint
+    fixture_profile_path: str
+    fixture_profile: TaskFixtureProfile
+    required_anchor_ids: list[str] = field(default_factory=list)
+    anchor_specs: dict[str, AnchorSpec] = field(default_factory=dict)
+    step_specs: list[ClaimRewardsRuntimeStepSpec] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "task_id": self.task_id,
+            "pack_id": self.pack_id,
+            "manifest_path": self.manifest_path,
+            "fixture_profile_path": self.fixture_profile_path,
+            "fixture_id": self.fixture_profile.fixture_id,
+            "required_anchor_ids": list(self.required_anchor_ids),
+            "step_specs": [step.to_dict() for step in self.step_specs],
+            "builder_input": self.builder_input.to_dict(),
+            "implementation_readiness_state": self.readiness_report.implementation_readiness_state.value,
+            "warning_requirement_ids": [
+                requirement.requirement_id
+                for requirement in self.readiness_report.warning_requirements
+            ],
+            "metadata": dict(self.metadata),
+        }
+
+
+class ClaimRewardsTemplateMatcher(Protocol):
+    def match(
+        self,
+        image_path: Path,
+        anchor: AnchorSpec,
+        *,
+        instance: InstanceState,
+        metadata: dict[str, Any] | None = None,
+    ) -> Iterable[VisionMatch]:
+        """Return candidate matches for one anchor against one screenshot."""
+
+
+class ClaimRewardsVisionGateway(Protocol):
+    def inspect(
+        self,
+        *,
+        instance: InstanceState,
+        screenshot_path: Path,
+        anchor_specs: dict[str, AnchorSpec],
+        metadata: dict[str, Any] | None = None,
+    ) -> ClaimRewardsInspection:
+        """Classify one reward-panel screenshot."""
+
+
+class TemplateMatcherClaimRewardsVisionGateway:
+    def __init__(self, matcher: ClaimRewardsTemplateMatcher) -> None:
+        self._matcher = matcher
+
+    def inspect(
+        self,
+        *,
+        instance: InstanceState,
+        screenshot_path: Path,
+        anchor_specs: dict[str, AnchorSpec],
+        metadata: dict[str, Any] | None = None,
+    ) -> ClaimRewardsInspection:
+        match_results = {
+            anchor_id: self._match_anchor(
+                screenshot_path=screenshot_path,
+                anchor=anchor_specs[anchor_id],
+                instance=instance,
+                metadata=metadata,
+            )
+            for anchor_id in (
+                _CLAIM_REWARD_ANCHOR_ID,
+                _CONFIRM_BUTTON_ANCHOR_ID,
+                _CLOSE_BUTTON_ANCHOR_ID,
+            )
+        }
+        state = _classify_panel_state(match_results)
+        return ClaimRewardsInspection(
+            state=state,
+            screenshot_path=str(screenshot_path),
+            message=_inspection_message(state),
+            match_results=match_results,
+            claim_point=_matched_point(match_results[_CLAIM_REWARD_ANCHOR_ID]),
+            confirm_point=_matched_point(match_results[_CONFIRM_BUTTON_ANCHOR_ID]),
+            close_point=_matched_point(match_results[_CLOSE_BUTTON_ANCHOR_ID]),
+            metadata={"source": "template_matcher_gateway", **dict(metadata or {})},
+        )
+
+    def _match_anchor(
+        self,
+        *,
+        screenshot_path: Path,
+        anchor: AnchorSpec,
+        instance: InstanceState,
+        metadata: dict[str, Any] | None,
+    ) -> TemplateMatchResult:
+        return build_match_result(
+            source_image=str(screenshot_path),
+            candidates=self._matcher.match(
+                screenshot_path,
+                anchor,
+                instance=instance,
+                metadata=metadata,
+            ),
+            expected_anchor=anchor,
+        )
+
+
+class _ClaimRewardsTaskBridge:
+    def __init__(
+        self,
+        *,
+        adapter: EmulatorActionAdapter,
+        vision_gateway: ClaimRewardsVisionGateway,
+        navigation_plan: ClaimRewardsNavigationPlan,
+        anchor_specs: dict[str, AnchorSpec],
+    ) -> None:
+        self._adapter = adapter
+        self._vision_gateway = vision_gateway
+        self._navigation_plan = navigation_plan
+        self._anchor_specs = dict(anchor_specs)
+
+    def open_reward_panel(self, context: TaskExecutionContext):
+        self._adapter.tap(context.instance, self._navigation_plan.open_panel_point)
+        inspection = self._capture_inspection(context, reason="open_reward_panel")
+        if inspection.state is ClaimRewardsPanelState.UNAVAILABLE:
+            return step_failure(
+                "open_reward_panel",
+                "Reward panel could not be confirmed after deterministic navigation.",
+                screenshot_path=inspection.screenshot_path,
+                data={
+                    **inspection.to_dict(),
+                    "open_panel_point": self._navigation_plan.open_panel_point,
+                },
+            )
+        return step_success(
+            "open_reward_panel",
+            f"Reward panel detected in {inspection.state.value} state.",
+            screenshot_path=inspection.screenshot_path,
+            data={
+                **inspection.to_dict(),
+                "open_panel_point": self._navigation_plan.open_panel_point,
+            },
+        )
+
+    def verify_claim_affordance(self, context: TaskExecutionContext):
+        inspection = self._current_inspection(context) or self._capture_inspection(
+            context,
+            reason="verify_claim_affordance",
+        )
+        if inspection.state in {
+            ClaimRewardsPanelState.CLAIMABLE,
+            ClaimRewardsPanelState.CLAIMED,
+        }:
+            return step_success(
+                "verify_claim_affordance",
+                f"Reward panel classified as {inspection.state.value}.",
+                screenshot_path=inspection.screenshot_path,
+                data=inspection.to_dict(),
+            )
+        return step_failure(
+            "verify_claim_affordance",
+            "Claim button state remains ambiguous.",
+            screenshot_path=inspection.screenshot_path,
+            data=inspection.to_dict(),
+        )
+
+    def claim_reward(self, context: TaskExecutionContext):
+        inspection = self._current_inspection(context) or self._capture_inspection(
+            context,
+            reason="claim_reward.precheck",
+        )
+        if inspection.state is ClaimRewardsPanelState.CLAIMED:
+            return step_success(
+                "claim_reward",
+                "Reward is already claimed; tap is not required.",
+                screenshot_path=inspection.screenshot_path,
+                data=inspection.to_dict(),
+            )
+        if inspection.state is not ClaimRewardsPanelState.CLAIMABLE or inspection.claim_point is None:
+            return step_failure(
+                "claim_reward",
+                "Reward panel does not expose a tappable claim affordance.",
+                screenshot_path=inspection.screenshot_path,
+                data=inspection.to_dict(),
+            )
+
+        self._adapter.tap(context.instance, inspection.claim_point)
+        follow_up = self._capture_inspection(context, reason="claim_reward.post_tap")
+        if follow_up.state in {
+            ClaimRewardsPanelState.CLAIMED,
+            ClaimRewardsPanelState.CONFIRM_REQUIRED,
+        }:
+            return step_success(
+                "claim_reward",
+                f"Claim tap advanced panel to {follow_up.state.value}.",
+                screenshot_path=follow_up.screenshot_path,
+                data=follow_up.to_dict(),
+            )
+        return step_failure(
+            "claim_reward",
+            "Claim tap did not advance the reward panel.",
+            screenshot_path=follow_up.screenshot_path,
+            data=follow_up.to_dict(),
+        )
+
+    def confirm_reward_claim(self, context: TaskExecutionContext):
+        inspection = self._current_inspection(context) or self._capture_inspection(
+            context,
+            reason="confirm_reward_claim.precheck",
+        )
+        if inspection.state is ClaimRewardsPanelState.CLAIMED:
+            return step_success(
+                "confirm_reward_claim",
+                "Confirmation modal is not required.",
+                screenshot_path=inspection.screenshot_path,
+                data=inspection.to_dict(),
+            )
+        if inspection.state is not ClaimRewardsPanelState.CONFIRM_REQUIRED or inspection.confirm_point is None:
+            return step_failure(
+                "confirm_reward_claim",
+                "Claim confirmation modal could not be verified.",
+                screenshot_path=inspection.screenshot_path,
+                data=inspection.to_dict(),
+            )
+
+        self._adapter.tap(context.instance, inspection.confirm_point)
+        follow_up = self._capture_inspection(context, reason="confirm_reward_claim.post_tap")
+        if follow_up.state is ClaimRewardsPanelState.CLAIMED:
+            return step_success(
+                "confirm_reward_claim",
+                "Claim confirmation completed.",
+                screenshot_path=follow_up.screenshot_path,
+                data=follow_up.to_dict(),
+            )
+        return step_failure(
+            "confirm_reward_claim",
+            "Confirmation tap did not produce a claimed reward state.",
+            screenshot_path=follow_up.screenshot_path,
+            data=follow_up.to_dict(),
+        )
+
+    def verify_claimed(self, context: TaskExecutionContext):
+        inspection = self._capture_inspection(context, reason="verify_claimed")
+        if inspection.state is ClaimRewardsPanelState.CLAIMED:
+            return step_success(
+                "verify_claimed",
+                "Claimed reward state verified.",
+                screenshot_path=inspection.screenshot_path,
+                data=inspection.to_dict(),
+            )
+        return step_failure(
+            "verify_claimed",
+            "Claimed reward state could not be verified.",
+            screenshot_path=inspection.screenshot_path,
+            data=inspection.to_dict(),
+        )
+
+    def _capture_inspection(
+        self,
+        context: TaskExecutionContext,
+        *,
+        reason: str,
+    ) -> ClaimRewardsInspection:
+        screenshot_path = self._adapter.capture_screenshot(context.instance)
+        inspection = self._vision_gateway.inspect(
+            instance=context.instance,
+            screenshot_path=screenshot_path,
+            anchor_specs=self._anchor_specs,
+            metadata={
+                "reason": reason,
+                "task_id": "daily_ui.claim_rewards",
+            },
+        )
+        if not inspection.screenshot_path:
+            inspection = replace(inspection, screenshot_path=str(screenshot_path))
+        self._store_inspection(context, inspection, reason=reason)
+        return inspection
+
+    def _current_inspection(self, context: TaskExecutionContext) -> ClaimRewardsInspection | None:
+        inspection = context.metadata.get(_INSPECTION_CONTEXT_KEY)
+        if isinstance(inspection, ClaimRewardsInspection):
+            return inspection
+        return None
+
+    def _store_inspection(
+        self,
+        context: TaskExecutionContext,
+        inspection: ClaimRewardsInspection,
+        *,
+        reason: str,
+    ) -> None:
+        context.metadata[_INSPECTION_CONTEXT_KEY] = inspection
+        history = context.metadata.setdefault(_INSPECTION_HISTORY_KEY, [])
+        if isinstance(history, list):
+            history.append(
+                {
+                    "reason": reason,
+                    **inspection.to_dict(),
+                }
+            )
+
+
+def load_claim_rewards_blueprint(
+    repository: TaskFoundationRepository | None = None,
+) -> TaskBlueprint:
+    repo = repository or TaskFoundationRepository.load_default()
+    return repo.load_blueprint(repo.root / "packs" / "daily_ui" / "daily_claim_rewards.task.json")
+
+
+def load_claim_rewards_anchor_specs(
+    templates_root: Path | str | None = None,
+) -> dict[str, AnchorSpec]:
+    root = (
+        Path(templates_root)
+        if templates_root is not None
+        else Path(__file__).resolve().parents[4] / "assets" / "templates"
+    )
+    common_repository = AnchorRepository.load(root / "common")
+    daily_ui_repository = AnchorRepository.load(root / "daily_ui")
+    return {
+        _CLOSE_BUTTON_ANCHOR_ID: common_repository.get_anchor(_CLOSE_BUTTON_ANCHOR_ID),
+        _CONFIRM_BUTTON_ANCHOR_ID: common_repository.get_anchor(_CONFIRM_BUTTON_ANCHOR_ID),
+        _CLAIM_REWARD_ANCHOR_ID: daily_ui_repository.get_anchor(_CLAIM_REWARD_ANCHOR_ID),
+    }
+
+
+def build_claim_rewards_runtime_input(
+    *,
+    builder_input: TaskRuntimeBuilderInput | None = None,
+    readiness_report: TaskReadinessReport | None = None,
+    foundation_repository: TaskFoundationRepository | None = None,
+    templates_root: Path | str | None = None,
+) -> ClaimRewardsRuntimeInput:
+    repo = foundation_repository or TaskFoundationRepository.load_default()
+    resolved_builder_input = builder_input or repo.build_runtime_builder_input("daily_ui.claim_rewards")
+    if resolved_builder_input.task_id != "daily_ui.claim_rewards":
+        raise ValueError("build_claim_rewards_runtime_input only supports daily_ui.claim_rewards")
+
+    resolved_readiness_report = readiness_report or repo.evaluate_task_readiness(resolved_builder_input.task_id)
+    if resolved_readiness_report.task_id != resolved_builder_input.task_id:
+        raise ValueError("Claim rewards readiness report does not match the runtime builder input task id")
+    if resolved_readiness_report.implementation_readiness_state is not TaskReadinessState.READY:
+        raise ValueError("Claim rewards runtime input requires implementation readiness to be ready")
+
+    blueprint = load_claim_rewards_blueprint(repo)
+    fixture_profile_path = _select_fixture_profile_path(resolved_builder_input)
+    fixture_profile = repo.load_fixture_profile(repo.root / fixture_profile_path)
+    discovered_anchor_specs = load_claim_rewards_anchor_specs(templates_root)
+    anchor_specs = {
+        anchor_id: discovered_anchor_specs[anchor_id]
+        for anchor_id in resolved_builder_input.required_anchors
+    }
+    step_specs = _build_runtime_step_specs(blueprint.steps)
+
+    return ClaimRewardsRuntimeInput(
+        task_id=resolved_builder_input.task_id,
+        pack_id=resolved_builder_input.pack_id,
+        manifest_path=resolved_builder_input.manifest_path,
+        manifest=_build_runtime_manifest(blueprint.manifest),
+        builder_input=resolved_builder_input,
+        readiness_report=resolved_readiness_report,
+        blueprint=blueprint,
+        fixture_profile_path=fixture_profile_path,
+        fixture_profile=fixture_profile,
+        required_anchor_ids=list(resolved_builder_input.required_anchors),
+        anchor_specs=anchor_specs,
+        step_specs=step_specs,
+        metadata={
+            "implementation_state": blueprint.implementation_state.value,
+            "runtime_bridge": "roxauto.tasks.daily_ui.claim_rewards",
+            "golden_screen_slugs": [case.screen_slug for case in blueprint.golden_cases],
+        },
+    )
+
+
+def build_claim_rewards_task_spec(
+    *,
+    adapter: EmulatorActionAdapter,
+    navigation_plan: ClaimRewardsNavigationPlan,
+    runtime_input: ClaimRewardsRuntimeInput | None = None,
+    matcher: ClaimRewardsTemplateMatcher | None = None,
+    vision_gateway: ClaimRewardsVisionGateway | None = None,
+    foundation_repository: TaskFoundationRepository | None = None,
+    templates_root: Path | str | None = None,
+) -> TaskSpec:
+    if matcher is None and vision_gateway is None:
+        raise ValueError("build_claim_rewards_task_spec requires matcher or vision_gateway")
+
+    resolved_runtime_input = runtime_input or build_claim_rewards_runtime_input(
+        foundation_repository=foundation_repository,
+        templates_root=templates_root,
+    )
+    gateway = vision_gateway or TemplateMatcherClaimRewardsVisionGateway(matcher)
+    bridge = _ClaimRewardsTaskBridge(
+        adapter=adapter,
+        vision_gateway=gateway,
+        navigation_plan=navigation_plan,
+        anchor_specs=resolved_runtime_input.anchor_specs,
+    )
+    handlers = {
+        "open_reward_panel": bridge.open_reward_panel,
+        "verify_claim_affordance": bridge.verify_claim_affordance,
+        "claim_reward": bridge.claim_reward,
+        "confirm_reward_claim": bridge.confirm_reward_claim,
+        "verify_claimed": bridge.verify_claimed,
+    }
+    manifest = resolved_runtime_input.manifest
+    return TaskSpec(
+        task_id=manifest.task_id,
+        name=manifest.name,
+        version=manifest.version,
+        entry_state="home_hud_visible",
+        manifest=manifest,
+        steps=[
+            TaskStep(step.step_id, step.description, handlers[step.step_id])
+            for step in resolved_runtime_input.step_specs
+        ],
+        metadata={
+            **dict(resolved_runtime_input.blueprint.metadata),
+            "implementation_state": "fixtured",
+            "navigation_plan": navigation_plan.to_dict(),
+            "required_anchor_ids": list(resolved_runtime_input.required_anchor_ids),
+            "runtime_bridge": "roxauto.tasks.daily_ui.claim_rewards",
+            "builder_input": resolved_runtime_input.builder_input.to_dict(),
+            "runtime_input": resolved_runtime_input.to_dict(),
+            "implementation_readiness_state": (
+                resolved_runtime_input.readiness_report.implementation_readiness_state.value
+            ),
+        },
+    )
+
+
+def has_claim_rewards_runtime_bridge() -> bool:
+    return True
+
+
+def _build_runtime_manifest(manifest: TaskManifest) -> TaskManifest:
+    metadata = dict(manifest.metadata)
+    metadata["implementation_state"] = "fixtured"
+    metadata["runtime_bridge"] = "roxauto.tasks.daily_ui.claim_rewards"
+    return replace(manifest, metadata=metadata)
+
+
+def _select_fixture_profile_path(builder_input: TaskRuntimeBuilderInput) -> str:
+    if not builder_input.fixture_profile_paths:
+        raise ValueError("Claim rewards runtime input requires at least one fixture profile path")
+    return builder_input.fixture_profile_paths[0]
+
+
+def _build_runtime_step_specs(
+    steps: list[TaskStepBlueprint],
+) -> list[ClaimRewardsRuntimeStepSpec]:
+    descriptions = {
+        "open_reward_panel": "Open the fixed daily reward panel.",
+        "verify_claim_affordance": "Determine whether the reward is claimable or already claimed.",
+        "claim_reward": "Tap the reward claim button when it is actionable.",
+        "confirm_reward_claim": "Confirm the reward modal when the UI requires it.",
+        "verify_claimed": "Verify the panel now shows a claimed reward state.",
+    }
+    anchor_ids = {
+        "verify_claim_affordance": _CLAIM_REWARD_ANCHOR_ID,
+        "claim_reward": _CLAIM_REWARD_ANCHOR_ID,
+        "confirm_reward_claim": _CONFIRM_BUTTON_ANCHOR_ID,
+        "verify_claimed": _CLOSE_BUTTON_ANCHOR_ID,
+    }
+    expected_panel_states = {
+        "open_reward_panel": (
+            ClaimRewardsPanelState.CLAIMABLE,
+            ClaimRewardsPanelState.CLAIMED,
+            ClaimRewardsPanelState.CONFIRM_REQUIRED,
+        ),
+        "verify_claim_affordance": (
+            ClaimRewardsPanelState.CLAIMABLE,
+            ClaimRewardsPanelState.CLAIMED,
+        ),
+        "claim_reward": (
+            ClaimRewardsPanelState.CLAIMED,
+            ClaimRewardsPanelState.CONFIRM_REQUIRED,
+        ),
+        "confirm_reward_claim": (
+            ClaimRewardsPanelState.CLAIMED,
+            ClaimRewardsPanelState.CONFIRM_REQUIRED,
+        ),
+        "verify_claimed": (ClaimRewardsPanelState.CLAIMED,),
+    }
+    return [
+        ClaimRewardsRuntimeStepSpec(
+            step_id=step.step_id,
+            action=step.action,
+            description=descriptions[step.step_id],
+            success_condition=step.success_condition,
+            failure_condition=step.failure_condition,
+            notes=step.notes,
+            anchor_id=anchor_ids.get(step.step_id, ""),
+            expected_panel_states=expected_panel_states.get(step.step_id, ()),
+            metadata=dict(step.metadata),
+        )
+        for step in steps
+    ]
+
+
+def _inspection_message(state: ClaimRewardsPanelState) -> str:
+    if state is ClaimRewardsPanelState.CONFIRM_REQUIRED:
+        return "confirmation modal detected"
+    if state is ClaimRewardsPanelState.CLAIMABLE:
+        return "claim button detected"
+    if state is ClaimRewardsPanelState.CLAIMED:
+        return "claimed reward panel detected"
+    return "reward panel could not be classified"
+
+
+def _matched_point(result: TemplateMatchResult) -> tuple[int, int] | None:
+    candidate = result.matched_candidate()
+    if candidate is None:
+        return None
+    left, top, width, height = candidate.bbox
+    return (left + width // 2, top + height // 2)
+
+
+def _classify_panel_state(
+    match_results: dict[str, TemplateMatchResult],
+) -> ClaimRewardsPanelState:
+    # Confirmation modal takes precedence over the underlying panel because both layers can be visible together.
+    if match_results[_CONFIRM_BUTTON_ANCHOR_ID].is_match():
+        return ClaimRewardsPanelState.CONFIRM_REQUIRED
+    if match_results[_CLAIM_REWARD_ANCHOR_ID].is_match():
+        return ClaimRewardsPanelState.CLAIMABLE
+    if match_results[_CLOSE_BUTTON_ANCHOR_ID].is_match():
+        return ClaimRewardsPanelState.CLAIMED
+    return ClaimRewardsPanelState.UNAVAILABLE

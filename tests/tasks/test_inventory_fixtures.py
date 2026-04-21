@@ -48,6 +48,7 @@ class TaskFixtureExamplesTests(unittest.TestCase):
         readiness = repository.load_readiness_report()
         by_task = {report.task_id: report for report in readiness.reports}
 
-        self.assertEqual(by_task["daily_ui.claim_rewards"].implementation_readiness_state.value, "blocked_by_runtime")
+        self.assertEqual(by_task["daily_ui.claim_rewards"].implementation_readiness_state.value, "ready")
+        self.assertTrue(by_task["daily_ui.claim_rewards"].implementation_requirements[0].satisfied)
         self.assertEqual(by_task["daily_ui.guild_check_in"].builder_readiness_state.value, "blocked_by_asset")
         self.assertEqual(by_task["odin.preset_entry"].implementation_readiness_state.value, "blocked_by_calibration")
