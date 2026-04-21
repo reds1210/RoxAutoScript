@@ -276,3 +276,71 @@ class VisionToolingTests(unittest.TestCase):
         self.assertEqual(tooling.failure.best_candidate.anchor_id, "common.close_button")
         self.assertEqual(tooling.failure.inspection.selected_overlay.kind, InspectionOverlayKind.MATCHED_ANCHOR)
         self.assertEqual(tooling.to_dict()["workspace"]["selected_repository_id"], "common")
+
+    def test_build_failure_inspector_exposes_claim_rewards_checks(self) -> None:
+        repository = AnchorRepository.load(self.templates_root / "daily_ui")
+        failure_record = build_failure_inspection(
+            failure_id="failure-claim-rewards",
+            instance_id="mumu-0",
+            screenshot_path="captures/reward-failure.png",
+            preview_image_path="captures/reward-preview.png",
+            metadata={
+                "task_id": "daily_ui.claim_rewards",
+                "claim_rewards": {
+                    "current_check_id": "confirm_state",
+                    "checks": {
+                        "reward_panel": {
+                            "source_image": "captures/reward-preview.png",
+                            "message": "Reward panel frame matched.",
+                            "candidates": [
+                                {
+                                    "anchor_id": "daily_ui.reward_panel",
+                                    "confidence": 0.97,
+                                    "bbox": [420, 120, 1080, 840],
+                                    "source_image": "captures/reward-preview.png",
+                                }
+                            ],
+                        },
+                        "claim_reward_button": {
+                            "source_image": "captures/reward-preview.png",
+                            "message": "Claim button fell below threshold.",
+                            "candidates": [
+                                {
+                                    "anchor_id": "daily_ui.claim_reward",
+                                    "confidence": 0.88,
+                                    "bbox": [760, 760, 360, 140],
+                                    "source_image": "captures/reward-preview.png",
+                                }
+                            ],
+                        },
+                        "confirm_state": {
+                            "source_image": "captures/reward-preview.png",
+                            "message": "Confirm modal was not stable enough.",
+                            "candidates": [
+                                {
+                                    "anchor_id": "daily_ui.reward_confirm_state",
+                                    "confidence": 0.89,
+                                    "bbox": [560, 260, 760, 420],
+                                    "source_image": "captures/reward-preview.png",
+                                }
+                            ],
+                        },
+                    },
+                },
+            },
+        )
+
+        failure = build_failure_inspector(failure_record, repository=repository)
+
+        self.assertEqual(failure.anchor_id, "daily_ui.reward_confirm_state")
+        self.assertEqual(failure.status, MatchStatus.MISSED)
+        self.assertIsNotNone(failure.claim_rewards)
+        self.assertEqual(failure.claim_rewards.current_check_id, "confirm_state")
+        self.assertEqual(failure.claim_rewards.check_count, 3)
+        self.assertEqual(failure.claim_rewards.matched_check_count, 1)
+        self.assertEqual(failure.claim_rewards.selected_check.anchor_id, "daily_ui.reward_confirm_state")
+        self.assertIn("Confirm", failure.claim_rewards.selected_check_summary)
+        self.assertEqual(failure.best_candidate.anchor_id, "daily_ui.reward_confirm_state")
+        self.assertEqual(failure.candidate_count, 1)
+        self.assertEqual(failure.inspection.selected_overlay.kind, InspectionOverlayKind.EXPECTED_ANCHOR)
+        self.assertEqual(failure.inspection.selected_overlay.metadata["anchor_id"], "daily_ui.reward_confirm_state")

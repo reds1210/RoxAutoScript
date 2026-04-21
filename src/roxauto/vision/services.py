@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import Iterable
+from typing import Any, Iterable
 
 from roxauto.core.models import VisionMatch
 from roxauto.vision.models import (
@@ -144,8 +144,19 @@ def build_failure_inspection(
     message: str = "",
     metadata: dict[str, object] | None = None,
 ) -> FailureInspectionRecord:
-    resolved_anchor_id = anchor_id or (match_result.expected_anchor_id if match_result else "")
-    resolved_message = message or (match_result.message if match_result else "")
+    resolved_metadata = dict(metadata or {})
+    resolved_anchor_id = (
+        anchor_id
+        or (match_result.expected_anchor_id if match_result else "")
+        or str(resolved_metadata.get("anchor_id") or resolved_metadata.get("expected_anchor_id") or "")
+        or _claim_rewards_failure_anchor_id(resolved_metadata)
+    )
+    resolved_message = (
+        message
+        or (match_result.message if match_result else "")
+        or str(resolved_metadata.get("message") or "")
+        or _claim_rewards_failure_message(resolved_metadata)
+    )
     return FailureInspectionRecord(
         failure_id=failure_id,
         instance_id=instance_id,
@@ -154,7 +165,7 @@ def build_failure_inspection(
         preview_image_path=preview_image_path,
         match_result=match_result,
         message=resolved_message,
-        metadata=dict(metadata or {}),
+        metadata=resolved_metadata,
     )
 
 
@@ -386,3 +397,31 @@ def _overlay_summary(overlay: InspectionOverlay | None) -> str:
     if region is not None:
         summary += f" | region={region}"
     return summary
+
+
+def _claim_rewards_failure_anchor_id(metadata: dict[str, Any]) -> str:
+    claim_payload = metadata.get("claim_rewards")
+    if not isinstance(claim_payload, dict):
+        return ""
+    current_check_id = str(claim_payload.get("current_check_id") or claim_payload.get("selected_check_id") or "")
+    checks = claim_payload.get("checks", {})
+    if not current_check_id or not isinstance(checks, dict):
+        return ""
+    current_check = checks.get(current_check_id, {})
+    if not isinstance(current_check, dict):
+        return ""
+    return str(current_check.get("anchor_id") or "")
+
+
+def _claim_rewards_failure_message(metadata: dict[str, Any]) -> str:
+    claim_payload = metadata.get("claim_rewards")
+    if not isinstance(claim_payload, dict):
+        return ""
+    current_check_id = str(claim_payload.get("current_check_id") or claim_payload.get("selected_check_id") or "")
+    checks = claim_payload.get("checks", {})
+    if not current_check_id or not isinstance(checks, dict):
+        return ""
+    current_check = checks.get(current_check_id, {})
+    if not isinstance(current_check, dict):
+        return ""
+    return str(current_check.get("message") or "")

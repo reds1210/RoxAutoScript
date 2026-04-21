@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="420" height="520" viewBox="0 0 420 520">
+  <rect x="8" y="8" width="404" height="504" rx="28" fill="#2d2438" stroke="#f0c96a" stroke-width="8"/>
+  <rect x="34" y="52" width="352" height="68" rx="18" fill="#5b4771"/>
+  <rect x="48" y="160" width="324" height="244" rx="20" fill="#433456" stroke="#9d88b8" stroke-width="4"/>
+  <rect x="110" y="430" width="200" height="46" rx="14" fill="#a67818"/>
+  <text x="210" y="96" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" fill="#ffffff">Reward Panel</text>
+  <text x="210" y="462" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" fill="#fff3d1">Daily Rewards</text>
+</svg>
