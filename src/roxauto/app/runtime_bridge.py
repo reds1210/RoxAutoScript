@@ -56,6 +56,7 @@ from roxauto.tasks.daily_ui import (
     ClaimRewardsInspection,
     ClaimRewardsNavigationPlan,
     ClaimRewardsPanelState,
+    build_claim_rewards_task_display_model,
     build_claim_rewards_runtime_input,
     build_claim_rewards_task_spec,
 )
@@ -780,7 +781,6 @@ class OperatorConsoleRuntimeBridge:
                 queued_items=queued_items,
                 record=record,
             )
-            step_rows = self._claim_rewards_step_rows(runtime_input, record)
             failure_snapshot = record.last_run.failure_snapshot if record is not None and record.last_run is not None else None
             source_image = self._resolve_claim_rewards_source_image(
                 selected_snapshot,
@@ -790,6 +790,11 @@ class OperatorConsoleRuntimeBridge:
             selected_resolution = (
                 vision_state.calibration.selected_resolution
                 if vision_state is not None and vision_state.calibration is not None
+                else None
+            )
+            claim_failure = (
+                vision_state.failure.claim_rewards
+                if vision_state is not None and vision_state.failure is not None
                 else None
             )
             selected_anchor_id = (
@@ -807,6 +812,15 @@ class OperatorConsoleRuntimeBridge:
                 if requirement.blocking and not requirement.satisfied
             ]
             last_run = record.last_run if record is not None else None
+            display_model = build_claim_rewards_task_display_model(
+                run=last_run,
+                runtime_input=runtime_input,
+            )
+            step_rows = self._claim_rewards_step_rows(
+                runtime_input,
+                record,
+                display_model=display_model,
+            )
             completed_count = sum(1 for row in step_rows if row.status == "succeeded")
             current_step_title = self._claim_rewards_current_step_title(
                 workflow_status,
@@ -862,8 +876,8 @@ class OperatorConsoleRuntimeBridge:
             )
             return ClaimRewardsPaneView(
                 task_id=runtime_input.task_id,
-                task_name=runtime_input.manifest.name,
-                task_label="每日領獎",
+                task_name=display_model.display_name,
+                task_label=display_model.display_name,
                 manifest_path=runtime_input.manifest_path,
                 workflow_status=workflow_status,
                 workflow_banner=self._claim_rewards_banner(
@@ -872,11 +886,7 @@ class OperatorConsoleRuntimeBridge:
                     workflow_status=workflow_status,
                     queued_items=queued_items,
                 ),
-                preset_summary=(
-                    f"{runtime_input.fixture_profile.display_name} | "
-                    f"{runtime_input.fixture_profile.locale} | "
-                    f"{runtime_input.fixture_profile.resolution[0]}x{runtime_input.fixture_profile.resolution[1]}"
-                ),
+                preset_summary=self._claim_rewards_preset_summary(display_model),
                 progress_summary=f"已完成 {completed_count}/{len(step_rows)} 個步驟",
                 progress_completed_count=completed_count,
                 progress_total_count=len(step_rows),
@@ -891,13 +901,34 @@ class OperatorConsoleRuntimeBridge:
                     if selected_snapshot is not None
                     else "請先選擇模擬器，再排入每日領獎。"
                 ),
-                last_run_summary=self._claim_rewards_last_run_summary(last_run),
+                last_run_summary=self._claim_rewards_last_run_summary(
+                    last_run,
+                    display_model=display_model,
+                ),
                 active_step_summary=self._claim_rewards_active_step_summary(
                     workflow_status,
                     step_rows=step_rows,
                     last_run=last_run,
+                    display_model=display_model,
                 ),
-                failure_summary=self._claim_rewards_failure_summary(failure_snapshot, last_run),
+                failure_summary=self._claim_rewards_failure_summary(
+                    failure_snapshot,
+                    last_run,
+                    display_model=display_model,
+                    step_rows=step_rows,
+                ),
+                failure_check_summary=self._claim_rewards_failure_check_summary(
+                    claim_failure,
+                    step_rows=step_rows,
+                ),
+                next_action_summary=self._claim_rewards_next_action_summary(
+                    selected_snapshot,
+                    runtime_blockers=runtime_blockers,
+                    workflow_status=workflow_status,
+                    step_rows=step_rows,
+                    display_model=display_model,
+                    claim_failure=claim_failure,
+                ),
                 preview_summary=(
                     source_image
                     or (
@@ -921,8 +952,8 @@ class OperatorConsoleRuntimeBridge:
                 last_run_id=last_run.run_id if last_run is not None else "",
                 last_run_status=last_run.status.value if last_run is not None else "",
                 failure_reason=(
-                    failure_snapshot.reason.value
-                    if failure_snapshot is not None
+                    display_model.failure_reason.title
+                    if display_model.failure_reason is not None
                     else ""
                 ),
                 failure_step_id=failure_snapshot.step_id if failure_snapshot is not None and failure_snapshot.step_id else "",
@@ -1595,7 +1626,10 @@ class OperatorConsoleRuntimeBridge:
         self,
         runtime_input,
         record: _ClaimRewardsExecutionRecord | None,
+        *,
+        display_model,
     ) -> list[ClaimRewardsStepView]:
+        display_steps = {step.step_id: step for step in display_model.steps}
         results_by_step = {
             result.step_id: result
             for result in (record.last_run.step_results if record is not None and record.last_run is not None else [])
@@ -1618,16 +1652,26 @@ class OperatorConsoleRuntimeBridge:
         rows: list[ClaimRewardsStepView] = []
         for step_spec in runtime_input.step_specs:
             result = results_by_step.get(step_spec.step_id)
+            display_step = display_steps.get(step_spec.step_id)
             rows.append(
                 ClaimRewardsStepView(
                     step_id=step_spec.step_id,
-                    title=step_spec.description or step_spec.step_id.replace("_", " ").title(),
+                    title=(
+                        display_step.display_name
+                        if display_step is not None and display_step.display_name
+                        else step_spec.display_name or step_spec.step_id.replace("_", " ").title()
+                    ),
                     action=step_spec.action,
-                    status=result.status.value if result is not None else "pending",
+                    status=display_step.status if display_step is not None else (result.status.value if result is not None else "pending"),
+                    status_text=display_step.status_text if display_step is not None else "",
                     summary=(
-                        result.message
-                        if result is not None
-                        else step_spec.notes or step_spec.success_condition or step_spec.description
+                        display_step.summary
+                        if display_step is not None and display_step.summary
+                        else (
+                            result.message
+                            if result is not None
+                            else step_spec.summary or step_spec.notes or step_spec.success_condition or step_spec.description
+                        )
                     ),
                     success_condition=step_spec.success_condition,
                     failure_condition=step_spec.failure_condition,
@@ -1636,6 +1680,14 @@ class OperatorConsoleRuntimeBridge:
                 )
             )
         return rows
+
+    def _claim_rewards_preset_summary(self, display_model) -> str:
+        parts = [
+            display_model.preset.category_label,
+            display_model.preset.status_text,
+            display_model.preset.description,
+        ]
+        return " | ".join(part for part in parts if part)
 
     def _claim_rewards_banner(
         self,
@@ -1667,12 +1719,18 @@ class OperatorConsoleRuntimeBridge:
             banner += " 可在此面板排入或直接執行。"
         return banner
 
-    def _claim_rewards_last_run_summary(self, last_run: TaskRun | None) -> str:
+    def _claim_rewards_last_run_summary(
+        self,
+        last_run: TaskRun | None,
+        *,
+        display_model,
+    ) -> str:
         if last_run is None:
             return "目前尚無每日領獎執行紀錄。"
         return (
-            f"{last_run.status.value} | 執行編號={last_run.run_id} | "
-            f"步驟數={len(last_run.step_results)}"
+            f"{display_model.status_text or last_run.status.value} | "
+            f"執行編號：{last_run.run_id} | "
+            f"已回報 {len(last_run.step_results)} 個步驟"
         )
 
     def _claim_rewards_active_step_summary(
@@ -1681,36 +1739,127 @@ class OperatorConsoleRuntimeBridge:
         *,
         step_rows: list[ClaimRewardsStepView],
         last_run: TaskRun | None,
+        display_model,
     ) -> str:
         if workflow_status == "queued" and step_rows:
-            return f"排隊中，等待步驟 {step_rows[0].step_id}。"
+            return f"已排入佇列，等待「{step_rows[0].title}」。"
+        if workflow_status == "running":
+            current = next((row for row in step_rows if row.is_current), None)
+            if current is not None:
+                return f"目前步驟：{current.title}"
         if last_run is None:
-            return "目前尚無步驟執行紀錄。"
+            return display_model.status_summary
         failed = next((row for row in step_rows if row.status == "failed"), None)
         if failed is not None:
-            return f"卡在 {failed.step_id}：{failed.summary}"
+            if display_model.failure_reason is not None:
+                return f"{display_model.failure_reason.title}：{display_model.failure_reason.summary}"
+            return f"卡在 {failed.title}：{failed.summary}"
         completed = [row for row in step_rows if row.status == "succeeded"]
         if len(completed) == len(step_rows):
-            return "每日領獎全部步驟已完成。"
-        pending = next((row for row in step_rows if row.status == "pending"), None)
+            return display_model.status_summary
+        pending = next((row for row in step_rows if row.is_current), None)
+        if pending is None:
+            pending = next((row for row in step_rows if row.status == "pending"), None)
         if pending is not None:
-            return f"下一步：{pending.step_id}"
-        return "可在步驟列表查看完整執行軌跡。"
+            return f"下一步：{pending.title}"
+        return display_model.status_summary or "可在步驟列表查看完整執行軌跡。"
 
     def _claim_rewards_failure_summary(
         self,
         failure_snapshot: FailureSnapshotMetadata | None,
         last_run: TaskRun | None,
+        *,
+        display_model,
+        step_rows: list[ClaimRewardsStepView],
     ) -> str:
+        if display_model.failure_reason is not None:
+            return f"{display_model.failure_reason.title}：{display_model.failure_reason.summary}"
         if failure_snapshot is None:
             if last_run is not None and last_run.status.value == "succeeded":
-                return "沒有失敗快照；上次執行成功。"
+                return display_model.status_summary or "沒有失敗快照；上次執行成功。"
             return "目前沒有每日領獎失敗紀錄。"
+        step_title = next(
+            (row.title for row in step_rows if row.step_id == failure_snapshot.step_id),
+            failure_snapshot.step_id or "未提供步驟",
+        )
+        message = str(failure_snapshot.metadata.get("message", "") or "").strip()
+        if message:
+            return f"{step_title}：{message}"
         return (
             f"{failure_snapshot.reason.value} | "
             f"step={failure_snapshot.step_id or 'n/a'} | "
             f"{failure_snapshot.metadata.get('message', '')}"
         )
+
+    def _claim_rewards_failure_check_summary(
+        self,
+        claim_failure,
+        *,
+        step_rows: list[ClaimRewardsStepView],
+    ) -> str:
+        if claim_failure is None:
+            return ""
+        selected_check = claim_failure.selected_check
+        current_check_id = (
+            selected_check.check_id
+            if selected_check is not None
+            else str(claim_failure.current_check_id or claim_failure.selected_check_id or "")
+        )
+        if not current_check_id:
+            return ""
+        check_label = self._claim_rewards_check_label(current_check_id)
+        parts = [check_label]
+        stage_id = selected_check.stage if selected_check is not None else ""
+        if stage_id:
+            stage_title = next((row.title for row in step_rows if row.step_id == stage_id), stage_id)
+            parts.append(f"對應步驟：{stage_title}")
+        if selected_check is not None:
+            parts.append(f"檢查結果：{self._claim_rewards_match_status_text(selected_check.status.value)}")
+            localized_message = self._claim_rewards_visual_message(
+                current_check_id,
+                status=selected_check.status.value,
+            )
+            if localized_message:
+                parts.append(localized_message)
+        return " | ".join(part for part in parts if part)
+
+    def _claim_rewards_next_action_summary(
+        self,
+        selected_snapshot,
+        *,
+        runtime_blockers: list[str],
+        workflow_status: str,
+        step_rows: list[ClaimRewardsStepView],
+        display_model,
+        claim_failure,
+    ) -> str:
+        if selected_snapshot is None:
+            return "先選擇一台模擬器，才能開始每日領獎。"
+        if runtime_blockers:
+            return f"先補齊執行條件：{'；'.join(runtime_blockers)}。"
+        if workflow_status == "queued":
+            return "保持佇列啟動；如果長時間沒有開始，先按「啟動佇列」再重新同步。"
+        if workflow_status == "running":
+            current = next((row for row in step_rows if row.is_current), None)
+            if current is not None:
+                return f"先等待「{current.title}」完成；若畫面停住，再切到「卡關診斷」查看目前視覺檢查。"
+            return "執行中；若畫面停住，再切到「卡關診斷」查看目前視覺檢查。"
+        if workflow_status == "succeeded":
+            return "本輪已完成；若要再跑一次，先確認遊戲仍停留在可開啟每日獎勵的主畫面。"
+        if workflow_status in {"failed", "aborted"}:
+            if display_model.failure_reason is not None:
+                reason_id = display_model.failure_reason.reason_id
+                if reason_id == "health_check_failed":
+                    return "先重新同步並確認模擬器健康狀態，再重新執行。"
+                if reason_id == "operator_stop":
+                    return "若要繼續，重新排入佇列後再執行。"
+            selected_check = claim_failure.selected_check if claim_failure is not None else None
+            if selected_check is not None:
+                guidance = self._claim_rewards_check_guidance(selected_check.check_id)
+                if guidance:
+                    return guidance
+            return "先到「卡關診斷」確認失敗步驟與視覺檢查，再決定是否重新擷取或直接重跑。"
+        return "確認畫面位於遊戲主流程後，即可排入或直接執行每日領獎。"
 
     def _claim_rewards_anchor_summary(
         self,
@@ -1722,8 +1871,8 @@ class OperatorConsoleRuntimeBridge:
             return anchor_id or _CLAIM_REWARDS_ANCHOR_ID
         return (
             f"{anchor_id or _CLAIM_REWARDS_ANCHOR_ID} | "
-            f"threshold={selected_resolution.effective_confidence_threshold:.2f} | "
-            f"region={self._format_region(selected_resolution.effective_match_region)}"
+            f"門檻={selected_resolution.effective_confidence_threshold:.2f} | "
+            f"區域={self._format_region(selected_resolution.effective_match_region)}"
         )
 
     def _claim_rewards_scope_summary(
@@ -1733,14 +1882,16 @@ class OperatorConsoleRuntimeBridge:
         queued_items: list[QueuedTask],
     ) -> str:
         if selected_snapshot is None:
-            return "No selected instance."
-        scope_parts = [f"instance={selected_snapshot.instance_id}"]
+            return "尚未選擇模擬器。"
+        scope_parts = [
+            f"模擬器：{selected_snapshot.instance.label} ({selected_snapshot.instance_id})",
+        ]
         if selected_snapshot.context is not None and selected_snapshot.context.active_task_id == _CLAIM_REWARDS_TASK_ID:
-            scope_parts.append("active")
+            scope_parts.append("執行中")
         if queued_items:
-            scope_parts.append(f"queued={len(queued_items)}")
+            scope_parts.append(f"佇列中 {len(queued_items)} 筆")
         if selected_snapshot.profile_binding is not None:
-            scope_parts.append(f"profile={selected_snapshot.profile_binding.profile_id}")
+            scope_parts.append(f"設定檔：{selected_snapshot.profile_binding.display_name}")
         return " | ".join(scope_parts)
 
     def _claim_rewards_current_step_title(
@@ -1763,6 +1914,51 @@ class OperatorConsoleRuntimeBridge:
         if completed is not None:
             return completed.title or completed.step_id
         return step_rows[0].title or step_rows[0].step_id
+
+    def _claim_rewards_check_label(self, check_id: str) -> str:
+        mapping = {
+            "reward_panel": "獎勵面板",
+            "claim_reward_button": "領獎按鈕",
+            "confirm_state": "確認彈窗",
+        }
+        return mapping.get(check_id, check_id)
+
+    def _claim_rewards_match_status_text(self, status: str) -> str:
+        mapping = {
+            MatchStatus.MATCHED.value: "已命中",
+            MatchStatus.MISSED.value: "未命中",
+        }
+        return mapping.get(status, "結果不明" if status else "")
+
+    def _claim_rewards_visual_message(
+        self,
+        check_id: str,
+        *,
+        status: str,
+    ) -> str:
+        messages = {
+            "reward_panel": {
+                MatchStatus.MATCHED.value: "已看到每日獎勵面板。",
+                MatchStatus.MISSED.value: "還沒看到每日獎勵面板。",
+            },
+            "claim_reward_button": {
+                MatchStatus.MATCHED.value: "已找到可點擊的領獎按鈕。",
+                MatchStatus.MISSED.value: "還沒找到可點擊的領獎按鈕。",
+            },
+            "confirm_state": {
+                MatchStatus.MATCHED.value: "已看到確認彈窗。",
+                MatchStatus.MISSED.value: "還沒看到確認彈窗。",
+            },
+        }
+        return messages.get(check_id, {}).get(status, "視覺訊號仍不穩定。")
+
+    def _claim_rewards_check_guidance(self, check_id: str) -> str:
+        mapping = {
+            "reward_panel": "先確認遊戲回到主畫面且每日獎勵入口可見，再重新執行。",
+            "claim_reward_button": "先重新擷取目前畫面，確認領獎按鈕的比對區域與門檻；必要時到「校準工具」調整後再執行。",
+            "confirm_state": "先確認是否真的出現確認彈窗；若有，重擷取失敗畫面並檢查確認按鈕的比對區域後再執行。",
+        }
+        return mapping.get(check_id, "")
 
     def _claim_rewards_failure_payload(
         self,

@@ -61,17 +61,60 @@
   - saved values are rebound into the live runtime session immediately
   - next app launch will reuse the stored profile when it uniquely matches the instance
 
+## 2026-04-21 follow-up
+
+- This pass stayed inside Engine B ownership and only refined `daily_ui.claim_rewards`.
+- The claim-rewards main pane now consumes the task-side display projection from `build_claim_rewards_task_display_model(...)` instead of rebuilding product copy from raw step specs and failure snapshots.
+- Main-surface task label, preset summary, failure reason, active-step summary, per-step display names, and per-step status text now come from task-owned metadata.
+- Step rows now expose task-owned `status_text`, so the shell can show zh-TW step-state copy such as `等待確認領獎` or `獎勵狀態辨識失敗` instead of generic status labels only.
+- The shell now prefers the task-owned failure title on the primary status card, which removes raw internal failure reasons like `step_failed` from the operator-facing summary.
+- The primary preset summary now shows product-facing task preset text (`每日任務 | 可執行 | 固定介面的每日獎勵領取流程。`) instead of fixture-profile internals.
+- The bridge now projects operator-facing `failure_check_summary` and `next_action_summary` from existing task + vision telemetry so the main pane and failure tab can answer:
+  - 卡在哪一步
+  - 哪個視覺檢查是目前焦點
+  - 下一步應該先檢查什麼
+- Scope, last-run, and tab copy were rewritten into Traditional Chinese product wording so the single-task surface reads less like an internal debugger.
+
+## Runtime-owned signal now visible in GUI
+
+- Task-owned:
+  - `build_claim_rewards_task_display_model(...)` now drives task name, status text, status summary, failure reason, step labels, and step state copy.
+- Runtime-owned:
+  - selected instance status
+  - queue/running/succeeded/failed workflow state
+  - latest run id / last run status
+  - active step / failed step selection
+- Vision-owned:
+  - `vision.failure.claim_rewards` selected check / matched-vs-missing counts / selected anchor / threshold / candidate summaries
+  - preview / overlay / capture / calibration resolution surfaced through `VisionToolingState`
+- App projection only:
+  - mapping normalized failure-check ids into operator guidance text such as `先確認是否真的出現確認彈窗`
+  - translating normalized scope and diagnosis summaries into product-facing zh-TW copy
+
+## Viewer-only and operator-aid surfaces
+
+- `目前畫面`
+  - viewer-only preview of the currently selected source image and overlay focus
+- `卡關診斷`
+  - viewer-only diagnosis surface built from runtime failure snapshot + vision claim-rewards inspector state
+  - it explains the active visual check and candidate details, but does not change runtime behavior
+- `執行條件`
+  - viewer-only readiness projection from foundations/runtime requirements
+- `校準工具`
+  - operator aid for capture, crop, threshold, and offset tuning
+  - saving here updates profile-backed calibration/capture settings, but the `workflow_mode` control is still only a diagnostic/editor aid and not a production runtime signal
+
 ## GUI behavior now
 
 - Main surface:
-  - `模擬器卡片`
-  - `當前模擬器`
+  - `模擬器`
+  - `執行對象`
   - `每日領獎`
 - Secondary surface:
-  - `預覽`
-  - `失敗分析`
-  - `就緒檢查`
-  - `校正 / 擷取`
+  - `目前畫面`
+  - `卡關診斷`
+  - `執行條件`
+  - `校準工具`
 - The UI timer only reads state and never performs runtime refresh directly.
 - Buttons dispatch work through `schedule_*` methods only.
 
@@ -90,7 +133,7 @@
 ## Viewer-only now
 
 - Preview image pane
-- Flattened failure inspector pane
+- Failure diagnosis pane
 - Readiness details pane
 - Calibration/capture diagnostics pane
 - Generic runtime/log diagnostics beyond the first-task workflow
@@ -100,6 +143,7 @@
 
 - The editor workflow still includes session-scoped operator aids, but calibration/capture values can now be persisted to the workspace profile store.
 - The workflow-mode control remains an app-side operator aid; it is not a production gameplay setting.
+- The secondary failure pane still depends on app-side projection of normalized check ids into operator guidance copy; it is no longer inventing task state, but the wording layer is still owned by Engine B.
 - No second task is wired into the GUI.
 - The shell still depends on the production environment having working ADB/runtime access when launched outside tests.
 
@@ -110,6 +154,7 @@
 - `python -m unittest discover -s tests/app -t .`
 - `python -m unittest discover -s tests -t .`
 - Result: `135` tests passed
+- Follow-up result on `2026-04-21`: `142` tests passed
 
 ## Recommended next step
 
