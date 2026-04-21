@@ -6,6 +6,23 @@ Turn `daily_ui.claim_rewards` from an MVP operator scaffold into the first real,
 
 This round is not about adding more tasks. It is about making one fixed flow materially reliable.
 
+## Current baseline
+
+Current `main` already has:
+
+- a zh-TW MVP operator console
+- production session entry points and background runtime refresh surfaces
+- persisted claim-rewards calibration/capture settings under `profiles/`
+- one GUI-visible task: `每日領獎`
+- claim-rewards display metadata, step telemetry, and failure/readiness panes
+
+What is still missing is not platform skeleton. It is real-flow quality:
+
+- curated screenshots and anchors
+- runtime-owned step and failure signals that survive repeated runs
+- cleaner operator guidance when a run blocks or fails
+- task-side recovery and verification that do not depend on placeholder assumptions
+
 ## Definition of done
 
 - The task runs through the real runtime path, not just app-side operator scaffolding.
@@ -25,6 +42,27 @@ The platform is now sufficient to expose:
 - profile-backed calibration persistence
 
 The remaining gap is game knowledge and curated assets. This round closes that gap for one narrow flow.
+
+## Thread model
+
+Use top-level Codex threads with one dedicated worktree per thread.
+
+Round-5 standard threads:
+
+- `Engine A` -> `codex/core-runtime-claim-rewards-hardening`
+- `Engine B` -> `codex/gui-claim-rewards-operator-hardening`
+- `Engine C` -> `codex/vision-claim-rewards-curation`
+- `Engine D` -> `codex/task-claim-rewards-real-flow`
+
+Optional support thread:
+
+- `Engine E` -> `codex/claim-rewards-goldens`
+
+Rules:
+
+- do not use subagents as a replacement for these top-level threads
+- each thread reads `main` plus handoffs; threads do not assume each other’s chat history
+- sync happens through `main`, `docs/handoffs/`, and curated assets under `assets/templates/`
 
 ## Track layout
 
@@ -94,7 +132,7 @@ Focus:
   - reward panel
   - claim reward button
   - confirm state
-- improve failure explanation quality from actual candidates/thresholds
+- improve failure explanation quality from actual candidates and thresholds
 
 Acceptance:
 
@@ -125,7 +163,7 @@ Acceptance:
 
 Branch: `codex/claim-rewards-goldens`
 
-Open a fresh worktree for this track. Do not reuse the currently dirty vision worktree.
+Open a fresh worktree for this track. Do not reuse a dirty or cross-owned worktree.
 
 Ownership:
 
@@ -135,7 +173,7 @@ Ownership:
 
 Focus:
 
-- collect and organize curated screenshots / goldens for claim rewards
+- collect and organize curated screenshots and goldens for claim rewards
 - document what each image proves
 - support the vision and task tracks with real inputs
 
@@ -143,13 +181,47 @@ Acceptance:
 
 - curated assets exist for the claim-rewards happy path and at least one failure path
 
-## Recommended order
+## Recommended start order
 
-1. Commit the current main changes first.
+1. Sync every active worktree to `main` before starting.
 2. Start `Engine C` and `Engine D` together.
-3. Start `Engine A` once the real failure/asset expectations are clearer.
-4. Start `Engine B` after A/C/D have first outputs.
-5. Use `Engine E` only if asset curation starts blocking C and D.
+3. Start `Engine E` only if curated screenshots or goldens become the main blocker.
+4. Start `Engine A` after C/D have made the claim-rewards failure model concrete.
+5. Start `Engine B` last, once A/C/D outputs are clear enough to wire into the GUI.
+
+## Default merge order
+
+Use this order unless a narrower dependency forces a different one:
+
+1. `Engine E` when it only contributes curated screenshots or goldens
+2. `Engine C`
+3. `Engine D`
+4. `Engine A`
+5. `Engine B`
+
+Reason:
+
+- curated assets and inspection expectations should stabilize before runtime and GUI integrations harden around them
+
+## Handoff minimums
+
+Every round-5 handoff must state:
+
+- what changed specifically for `daily_ui.claim_rewards`
+- whether the work still depends on placeholder anchors or curated assets
+- what the operator will now see differently in the GUI
+- what still blocks repeated real-flow runs
+- whether a fresh worktree or fresh screenshots are required for the next track
+
+## Out of scope for round 5
+
+- second task enablement
+- guild check-in implementation
+- Odin implementation
+- navigation AI
+- combat logic
+- broad OCR work outside the claim-rewards flow
+- app-side reinvention of runtime or vision contracts
 
 ## Non-goals
 

@@ -482,6 +482,83 @@ Rules:
 - sync `poll()` / `refresh_runtime_contexts()` remain valid for tests and CLI-style tooling, but GUI integrations should not loop over them on the UI thread
 - production GUI wiring should start from `build_adb_live_runtime_session(...)` instead of hand-building adapter/execution services
 
+### `TaskRuntimeBuilderInput`
+
+Minimum fields:
+
+- `task_id`
+- `pack_id`
+- `manifest_path`
+- `fixture_profile_paths`
+- `required_anchors`
+- `asset_requirement_ids`
+- `runtime_requirement_ids`
+- `calibration_requirement_ids`
+- `foundation_requirement_ids`
+- `metadata`
+
+Rules:
+
+- task implementation tracks should accept a `TaskRuntimeBuilderInput` rather than re-discovering pack metadata ad hoc
+- GUI or runtime callers may use this as the stable boundary between foundations and implementation-specific builders
+
+### `TaskReadinessReport`
+
+Minimum fields:
+
+- `task_id`
+- `pack_id`
+- `builder_readiness_state`
+- `implementation_readiness_state`
+- `builder_requirements`
+- `implementation_requirements`
+- `warning_requirements`
+- `metadata`
+
+Rules:
+
+- GUI surfaces should render readiness from `TaskReadinessReport` instead of open-coding task-specific readiness heuristics
+- warning requirements should stay non-blocking and should not be mixed into runtime or calibration blockers
+
+### `TaskDisplayModel`
+
+Minimum fields:
+
+- `task_id`
+- `display_name`
+- `description`
+- `status`
+- `status_text`
+- `status_summary`
+- `steps`
+- `failure_reason` optional
+- `metadata`
+
+Rules:
+
+- product-facing task names, step labels, and failure reasons should be exposed through display metadata or a display model, not derived from raw task ids in GUI code
+- task-specific display builders may exist per task pack, but GUI code should consume their normalized output
+
+### `VisionToolingState`
+
+Minimum fields:
+
+- `workspace`
+- `readiness`
+- `preview`
+- `match`
+- `anchors`
+- `calibration`
+- `capture`
+- `replay`
+- `failure`
+- `metadata`
+
+Rules:
+
+- vision/tooling layers should expose flattened selected-image, overlay-summary, threshold, and failure-explanation fields for GUI consumption
+- GUI code should not rebuild overlay or calibration merge rules from nested raw payloads when these flattened surfaces already exist
+
 ### `RuntimeCoordinator`
 
 Responsibilities:

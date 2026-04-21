@@ -20,18 +20,20 @@ Every worker must read these files before editing code:
 3. `docs/engine-roster.md`
 4. `docs/worktree-playbook.md`
 5. `docs/architecture-contracts.md`
-6. the track brief under `docs/tracks/`
+6. the current round brief such as `docs/round-5-claim-rewards-real-flow.md`
+7. the relevant handoff under `docs/handoffs/`
 
 ## 3. Engine Model
 
 Rule: one worktree maps to one delivery track.
 
-The standard roster is now 4 fixed engines:
+The standard roster is now 4 fixed engines, with one optional support engine for curated screenshots or goldens:
 
 - `Engine A`: runtime and emulator execution
 - `Engine B`: GUI and operator console
 - `Engine C`: vision, calibration, and template tooling
 - `Engine D`: task packs and plugin/event runtime
+- `Engine E`: optional asset curation and goldens
 
 Each track should produce:
 
@@ -40,6 +42,12 @@ Each track should produce:
 - one focused branch history
 
 Do not use one worktree for unrelated tasks.
+
+Thread rule:
+
+- one top-level Codex thread maps to one dedicated worktree
+- do not treat subagents as replacements for these top-level delivery threads
+- cross-thread sync happens through `main`, handoffs, and committed assets
 
 Model policy:
 
@@ -114,6 +122,10 @@ Each track owns a disjoint write area.
   - owns: `src/roxauto/tasks/`, `tests/tasks/`, task-specific assets under `assets/templates/`
   - gate: remains standby until platform Gate 3 is complete
 
+- `Engine E`
+  - owns: curated screenshots, goldens, and supporting vision docs only
+  - gate: open only when asset collection blocks `Engine C` or `Engine D`
+
 ### Shared files
 
 Shared files are high-conflict files and must be changed carefully:
@@ -156,16 +168,17 @@ Reason:
 
 ## 8. Merge Order
 
-Merge in this order unless there is a strong reason not to:
+For round 5, merge in this order unless there is a strong reason not to:
 
-1. `Engine A` runtime branches
-2. `Engine D` first-task branches when they depend on A
-3. `Engine C` vision curation branches
-4. `Engine B` GUI/operator branches
+1. `Engine E` goldens branches when used
+2. `Engine C` vision curation branches
+3. `Engine D` first-task branches
+4. `Engine A` runtime hardening branches
+5. `Engine B` GUI/operator branches
 
 Reason:
 
-- later tracks depend on contracts from earlier tracks
+- curated assets and task expectations should settle before runtime and GUI integrations harden around them
 
 ## 9. How To Start A Track
 
@@ -187,6 +200,12 @@ git worktree add ..\RoxAutoScript-wt-core-runtime-claim-rewards -b codex/core-ru
 git worktree add ..\RoxAutoScript-wt-gui-claim-rewards -b codex/gui-claim-rewards-operator-hardening main
 git worktree add ..\RoxAutoScript-wt-vision-claim-rewards -b codex/vision-claim-rewards-curation main
 git worktree add ..\RoxAutoScript-wt-task-claim-rewards -b codex/task-claim-rewards-real-flow main
+```
+
+Optional support worktree:
+
+```powershell
+git worktree add ..\RoxAutoScript-wt-claim-rewards-goldens -b codex/claim-rewards-goldens main
 ```
 
 ## 10. Handoff Rules
