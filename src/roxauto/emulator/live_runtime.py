@@ -23,11 +23,14 @@ from roxauto.core.events import (
     EventBus,
 )
 from roxauto.core.models import (
+    FailureSnapshotMetadata,
     InstanceRuntimeContext,
     InstanceState,
     InstanceStatus,
     PreviewFrame,
     ProfileBinding,
+    TaskSpec,
+    TaskRunTelemetry,
 )
 from roxauto.core.queue import QueuedTask, TaskQueue
 from roxauto.core.runtime import AuditSink, QueueRunResult, RuntimeCoordinator, RuntimeInspectionResult
@@ -64,6 +67,22 @@ class InstanceDiscovery(Protocol):
 class ProfileResolver(Protocol):
     def __call__(self, instance: InstanceState) -> ProfileBinding | None:
         """Return one runtime profile binding for the instance when available."""
+
+
+@dataclass(slots=True, frozen=True)
+class RuntimeTaskFactoryRequest:
+    task_id: str
+    instance: InstanceState
+    runtime_context: InstanceRuntimeContext | None
+    profile_binding: ProfileBinding | None
+    adapter: EmulatorActionAdapter
+    execution_path: RuntimeExecutionPath
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+class RegisteredTaskFactory(Protocol):
+    def __call__(self, request: RuntimeTaskFactoryRequest) -> TaskSpec:
+        """Build one task spec from the current runtime/session state."""
 
 
 @dataclass(slots=True)
@@ -107,10 +126,28 @@ class LiveRuntimeInstanceSnapshot:
         return self.context.failure_snapshot
 
     @property
+    def last_failure_snapshot(self) -> FailureSnapshotMetadata | None:
+        if self.context is None:
+            return None
+        return self.context.last_failure_snapshot
+
+    @property
     def health_check_ok(self) -> bool | None:
         if self.context is None:
             return None
         return self.context.health_check_ok
+
+    @property
+    def active_task_run(self) -> TaskRunTelemetry | None:
+        if self.context is None:
+            return None
+        return self.context.active_task_run
+
+    @property
+    def last_task_run(self) -> TaskRunTelemetry | None:
+        if self.context is None:
+            return None
+        return self.context.last_task_run
 
 
 @dataclass(slots=True)
@@ -147,6 +184,8 @@ class LiveRuntimeInstanceSummary:
     queue_depth: int = 0
     active_task_id: str = ""
     active_run_id: str = ""
+    active_step_id: str = ""
+    active_step_status: str = ""
     stop_requested: bool = False
     health_check_ok: bool | None = None
     profile_id: str = ""
@@ -154,6 +193,13 @@ class LiveRuntimeInstanceSummary:
     preview_image_path: str = ""
     failure_snapshot_id: str = ""
     failure_reason: str = ""
+    last_task_id: str = ""
+    last_run_id: str = ""
+    last_run_status: str = ""
+    last_step_count: int = 0
+    last_completed_step_count: int = 0
+    last_failure_snapshot_id: str = ""
+    last_failure_reason: str = ""
 
 
 @dataclass(slots=True, frozen=True)
@@ -246,6 +292,7 @@ class LiveRuntimeSession:
         self._state_lock = threading.Lock()
         self._live_state_cache: LiveRuntimeState | None = None
         self._refresh_state = LiveRuntimeRefreshState()
+        self._task_factories: dict[str, RegisteredTaskFactory] = {}
         self._background_condition = threading.Condition()
         self._background_request: _ScheduledRefreshRequest | None = None
         self._background_worker: threading.Thread | None = None
@@ -397,10 +444,67 @@ class LiveRuntimeSession:
             self._publish_live_state_locked()
             return context
 
+    def register_task_factory(self, task_id: str, factory: RegisteredTaskFactory) -> None:
+        normalized_task_id = self._normalize_registered_task_id(task_id)
+        with self._operation_lock:
+            self._task_factories[normalized_task_id] = factory
+
+    def unregister_task_factory(self, task_id: str) -> None:
+        normalized_task_id = self._normalize_registered_task_id(task_id)
+        with self._operation_lock:
+            self._task_factories.pop(normalized_task_id, None)
+
+    def has_task_factory(self, task_id: str) -> bool:
+        normalized_task_id = self._normalize_registered_task_id(task_id)
+        with self._operation_lock:
+            return normalized_task_id in self._task_factories
+
+    def build_registered_task_spec(
+        self,
+        instance_id: str,
+        task_id: str,
+        *,
+        metadata: dict[str, Any] | None = None,
+    ) -> TaskSpec:
+        with self._operation_lock:
+            return self._build_registered_task_spec_locked(
+                instance_id=instance_id,
+                task_id=task_id,
+                metadata=metadata,
+            )
+
     def enqueue(self, item: QueuedTask) -> QueuedTask:
         with self._operation_lock:
             before_revision = self._revision
             queued = self._coordinator.enqueue(item)
+            self._ensure_revision_changed(before_revision)
+            self._publish_live_state_locked()
+            return queued
+
+    def enqueue_registered_task(
+        self,
+        instance_id: str,
+        task_id: str,
+        *,
+        priority: int = 100,
+        builder_metadata: dict[str, Any] | None = None,
+        queue_metadata: dict[str, Any] | None = None,
+    ) -> QueuedTask:
+        with self._operation_lock:
+            before_revision = self._revision
+            spec = self._build_registered_task_spec_locked(
+                instance_id=instance_id,
+                task_id=task_id,
+                metadata=builder_metadata,
+            )
+            queued = self._coordinator.enqueue(
+                QueuedTask(
+                    instance_id=instance_id,
+                    spec=spec,
+                    priority=priority,
+                    metadata=dict(queue_metadata or {}),
+                )
+            )
             self._ensure_revision_changed(before_revision)
             self._publish_live_state_locked()
             return queued
@@ -879,9 +983,18 @@ class LiveRuntimeSession:
         preview_image_path = ""
         failure_snapshot_id = ""
         failure_reason = ""
+        last_failure_snapshot_id = ""
+        last_failure_reason = ""
         queue_depth = 0
         active_task_id = ""
         active_run_id = ""
+        active_step_id = ""
+        active_step_status = ""
+        last_task_id = ""
+        last_run_id = ""
+        last_run_status = ""
+        last_step_count = 0
+        last_completed_step_count = 0
         stop_requested = False
         health_check_ok = None
         if context is not None:
@@ -890,6 +1003,17 @@ class LiveRuntimeSession:
             active_run_id = context.active_run_id or ""
             stop_requested = context.stop_requested
             health_check_ok = context.health_check_ok
+            if context.active_task_run is not None:
+                active_step_id = context.active_task_run.current_step_id
+                if context.active_task_run.current_step_index >= 0:
+                    active_step = context.active_task_run.steps[context.active_task_run.current_step_index]
+                    active_step_status = active_step.status.value
+            if context.last_task_run is not None:
+                last_task_id = context.last_task_run.task_id
+                last_run_id = context.last_task_run.run_id
+                last_run_status = context.last_task_run.status.value
+                last_step_count = context.last_task_run.step_count
+                last_completed_step_count = context.last_task_run.completed_step_count
             if context.profile_binding is not None:
                 profile_id = context.profile_binding.profile_id
                 profile_display_name = context.profile_binding.display_name
@@ -898,6 +1022,9 @@ class LiveRuntimeSession:
             if context.failure_snapshot is not None:
                 failure_snapshot_id = context.failure_snapshot.snapshot_id
                 failure_reason = context.failure_snapshot.reason.value
+            if context.last_failure_snapshot is not None:
+                last_failure_snapshot_id = context.last_failure_snapshot.snapshot_id
+                last_failure_reason = context.last_failure_snapshot.reason.value
         return LiveRuntimeInstanceSummary(
             instance_id=instance.instance_id,
             label=instance.label,
@@ -907,6 +1034,8 @@ class LiveRuntimeSession:
             queue_depth=queue_depth,
             active_task_id=active_task_id,
             active_run_id=active_run_id,
+            active_step_id=active_step_id,
+            active_step_status=active_step_status,
             stop_requested=stop_requested,
             health_check_ok=health_check_ok,
             profile_id=profile_id,
@@ -914,6 +1043,13 @@ class LiveRuntimeSession:
             preview_image_path=preview_image_path,
             failure_snapshot_id=failure_snapshot_id,
             failure_reason=failure_reason,
+            last_task_id=last_task_id,
+            last_run_id=last_run_id,
+            last_run_status=last_run_status,
+            last_step_count=last_step_count,
+            last_completed_step_count=last_completed_step_count,
+            last_failure_snapshot_id=last_failure_snapshot_id,
+            last_failure_reason=last_failure_reason,
         )
 
     def _merge_instance_states_locked(self, updated: InstanceState) -> list[InstanceState]:
@@ -933,6 +1069,46 @@ class LiveRuntimeSession:
         if not replaced_existing:
             merged.append(updated)
         return merged
+
+    def _build_registered_task_spec_locked(
+        self,
+        *,
+        instance_id: str,
+        task_id: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> TaskSpec:
+        normalized_task_id = self._normalize_registered_task_id(task_id)
+        factory = self._task_factories.get(normalized_task_id)
+        if factory is None:
+            raise KeyError(f"Unknown registered task factory: {normalized_task_id}")
+        instance = self._coordinator.registry.get(instance_id)
+        if instance is None:
+            raise KeyError(f"Unknown instance_id: {instance_id}")
+        context = self._coordinator.get_runtime_context(instance_id)
+        if context is None:
+            context = self._coordinator._sync_context_for_instance(instance)
+        request = RuntimeTaskFactoryRequest(
+            task_id=normalized_task_id,
+            instance=instance,
+            runtime_context=context,
+            profile_binding=context.profile_binding if context is not None else None,
+            adapter=self.adapter,
+            execution_path=self.execution_path,
+            metadata=dict(metadata or {}),
+        )
+        spec = factory(request)
+        if spec.task_id != normalized_task_id:
+            raise ValueError(
+                "Registered task factory "
+                f"{normalized_task_id} returned spec.task_id={spec.task_id}"
+            )
+        return spec
+
+    def _normalize_registered_task_id(self, task_id: str) -> str:
+        normalized_task_id = str(task_id).strip()
+        if not normalized_task_id:
+            raise ValueError("task_id is required")
+        return normalized_task_id
 
     def _auto_bind_profiles(self, states: list[InstanceState]) -> None:
         if self._profile_resolver is None:

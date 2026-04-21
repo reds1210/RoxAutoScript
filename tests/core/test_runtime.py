@@ -309,6 +309,150 @@ class RuntimeCoordinatorTests(unittest.TestCase):
         self.assertEqual(context.metadata["last_health_check_step_id"], "step-a")
         self.assertEqual(context.metadata["last_preview_step_id"], "step-a")
 
+    def test_start_queue_exposes_running_step_telemetry_inside_task_handler(self) -> None:
+        coordinator = RuntimeCoordinator(
+            queue=TaskQueue(),
+            task_runner=TaskRunner(),
+            health_checker=FakeHealthChecker(healthy=True),
+            preview_capture=FakePreviewCapture(),
+        )
+        coordinator.sync_instances([self.instance])
+
+        def handler(ctx: TaskExecutionContext):
+            runtime_context = ctx.metadata["runtime_context"]
+            active_run = runtime_context.active_task_run
+            self.assertIsNotNone(active_run)
+            self.assertEqual(active_run.current_step_id, "step-a")
+            self.assertEqual(active_run.current_step_index, 0)
+            self.assertEqual(active_run.steps[0].status.value, "running")
+            return step_success("step-a", "running telemetry is visible")
+
+        coordinator.enqueue(
+            QueuedTask(
+                instance_id="mumu-0",
+                spec=TaskSpec(
+                    task_id="daily_ui.claim_rewards",
+                    name="Daily Reward Claim",
+                    version="0.1.0",
+                    entry_state="ready",
+                    steps=[TaskStep("step-a", "Runtime telemetry", handler)],
+                ),
+                priority=100,
+            )
+        )
+
+        result = coordinator.start_queue("mumu-0")
+        context = coordinator.get_runtime_context("mumu-0")
+
+        self.assertEqual(result.runs[0].status, TaskRunStatus.SUCCEEDED)
+        self.assertIsNone(context.active_task_run)
+        self.assertIsNotNone(context.last_task_run)
+        self.assertEqual(context.last_task_run.steps[0].status.value, "succeeded")
+        self.assertEqual(context.last_task_run.completed_step_count, 1)
+
+    def test_start_queue_projects_runtime_owned_step_and_run_telemetry(self) -> None:
+        coordinator = RuntimeCoordinator(
+            queue=TaskQueue(),
+            task_runner=TaskRunner(),
+            health_checker=FakeHealthChecker(healthy=True),
+            preview_capture=FakePreviewCapture(),
+        )
+        coordinator.sync_instances([self.instance])
+        coordinator.enqueue(
+            QueuedTask(
+                instance_id="mumu-0",
+                spec=TaskSpec(
+                    task_id="daily_ui.claim_rewards",
+                    name="Daily Reward Claim",
+                    version="0.1.0",
+                    entry_state="ready",
+                    steps=[
+                        TaskStep("open_reward_panel", "Open reward panel", lambda ctx: step_success("open_reward_panel", "opened")),
+                        TaskStep(
+                            "verify_claim_affordance",
+                            "Verify claim affordance",
+                            lambda ctx: step_failure(
+                                "verify_claim_affordance",
+                                "claim affordance missing",
+                                screenshot_path="captures/failure.png",
+                            ),
+                        ),
+                    ],
+                ),
+                priority=100,
+            )
+        )
+
+        result = coordinator.start_queue("mumu-0")
+        context = coordinator.get_runtime_context("mumu-0")
+        telemetry = context.last_task_run
+
+        self.assertEqual(result.runs[0].status, TaskRunStatus.FAILED)
+        self.assertIsNotNone(telemetry)
+        self.assertEqual(telemetry.task_id, "daily_ui.claim_rewards")
+        self.assertEqual(telemetry.status, TaskRunStatus.FAILED)
+        self.assertEqual(telemetry.step_count, 2)
+        self.assertEqual(telemetry.completed_step_count, 2)
+        self.assertEqual([item.step_id for item in telemetry.steps], ["open_reward_panel", "verify_claim_affordance"])
+        self.assertEqual([item.status.value for item in telemetry.steps], ["succeeded", "failed"])
+        self.assertEqual(telemetry.steps[1].message, "claim affordance missing")
+        self.assertEqual(telemetry.steps[1].screenshot_path, "captures/failure.png")
+        self.assertIsNotNone(telemetry.preview_frame)
+        self.assertIsNotNone(telemetry.failure_snapshot)
+        self.assertEqual(telemetry.failure_snapshot.snapshot_id, result.runs[0].failure_snapshot.snapshot_id)
+        self.assertEqual(context.failure_snapshot.snapshot_id, result.runs[0].failure_snapshot.snapshot_id)
+        self.assertEqual(context.last_failure_snapshot.snapshot_id, result.runs[0].failure_snapshot.snapshot_id)
+
+    def test_retry_keeps_last_failure_snapshot_stable_after_successful_rerun(self) -> None:
+        coordinator = RuntimeCoordinator(
+            queue=TaskQueue(),
+            task_runner=TaskRunner(),
+            health_checker=FakeHealthChecker(healthy=True),
+            preview_capture=FakePreviewCapture(),
+        )
+        coordinator.sync_instances([self.instance])
+
+        failure_spec = TaskSpec(
+            task_id="daily_ui.claim_rewards",
+            name="Daily Reward Claim",
+            version="0.1.0",
+            entry_state="ready",
+            steps=[
+                TaskStep("open_reward_panel", "Open reward panel", lambda ctx: step_success("open_reward_panel", "opened")),
+                TaskStep("claim_reward", "Claim reward", lambda ctx: step_failure("claim_reward", "tap had no effect")),
+            ],
+        )
+        success_spec = TaskSpec(
+            task_id="daily_ui.claim_rewards",
+            name="Daily Reward Claim",
+            version="0.1.0",
+            entry_state="ready",
+            steps=[
+                TaskStep("open_reward_panel", "Open reward panel", lambda ctx: step_success("open_reward_panel", "opened")),
+                TaskStep("claim_reward", "Claim reward", lambda ctx: step_success("claim_reward", "claimed")),
+            ],
+        )
+
+        coordinator.enqueue(QueuedTask(instance_id="mumu-0", spec=failure_spec, priority=100))
+        failed = coordinator.start_queue("mumu-0")
+        failed_context = coordinator.get_runtime_context("mumu-0")
+        first_failure_snapshot = failed_context.failure_snapshot
+
+        coordinator.enqueue(QueuedTask(instance_id="mumu-0", spec=success_spec, priority=100))
+        succeeded = coordinator.start_queue("mumu-0")
+        recovered_context = coordinator.get_runtime_context("mumu-0")
+
+        self.assertEqual(failed.runs[0].status, TaskRunStatus.FAILED)
+        self.assertIsNotNone(first_failure_snapshot)
+        self.assertEqual(succeeded.runs[0].status, TaskRunStatus.SUCCEEDED)
+        self.assertIsNone(recovered_context.failure_snapshot)
+        self.assertIsNotNone(recovered_context.last_failure_snapshot)
+        self.assertEqual(recovered_context.last_failure_snapshot.snapshot_id, first_failure_snapshot.snapshot_id)
+        self.assertIsNotNone(recovered_context.last_task_run)
+        self.assertEqual(recovered_context.last_task_run.status, TaskRunStatus.SUCCEEDED)
+        self.assertEqual(recovered_context.last_task_run.attempt, 2)
+        self.assertEqual([item.status.value for item in recovered_context.last_task_run.steps], ["succeeded", "succeeded"])
+
     def test_dispatch_refresh_updates_runtime_context(self) -> None:
         coordinator = RuntimeCoordinator(
             task_runner=TaskRunner(),

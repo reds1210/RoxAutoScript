@@ -25,7 +25,10 @@ from roxauto.core.models import (
     TaskManifest,
     TaskRun,
     TaskRunStatus,
+    TaskRunTelemetry,
     TaskSpec,
+    TaskStepTelemetry,
+    TaskStepTelemetryStatus,
     TaskStepResult,
     VisionMatch,
 )
@@ -74,9 +77,12 @@ __all__ = [
     "TaskQueue",
     "TaskRun",
     "TaskRunStatus",
+    "TaskRunTelemetry",
     "TaskRunner",
     "TaskSpec",
     "TaskStep",
+    "TaskStepTelemetry",
+    "TaskStepTelemetryStatus",
     "TaskStepResult",
     "VisionMatch",
 ]

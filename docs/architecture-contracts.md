@@ -222,6 +222,54 @@ Minimum fields:
 - `message`
 - `screenshot_path`
 
+### `TaskStepTelemetry`
+
+Minimum fields:
+
+- `step_id`
+- `description`
+- `status`
+- `message`
+- `screenshot_path` optional
+- `started_at` optional
+- `finished_at` optional
+- `data`
+
+Recommended status values:
+
+- `pending`
+- `running`
+- `succeeded`
+- `failed`
+- `skipped`
+
+### `TaskRunTelemetry`
+
+Minimum fields:
+
+- `task_id`
+- `run_id`
+- `status`
+- `step_count`
+- `completed_step_count`
+- `current_step_id`
+- `current_step_index`
+- `started_at`
+- `finished_at` optional
+- `queue_id` optional
+- `attempt`
+- `steps`
+- `preview_frame` optional
+- `failure_snapshot` optional
+- `stop_condition` optional
+- `last_updated_at`
+- `metadata`
+
+Rules:
+
+- runtime should project the active and last completed task state through `TaskRunTelemetry` instead of forcing GUI layers to reconstruct step progress from raw events
+- retries should increment `attempt` for the same task id on the same instance runtime context
+
 ### `TaskExecutionContext`
 
 Minimum fields:
@@ -355,12 +403,20 @@ Minimum fields:
 - `queue_depth`
 - `active_task_id` optional
 - `active_run_id` optional
+- `active_task_run` optional
+- `last_task_run` optional
 - `stop_requested`
 - `health_check_ok` optional
 - `profile_binding` optional
 - `preview_frame` optional
 - `failure_snapshot` optional
+- `last_failure_snapshot` optional
 - `metadata`
+
+Rules:
+
+- runtime-owned execution should update `active_task_run` while a task is running and move the finalized projection into `last_task_run` when the run finishes
+- `failure_snapshot` may clear after a successful retry, but `last_failure_snapshot` should preserve the latest failure signal for inspection surfaces
 
 ### `InstanceCommand`
 
@@ -459,6 +515,7 @@ Rules:
 - GUI-facing polling should prefer `LiveRuntimeState` or `LiveRuntimeInstanceSummary` over rebuilding a full `LiveRuntimeSnapshot` on every repaint
 - `refresh_state` should expose whether a background rediscover or runtime refresh is pending or in flight
 - `instances` should be lightweight summaries only; expensive work such as health checks and preview capture must happen in scheduled runtime refreshes, not during state reads
+- selected or per-instance summaries should surface active step ids, last run status, and last failure ids without requiring GUI code to replay raw task events
 
 ### `LiveRuntimeSession`
 
@@ -475,12 +532,38 @@ Minimum GUI-facing methods:
 - `reconnect_instance(instance_id, rediscover=True, ...)`
 - `rediscover_instances(...)`
 
+Additional runtime/task integration methods:
+
+- `register_task_factory(task_id, factory)`
+- `has_task_factory(task_id)`
+- `build_registered_task_spec(instance_id, task_id, metadata=None)`
+- `enqueue_registered_task(instance_id, task_id, priority=100, ...)`
+
 Rules:
 
 - GUI threads should treat `schedule_*` methods as the non-blocking entry points for discovery and runtime inspection work
 - GUI threads should read `get_live_state(...)` for cards, counters, selection, and refresh banners
 - sync `poll()` / `refresh_runtime_contexts()` remain valid for tests and CLI-style tooling, but GUI integrations should not loop over them on the UI thread
 - production GUI wiring should start from `build_adb_live_runtime_session(...)` instead of hand-building adapter/execution services
+- runtime/task integration should prefer registered task factories over hard-coding task-pack imports inside `core` or `emulator`
+
+### `RuntimeTaskFactoryRequest`
+
+Minimum fields:
+
+- `task_id`
+- `instance`
+- `runtime_context`
+- `profile_binding` optional
+- `adapter`
+- `execution_path`
+- `metadata`
+
+Rules:
+
+- runtime-owned registration points may expose this request to caller-owned task factories instead of importing task packs directly
+- task factories may use `runtime_context`, `profile_binding`, and adapter-backed execution services to build task-specific `TaskSpec` instances
+- task factory output should preserve the requested `task_id` on the returned `TaskSpec`
 
 ### `TaskRuntimeBuilderInput`
 

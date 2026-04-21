@@ -29,6 +29,8 @@ from roxauto.emulator.live_runtime import (
     LiveRuntimeSession,
     LiveRuntimeSnapshot,
     LiveRuntimeState,
+    RegisteredTaskFactory,
+    RuntimeTaskFactoryRequest,
     build_adb_live_runtime_session,
 )
 
@@ -52,7 +54,9 @@ __all__ = [
     "LiveRuntimeSession",
     "LiveRuntimeSnapshot",
     "LiveRuntimeState",
+    "RegisteredTaskFactory",
     "RuntimeExecutionPath",
+    "RuntimeTaskFactoryRequest",
     "ScreenshotCapturePipeline",
     "SubprocessAdbTransport",
     "build_adb_execution_path",
