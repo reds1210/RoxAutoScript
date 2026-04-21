@@ -12,6 +12,10 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
 
     def test_discovers_pre_gate_3_blueprints(self) -> None:
         blueprints = self.repository.discover_blueprints()
+        implementation_states = {
+            blueprint.task_id: blueprint.implementation_state.value
+            for blueprint in blueprints
+        }
 
         self.assertEqual(
             [blueprint.task_id for blueprint in blueprints],
@@ -21,7 +25,14 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
                 "odin.preset_entry",
             ],
         )
-        self.assertTrue(all(blueprint.implementation_state.value == "spec_only" for blueprint in blueprints))
+        self.assertEqual(
+            implementation_states,
+            {
+                "daily_ui.claim_rewards": "fixtured",
+                "daily_ui.guild_check_in": "spec_only",
+                "odin.preset_entry": "spec_only",
+            },
+        )
         self.assertIn("daily_ui.claim_reward", blueprints[0].required_anchors)
         self.assertTrue(blueprints[0].steps)
 
@@ -77,6 +88,14 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
             ["runtime.daily_ui.dispatch_bridge"],
         )
         self.assertEqual(
+            by_task["daily_ui.claim_rewards"].required_anchors,
+            [
+                "common.close_button",
+                "common.confirm_button",
+                "daily_ui.claim_reward",
+            ],
+        )
+        self.assertEqual(
             by_task["daily_ui.guild_check_in"].asset_requirement_ids,
             ["asset.daily_ui.guild_check_in_button"],
         )
@@ -92,7 +111,12 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
         self.assertEqual(by_task["daily_ui.claim_rewards"].builder_readiness_state.value, "ready")
         self.assertEqual(
             by_task["daily_ui.claim_rewards"].implementation_readiness_state.value,
-            "blocked_by_runtime",
+            "ready",
+        )
+        self.assertTrue(by_task["daily_ui.claim_rewards"].implementation_requirements[0].satisfied)
+        self.assertIn(
+            "runtime_input_builder=roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_input",
+            by_task["daily_ui.claim_rewards"].implementation_requirements[0].details,
         )
         self.assertEqual(by_task["daily_ui.guild_check_in"].builder_readiness_state.value, "blocked_by_asset")
         self.assertEqual(
@@ -110,3 +134,5 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
 
         self.assertEqual(readiness.report_id, "pre_gate_3_task_readiness")
         self.assertEqual(len(readiness.reports), 3)
+        claim_rewards = next(report for report in readiness.reports if report.task_id == "daily_ui.claim_rewards")
+        self.assertEqual(claim_rewards.implementation_readiness_state.value, "ready")

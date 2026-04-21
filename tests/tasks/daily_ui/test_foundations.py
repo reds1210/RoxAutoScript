@@ -27,4 +27,5 @@ class DailyUiFoundationsTests(unittest.TestCase):
         reports = {report.task_id: report for report in repository.evaluate_task_readinesses()}
 
         self.assertEqual(reports["daily_ui.claim_rewards"].builder_readiness_state.value, "ready")
+        self.assertEqual(reports["daily_ui.claim_rewards"].implementation_readiness_state.value, "ready")
         self.assertEqual(reports["daily_ui.guild_check_in"].builder_readiness_state.value, "blocked_by_asset")
