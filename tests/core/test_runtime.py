@@ -375,6 +375,31 @@ class RuntimeCoordinatorTests(unittest.TestCase):
                                 "verify_claim_affordance",
                                 "claim affordance missing",
                                 screenshot_path="captures/failure.png",
+                                data={
+                                    "failure_reason_id": "claim_state_ambiguous",
+                                    "outcome_code": "claim_state_ambiguous",
+                                    "inspection_attempts": [
+                                        {
+                                            "attempt": 1,
+                                            "state": "unavailable",
+                                            "screenshot_path": "captures/failure.png",
+                                        }
+                                    ],
+                                    "step_outcome": {
+                                        "kind": "verification_failed",
+                                        "failure_reason_id": "claim_state_ambiguous",
+                                    },
+                                    "task_action": {
+                                        "action": "inspect_reward_panel",
+                                        "status": "skipped",
+                                    },
+                                    "telemetry": {
+                                        "inspection": {
+                                            "workflow_mode": "ambiguous",
+                                            "expected_panel_states": ["claimable", "claimed"],
+                                        }
+                                    },
+                                },
                             ),
                         ),
                     ],
@@ -397,9 +422,39 @@ class RuntimeCoordinatorTests(unittest.TestCase):
         self.assertEqual([item.status.value for item in telemetry.steps], ["succeeded", "failed"])
         self.assertEqual(telemetry.steps[1].message, "claim affordance missing")
         self.assertEqual(telemetry.steps[1].screenshot_path, "captures/failure.png")
+        self.assertEqual(telemetry.steps[1].data["failure_reason_id"], "claim_state_ambiguous")
+        self.assertEqual(telemetry.steps[1].data["outcome_code"], "claim_state_ambiguous")
         self.assertIsNotNone(telemetry.preview_frame)
         self.assertIsNotNone(telemetry.failure_snapshot)
         self.assertEqual(telemetry.failure_snapshot.snapshot_id, result.runs[0].failure_snapshot.snapshot_id)
+        self.assertEqual(
+            telemetry.failure_snapshot.metadata["failure_reason_id"],
+            "claim_state_ambiguous",
+        )
+        self.assertEqual(
+            telemetry.failure_snapshot.metadata["outcome_code"],
+            "claim_state_ambiguous",
+        )
+        self.assertEqual(
+            telemetry.failure_snapshot.metadata["inspection_attempts"][0]["state"],
+            "unavailable",
+        )
+        self.assertEqual(
+            telemetry.failure_snapshot.metadata["step_outcome"]["kind"],
+            "verification_failed",
+        )
+        self.assertEqual(
+            telemetry.failure_snapshot.metadata["task_action"]["status"],
+            "skipped",
+        )
+        self.assertEqual(
+            telemetry.failure_snapshot.metadata["inspection"]["workflow_mode"],
+            "ambiguous",
+        )
+        self.assertEqual(
+            telemetry.failure_snapshot.metadata["step_data"]["failure_reason_id"],
+            "claim_state_ambiguous",
+        )
         self.assertEqual(context.failure_snapshot.snapshot_id, result.runs[0].failure_snapshot.snapshot_id)
         self.assertEqual(context.last_failure_snapshot.snapshot_id, result.runs[0].failure_snapshot.snapshot_id)
 

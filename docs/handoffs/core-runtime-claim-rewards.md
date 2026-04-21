@@ -2,81 +2,95 @@
 
 Track:
 
-- `codex/core-runtime-claim-rewards-hardening`
+- `codex/core-runtime-step-telemetry`
 
 Scope:
 
-- Added runtime-owned run/step/failure telemetry for `daily_ui.claim_rewards` so GUI layers can read task progress from runtime state instead of reconstructing it from queue results or app-local workflow records.
-- Preserved the runtime task-factory registration seam added earlier so claim-rewards task specs can still be built and enqueued through `LiveRuntimeSession` without importing task-pack modules inside `core` or `emulator`.
-- Kept the change inside Engine A ownership: `core/`, `emulator/`, owner tests, shared architecture docs, and this handoff.
+- Kept scope on `daily_ui.claim_rewards` only.
+- Stayed inside Engine A ownership:
+  - `src/roxauto/core/`
+  - `src/roxauto/emulator/`
+  - `tests/core/`
+  - `tests/emulator/`
+  - `docs/architecture-contracts.md`
+  - `docs/handoffs/`
+- Did not touch `tasks/`, `app/`, `vision/`, or a second task.
+
+What shipped:
+
+- Runtime failure snapshots now preserve structured task-side step-failure signals instead of storing only generic `message` text.
+- `TaskRunner._capture_failure_snapshot()` now projects failed-step data into runtime-owned `FailureSnapshotMetadata.metadata` using a generic runtime path, not a `daily_ui.claim_rewards` hardcode.
+- When a failed `TaskStepResult.data` provides them, runtime failure snapshots now promote:
+  - `failure_reason_id`
+  - `outcome_code`
+  - `inspection_attempts`
+  - `step_outcome`
+  - `task_action`
+  - `inspection`
+- Runtime also stores the full primitive-cloned step payload under `failure_snapshot.metadata["step_data"]` so downstream consumers can access the full structured failure context without re-reading task-local objects.
+- Existing task-run telemetry behavior is unchanged:
+  - `TaskStepTelemetry.data` still carries the full step result payload
+  - `active_task_run`, `last_task_run`, `failure_snapshot`, and sticky `last_failure_snapshot` keep the same retry behavior as before
+- `LiveRuntimeInstanceSummary` now flattens the claim-rewards signals that GUI/header surfaces usually need first:
+  - `failure_step_id`
+  - `failure_reason_id`
+  - `failure_outcome_code`
+  - `failure_inspection_attempt_count`
+  - `last_step_id`
+  - `last_step_status`
+  - `last_step_failure_reason_id`
+  - `last_step_outcome_code`
+  - `last_failure_step_id`
+  - `last_failure_reason_id`
+  - `last_failure_outcome_code`
+  - `last_failure_inspection_attempt_count`
+- Reconnect / rediscover flows now have coverage proving `last_task_run` and `last_failure_snapshot` remain authoritative after a failed claim-rewards run, even if the instance is marked disconnected and then reconnected.
+- Health-check and stop-condition snapshots keep their existing generic schema; this round only hardens task step failure snapshots.
 
 Files changed:
 
-- `docs/architecture-contracts.md`
 - `docs/handoffs/core-runtime-claim-rewards.md`
-- `src/roxauto/core/__init__.py`
-- `src/roxauto/core/models.py`
+- `docs/architecture-contracts.md`
 - `src/roxauto/core/runtime.py`
-- `src/roxauto/emulator/__init__.py`
 - `src/roxauto/emulator/live_runtime.py`
 - `tests/core/test_runtime.py`
 - `tests/emulator/test_live_runtime.py`
 
 Public APIs added or changed:
 
-- Added `TaskStepTelemetryStatus`, `TaskStepTelemetry`, and `TaskRunTelemetry` under `roxauto.core.models`.
-- `InstanceRuntimeContext` now carries:
-  - `active_task_run`
-  - `last_task_run`
-  - `last_failure_snapshot`
-- `TaskRunner` now writes runtime-owned telemetry into the bound runtime context while the run is executing and finalizes it when the run ends.
-- `LiveRuntimeInstanceSnapshot` now exposes:
-  - `active_task_run`
-  - `last_task_run`
-  - `last_failure_snapshot`
-- `LiveRuntimeInstanceSummary` now surfaces:
-  - `active_step_id`
-  - `active_step_status`
-  - `last_task_id`
-  - `last_run_id`
-  - `last_run_status`
-  - `last_step_count`
-  - `last_completed_step_count`
-  - `last_failure_snapshot_id`
-  - `last_failure_reason`
-- Existing runtime task-factory API remains:
-  - `register_task_factory(...)`
-  - `unregister_task_factory(...)`
-  - `has_task_factory(...)`
-  - `build_registered_task_spec(...)`
-  - `enqueue_registered_task(...)`
-
-Contract changes:
-
-- Added `TaskStepTelemetry` and `TaskRunTelemetry` to `docs/architecture-contracts.md`.
-- `InstanceRuntimeContext` now documents runtime-owned active/last task telemetry plus sticky `last_failure_snapshot`.
-- `LiveRuntimeState` now documents that per-instance summaries should surface active step ids, last run status, and last failure ids directly.
+- No public method signatures changed.
+- Runtime-owned `FailureSnapshotMetadata.metadata` for task step failures now exposes these machine-readable fields when present in the failed step payload:
+  - `step_data`
+  - `failure_reason_id`
+  - `outcome_code`
+  - `inspection_attempts`
+  - `step_outcome`
+  - `task_action`
+  - `inspection`
+- `LiveRuntimeInstanceSummary` now exposes flattened task-runtime state for GUI consumers:
+  - `failure_step_id`
+  - `failure_reason_id`
+  - `failure_outcome_code`
+  - `failure_inspection_attempt_count`
+  - `last_step_id`
+  - `last_step_status`
+  - `last_step_failure_reason_id`
+  - `last_step_outcome_code`
+  - `last_failure_step_id`
+  - `last_failure_reason_id`
+  - `last_failure_outcome_code`
+  - `last_failure_inspection_attempt_count`
 
 Assumptions:
 
-- `daily_ui.claim_rewards` remains a caller-registered task factory; runtime still does not import task-pack builders directly.
-- Retry for a previously failed run may start from `error`; runtime now force-transitions `error -> busy` only for explicit queue start, then immediately re-checks health before task execution.
-- `failure_snapshot` is the current blocking failure for the active/latest run, while `last_failure_snapshot` is the sticky inspection surface that survives a later successful retry.
+- `main` already contains the Engine D `claim_rewards.v2` structured step payload contract.
+- Downstream consumers that need task-specific diagnosis should read runtime-owned failure snapshot metadata first and use `message` only as a fallback.
 
-What shipped for `daily_ui.claim_rewards`:
+Known limitations:
 
-- Runtime now owns the step lifecycle projection:
-  - pending
-  - running
-  - succeeded
-  - failed
-  - skipped
-- During execution, `runtime_context.active_task_run` exposes the currently running step id/index plus per-step statuses.
-- After completion, `runtime_context.last_task_run` holds the finalized step list, preview frame, failure snapshot, stop condition, attempt number, and run status.
-- Failure snapshots are now stabilized for retry flows:
-  - `failure_snapshot` clears after a successful retry
-  - `last_failure_snapshot` keeps the latest failed attempt available for inspection
-- `get_live_state()` now carries enough summary fields for Engine B to render queue/run/failure state without inventing claim-rewards step progression from app-local records.
+- Snapshot field promotion is intentionally selective. Additional task-specific keys remain available under `failure_snapshot.metadata["step_data"]` rather than being flattened one-by-one into runtime.
+- `LiveRuntimeInstanceSummary` now exposes the primary claim-rewards failure/outcome fields, but detailed per-attempt inspection payloads still live under `context.failure_snapshot.metadata["inspection_attempts"]` and `context.last_task_run.steps[*].data`.
+- Event summary payloads remain generic; this round does not add task-specific fields to runtime event names or summary counters.
 
 Verification performed:
 
@@ -84,27 +98,25 @@ Verification performed:
 - `python -m unittest tests.emulator.test_live_runtime`
 - `python -m unittest discover -s tests/core -t .`
 - `python -m unittest discover -s tests/emulator -t .`
-- `python -m unittest discover -s tests/profiles -t .`
-- `python -m unittest tests.app.test_runtime_bridge`
-
-Known limitations:
-
-- Engine B still needs to consume the new runtime signals; this branch does not touch `src/roxauto/app/`.
-- `LiveRuntimeInstanceSummary` is intentionally lightweight; full per-step detail still lives on `InstanceRuntimeContext.active_task_run` / `last_task_run`.
-- No default claim-rewards factory is auto-registered yet; an upper layer still needs to register the existing task-side builder.
 
 Blockers:
 
 - None inside Engine A ownership.
-- App adoption is still pending on Engine B.
+- Engine B still needs to switch any remaining claim-rewards diagnostics from message fallbacks to the new runtime summary / snapshot fields.
 
 Recommended next step:
 
-- Engine B should stop deriving claim-rewards step state from queue results or app-local execution records and instead read:
-  - `snapshot.get_instance_snapshot(instance_id).context.active_task_run` while a run is in progress
-  - `snapshot.get_instance_snapshot(instance_id).context.last_task_run` for the finalized step list
-  - `snapshot.get_instance_snapshot(instance_id).context.last_failure_snapshot` for sticky failure inspection after retries
-  - `session.get_live_state(instance_id).selected_instance.last_run_status` and related summary fields for lightweight card/header state
-- Engine B should also switch the claim-rewards enqueue path to the runtime registration seam:
-  - `register_task_factory(...)`
-  - `build_registered_task_spec(...)` or `enqueue_registered_task(...)`
+- Keep the next pass on `daily_ui.claim_rewards` only.
+- Engine B should switch claim-rewards card/detail/failure panes to runtime-owned fields in this order:
+  - lightweight state from `session.get_live_state(instance_id).selected_instance`
+  - `failure_reason_id`
+  - `failure_outcome_code`
+  - `last_failure_reason_id`
+  - `last_failure_outcome_code`
+  - `last_step_id`
+  - `last_step_status`
+  - deep inspection from `context.failure_snapshot.metadata`
+  - `inspection_attempts`
+  - `inspection`
+  - `step_data`
+- If later tasks need the same runtime diagnosis path, extend the generic projection rules in `core/runtime.py` rather than adding task-specific branches.

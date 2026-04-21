@@ -515,7 +515,7 @@ Rules:
 - GUI-facing polling should prefer `LiveRuntimeState` or `LiveRuntimeInstanceSummary` over rebuilding a full `LiveRuntimeSnapshot` on every repaint
 - `refresh_state` should expose whether a background rediscover or runtime refresh is pending or in flight
 - `instances` should be lightweight summaries only; expensive work such as health checks and preview capture must happen in scheduled runtime refreshes, not during state reads
-- selected or per-instance summaries should surface active step ids, last run status, and last failure ids without requiring GUI code to replay raw task events
+- selected or per-instance summaries should surface active step ids, last run status, last failure ids, and task-provided `failure_reason_id` / `outcome_code` signals when available without requiring GUI code to replay raw task events or parse fallback message strings
 
 ### `LiveRuntimeSession`
 
