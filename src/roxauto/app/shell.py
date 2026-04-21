@@ -26,7 +26,7 @@ def _parse_point(value: str) -> tuple[int, int]:
 
 def launch_placeholder_gui() -> int:
     try:
-        from PySide6.QtCore import Qt
+        from PySide6.QtCore import QTimer, Qt
         from PySide6.QtGui import QPixmap
         from PySide6.QtWidgets import (
             QApplication,
@@ -82,6 +82,10 @@ def launch_placeholder_gui() -> int:
             splitter.setSizes([390, 1170])
             root.addWidget(splitter)
             self._rebuild_state(selected_instance_id="")
+            self._auto_refresh_timer = QTimer(self)
+            self._auto_refresh_timer.setInterval(5000)
+            self._auto_refresh_timer.timeout.connect(self._refresh_runtime_tick)
+            self._auto_refresh_timer.start()
 
         def _build_header(self) -> QWidget:
             box = QGroupBox("Overview")
@@ -292,7 +296,7 @@ def launch_placeholder_gui() -> int:
             tabs.addTab(self._build_preview_tab(Qt), "Preview")
             tabs.addTab(self._text_tab("readiness_header", "readiness_box"), "Readiness")
             tabs.addTab(self._text_tab("calibration_header", "calibration_box"), "Calibration")
-            tabs.addTab(self._text_tab("recording_header", "recording_box"), "Recording")
+            tabs.addTab(self._text_tab("capture_header", "capture_box"), "Capture")
             tabs.addTab(self._text_tab("anchor_header", "anchor_box"), "Anchors")
             tabs.addTab(self._text_tab("failure_header", "failure_box"), "Failures")
             return tabs
@@ -340,6 +344,10 @@ def launch_placeholder_gui() -> int:
             self._rebuild_state(selected_instance_id=self._state.instance_rows[row].instance_id)
 
         def _refresh_snapshot(self) -> None:
+            self._bridge.refresh()
+            self._rebuild_state(selected_instance_id=self._state.selected_instance_id)
+
+        def _refresh_runtime_tick(self) -> None:
             self._bridge.refresh()
             self._rebuild_state(selected_instance_id=self._state.selected_instance_id)
 
@@ -408,12 +416,16 @@ def launch_placeholder_gui() -> int:
             self._console_snapshot = self._bridge.console_snapshot()
             resolved = self._resolve_selected_instance_id(selected_instance_id)
             self._vision_state = self._bridge.vision_tooling_state(resolved)
+            self._task_readiness_reports = self._bridge.task_readiness_reports()
+            self._task_runtime_builder_inputs = self._bridge.task_runtime_builder_inputs()
             self._state = build_operator_console_state(
                 self._console_snapshot,
                 self._runtime_snapshot,
                 self._vision_state,
                 selected_instance_id=resolved,
                 global_emergency_stop_active=self._bridge.global_emergency_stop_active(),
+                task_readiness_reports=self._task_readiness_reports,
+                task_runtime_builder_inputs=self._task_runtime_builder_inputs,
             )
             self._render_state()
 
@@ -422,6 +434,7 @@ def launch_placeholder_gui() -> int:
             features = ", ".join(self._state.snapshot.available_runtime_features) or "none"
             workspace = self._state.vision.workspace
             readiness = self._state.vision.readiness
+            task_readiness = self._state.task_readiness
 
             self.summary_label.setText(summary.global_status_message)
             self.features_label.setText(f"ADB: {self._state.snapshot.adb_path} | Optional packages: {features}")
@@ -429,7 +442,9 @@ def launch_placeholder_gui() -> int:
                 "Templates: "
                 f"{workspace.selected_repository_id or 'none'} | "
                 f"repos={workspace.repository_count} | "
-                f"blocking={readiness.blocking_count if readiness is not None else 0}"
+                f"blocking={readiness.blocking_count if readiness is not None else 0} | "
+                f"builder_ready={task_readiness.builder_ready_count}/{task_readiness.total_tasks} | "
+                f"impl_ready={task_readiness.implementation_ready_count}/{task_readiness.total_tasks}"
             )
             self.metric_total.setText(str(summary.total_instances))
             self.metric_ready.setText(str(summary.ready_count))
@@ -497,18 +512,26 @@ def launch_placeholder_gui() -> int:
                 "n/a",
             )
             self.detail_profile.setText(profile_line)
+            metadata_lines = list(detail.metadata_lines)
+            if detail.inspection_summary:
+                metadata_lines.insert(0, f"inspection_summary: {detail.inspection_summary}")
             self.instance_meta.setPlainText(
-                "\n".join(detail.metadata_lines) if detail.metadata_lines else "No runtime metadata available."
+                "\n".join(metadata_lines) if metadata_lines else "No runtime metadata available."
             )
 
         def _render_queue(self) -> None:
             queue = self._state.queue
-            self.queue_summary_label.setText(
+            summary = (
                 f"Queued items for {self._state.detail.label}: {queue.total_count} "
                 f"(runtime total {len(self._state.runtime_snapshot.queue_items)})"
             )
+            if queue.last_queue_summary:
+                summary += f" | last [{queue.last_queue_status}]: {queue.last_queue_summary}"
+            self.queue_summary_label.setText(summary)
             if not queue.items:
-                self.queue_output.setPlainText(queue.empty_message)
+                self.queue_output.setPlainText(
+                    queue.last_queue_summary or queue.empty_message
+                )
                 return
             self.queue_output.setPlainText(
                 "\n\n".join(
@@ -570,12 +593,16 @@ def launch_placeholder_gui() -> int:
 
         def _render_vision(self) -> None:
             selected = self._state.selected_instance_snapshot
+            inspection = self._state.selected_inspection_result
             vision = self._state.vision
             readiness = vision.readiness
             workspace = vision.workspace
+            preview_inspection = vision.preview
             preview_path = self._preview_path()
+            task_readiness = self._state.task_readiness
 
             self.preview_header.setText(
+                f"Inspection: {inspection.status.value if inspection is not None else 'uninspected'} | "
                 f"Match: {vision.match.status.value} | "
                 f"Anchor: {vision.anchors.selected_anchor_id or 'none'} | "
                 f"Repository: {workspace.selected_repository_id or 'none'}"
@@ -585,15 +612,7 @@ def launch_placeholder_gui() -> int:
                 "\n".join(self._preview_context_lines()) or "No runtime preview context."
             )
             self.preview_box.setPlainText(
-                "\n".join(
-                    [
-                        f"Source image: {preview_path or 'n/a'}",
-                        f"Match message: {vision.match.message or 'n/a'}",
-                        f"Failure message: {vision.failure.message or 'n/a'}",
-                        f"Matched candidate: {vision.match.matched_candidate_summary or 'no candidate'}",
-                        f"Best candidate: {vision.match.best_candidate_summary or 'no candidate'}",
-                    ]
-                )
+                "\n".join(self._inspection_lines(preview_inspection, fallback_image_path=preview_path))
             )
 
             if readiness is None:
@@ -603,7 +622,8 @@ def launch_placeholder_gui() -> int:
                 self.readiness_header.setText(
                     f"Workspace: {workspace.templates_root} | "
                     f"repos={workspace.repository_count} | "
-                    f"blocking={readiness.blocking_count}"
+                    f"blocking={readiness.blocking_count} | "
+                    f"tasks={task_readiness.total_tasks}"
                 )
                 dependency_lines = [
                     (
@@ -621,6 +641,36 @@ def launch_placeholder_gui() -> int:
                             f"missing={readiness.missing_count}",
                             f"invalid={readiness.invalid_count}",
                             f"inventory_mismatch={readiness.inventory_mismatch_count}",
+                            (
+                                "Task readiness: "
+                                f"builder ready={task_readiness.builder_ready_count}/"
+                                f"{task_readiness.total_tasks}, "
+                                f"implementation ready={task_readiness.implementation_ready_count}/"
+                                f"{task_readiness.total_tasks}"
+                            ),
+                            (
+                                "Task blockers: "
+                                f"asset={task_readiness.blocked_by_asset_count}, "
+                                f"runtime={task_readiness.blocked_by_runtime_count}, "
+                                f"calibration={task_readiness.blocked_by_calibration_count}, "
+                                f"foundation={task_readiness.blocked_by_foundation_count}"
+                            ),
+                            (
+                                "Selected task scope: "
+                                f"{', '.join(task_readiness.selected_task_ids) or 'none'}"
+                            ),
+                            "Task rows:",
+                            *(
+                                [
+                                    (
+                                        f"  {row.task_id} | builder={row.builder_state} | "
+                                        f"implementation={row.implementation_state} | "
+                                        f"related={'yes' if row.is_related_to_selected_instance else 'no'}"
+                                    )
+                                    for row in task_readiness.rows
+                                ]
+                                or ["  none"]
+                            ),
                             "Dependencies:",
                             *(dependency_lines or ["none"]),
                         ]
@@ -640,6 +690,8 @@ def launch_placeholder_gui() -> int:
                         f"Offset: {calibration.offset_summary or '0, 0'}",
                         f"Crop: {calibration.crop_summary or 'n/a'}",
                         f"Override count: {calibration.override_count}",
+                        f"Selected anchor: {calibration.selected_anchor_id or 'n/a'}",
+                        f"Selected resolution: {self._resolution_summary(calibration.selected_resolution)}",
                         "Anchors:",
                         *(
                             [
@@ -654,21 +706,32 @@ def launch_placeholder_gui() -> int:
                 )
             )
 
-            replay = vision.replay
-            self.recording_header.setText(
-                f"Script: {replay.script_id or 'n/a'} | Actions: {replay.total_actions} | Version: {replay.version}"
+            capture = vision.capture
+            self.capture_header.setText(
+                f"Session: {capture.session_id or 'n/a'} | "
+                f"Artifacts: {capture.artifact_count} | "
+                f"Selected: {capture.selected_artifact_id or 'none'}"
             )
-            self.recording_box.setPlainText(
+            self.capture_box.setPlainText(
                 "\n".join(
                     [
-                        f"Name: {replay.script_name or 'No replay script'}",
-                        "Actions:",
+                        f"Source image: {capture.source_image or 'n/a'}",
+                        f"Selected anchor: {capture.selected_anchor_id or 'n/a'}",
+                        f"Crop region: {capture.crop_region or 'n/a'}",
+                        f"Selected artifact summary: {capture.selected_artifact_summary or 'n/a'}",
+                        "Source inspection:",
+                        *self._inspection_lines(capture.source_inspection, indent="  "),
+                        "Selected artifact inspection:",
+                        *self._inspection_lines(capture.selected_artifact_inspection, indent="  "),
+                        "Artifacts:",
                         *(
                             [
-                                f"  {row.action_id} | {row.action_type.value} | "
-                                f"label={row.label} | payload={row.payload_summary or 'n/a'} | "
-                                f"selected={'yes' if row.is_selected else 'no'}"
-                                for row in replay.actions
+                                (
+                                    f"  {artifact.artifact_id} | kind={artifact.kind.value} | "
+                                    f"path={artifact.image_path} | "
+                                    f"selected={'yes' if artifact.is_selected else 'no'}"
+                                )
+                                for artifact in capture.artifacts
                             ]
                             or ["  none"]
                         ),
@@ -686,6 +749,7 @@ def launch_placeholder_gui() -> int:
                 "\n".join(
                     [
                         f"Selected summary: {anchors.selected_anchor_summary or 'n/a'}",
+                        f"Selected overlay: {self._overlay_summary(anchors.selected_overlay)}",
                         "Anchors:",
                         *(
                             [
@@ -713,6 +777,9 @@ def launch_placeholder_gui() -> int:
                         f"Preview image: {failure.preview_image_path or 'n/a'}",
                         f"Message: {failure.message or 'n/a'}",
                         f"Best candidate: {failure.best_candidate_summary or 'no candidate'}",
+                        f"Calibration: {self._resolution_summary(failure.calibration_resolution)}",
+                        "Inspection:",
+                        *self._inspection_lines(failure.inspection, indent="  "),
                         "Candidates:",
                         *(
                             [
@@ -726,15 +793,17 @@ def launch_placeholder_gui() -> int:
             )
 
         def _preview_path(self) -> str:
-            selected = self._state.selected_instance_snapshot
-            if selected is not None and selected.preview_frame is not None:
-                return selected.preview_frame.image_path
+            if self._state.vision.preview is not None and self._state.vision.preview.image_path:
+                return self._state.vision.preview.image_path
             if self._state.vision.capture.selected_artifact is not None:
                 return self._state.vision.capture.selected_artifact.image_path
             if self._state.vision.failure.preview_image_path:
                 return self._state.vision.failure.preview_image_path
             if self._state.vision.failure.screenshot_path:
                 return self._state.vision.failure.screenshot_path
+            selected = self._state.selected_instance_snapshot
+            if selected is not None and selected.preview_frame is not None:
+                return selected.preview_frame.image_path
             return self._state.vision.match.source_image
 
         def _render_preview_visual(self, preview_path: str, pixmap_class, qt) -> None:
@@ -757,6 +826,7 @@ def launch_placeholder_gui() -> int:
 
         def _preview_context_lines(self) -> list[str]:
             selected = self._state.selected_instance_snapshot
+            inspection = self._state.selected_inspection_result
             vision = self._state.vision
             lines: list[str] = []
             if selected is None:
@@ -769,6 +839,12 @@ def launch_placeholder_gui() -> int:
                     f"Queue depth: {selected.queue_depth}",
                 ]
             )
+            if inspection is not None:
+                lines.append(f"Inspection status: {inspection.status.value}")
+                lines.append(f"Inspection healthy: {inspection.health_check_ok}")
+                if inspection.health_check_message:
+                    lines.append(f"Inspection message: {inspection.health_check_message}")
+                lines.append(f"Inspected at: {inspection.inspected_at}")
             if context is not None:
                 lines.append(f"Stop requested: {context.stop_requested}")
                 lines.append(f"Health check: {context.health_check_ok}")
@@ -789,9 +865,57 @@ def launch_placeholder_gui() -> int:
             readiness = vision.readiness
             if readiness is not None:
                 lines.append(f"Workspace blockers: {readiness.blocking_count}")
+            if self._state.task_readiness.selected_task_ids:
+                lines.append(
+                    "Task readiness scope: "
+                    + ", ".join(self._state.task_readiness.selected_task_ids)
+                )
             if vision.anchors.selected_anchor_summary:
                 lines.append(f"Anchor: {vision.anchors.selected_anchor_summary}")
             return lines
+
+        def _inspection_lines(
+            self,
+            inspection_state,
+            *,
+            fallback_image_path: str = "",
+            indent: str = "",
+        ) -> list[str]:
+            if inspection_state is None:
+                return [f"{indent}none"]
+            lines = [
+                f"{indent}image={inspection_state.image_path or fallback_image_path or 'n/a'}",
+                f"{indent}source={inspection_state.source_image or fallback_image_path or 'n/a'}",
+                f"{indent}overlay_count={inspection_state.overlay_count}",
+                f"{indent}selected_overlay={inspection_state.selected_overlay_summary or 'n/a'}",
+            ]
+            lines.extend(
+                [
+                    (
+                        f"{indent}{overlay.overlay_id} | {overlay.kind.value} | "
+                        f"label={overlay.label} | region={overlay.region or 'n/a'} | "
+                        f"selected={'yes' if overlay.is_selected else 'no'}"
+                    )
+                    for overlay in inspection_state.overlays
+                ]
+                or [f"{indent}no_overlays"]
+            )
+            return lines
+
+        def _overlay_summary(self, overlay) -> str:
+            if overlay is None:
+                return "n/a"
+            return f"{overlay.overlay_id} | {overlay.kind.value} | region={overlay.region or 'n/a'}"
+
+        def _resolution_summary(self, resolution) -> str:
+            if resolution is None:
+                return "n/a"
+            return (
+                f"profile={resolution.profile_id or 'n/a'} | "
+                f"threshold={resolution.effective_confidence_threshold:.2f} | "
+                f"region={resolution.effective_match_region or 'n/a'} | "
+                f"crop={resolution.capture_crop_region or 'n/a'}"
+            )
 
     window = MainWindow(bridge)
     window.show()

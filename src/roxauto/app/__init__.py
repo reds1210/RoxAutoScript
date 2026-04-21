@@ -13,6 +13,8 @@ from roxauto.app.viewmodels import (
     OperatorConsoleState,
     QueueItemView,
     QueuePaneView,
+    TaskReadinessPaneView,
+    TaskReadinessRowView,
     build_console_snapshot,
     build_console_snapshot_from_runtime,
     build_console_summary,
@@ -20,6 +22,7 @@ from roxauto.app.viewmodels import (
     build_log_pane,
     build_manual_control_command,
     build_operator_console_state,
+    build_task_readiness_pane,
 )
 
 __all__ = [
@@ -35,6 +38,8 @@ __all__ = [
     "OperatorConsoleState",
     "QueueItemView",
     "QueuePaneView",
+    "TaskReadinessPaneView",
+    "TaskReadinessRowView",
     "build_console_snapshot",
     "build_console_snapshot_from_runtime",
     "build_console_summary",
@@ -42,4 +47,5 @@ __all__ = [
     "build_log_pane",
     "build_manual_control_command",
     "build_operator_console_state",
+    "build_task_readiness_pane",
 ]

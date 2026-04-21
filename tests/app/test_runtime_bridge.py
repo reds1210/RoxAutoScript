@@ -66,6 +66,8 @@ class OperatorConsoleRuntimeBridgeTests(unittest.TestCase):
 
             self.assertEqual(snapshot.instances[0].instance_id, "mumu-0")
             self.assertIsNotNone(instance_snapshot)
+            self.assertTrue(snapshot.last_sync_ok)
+            self.assertEqual(len(snapshot.last_inspection_results), 1)
             self.assertIsNotNone(instance_snapshot.preview_frame)
             self.assertTrue(instance_snapshot.health_check_ok)
             self.assertEqual(adapter.health_checks, 1)
@@ -76,6 +78,31 @@ class OperatorConsoleRuntimeBridgeTests(unittest.TestCase):
                 console_snapshot.instances[0].metadata["preview_frame"],
                 str((Path(temp_dir) / "mumu-0.png")),
             )
+
+    def test_interaction_commands_refresh_runtime_contexts_without_extra_health_probe(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            adapter = FakeAdapter(Path(temp_dir), healthy=True)
+            bridge = OperatorConsoleRuntimeBridge(
+                workspace_root=Path(__file__).resolve().parents[2],
+                doctor_report_provider=_doctor_report,
+                adapter=adapter,
+                discovery=lambda: [_instance("mumu-0")],
+                profile_resolver=lambda instance: _profile_binding(instance.instance_id),
+            )
+            bridge.refresh()
+
+            dispatch = bridge.dispatch_manual_action(
+                "tap",
+                instance_id="mumu-0",
+                payload={"x": 12, "y": 34},
+            )
+
+            self.assertEqual(dispatch.command_type.value, "tap")
+            self.assertEqual(adapter.taps, [(12, 34)])
+            self.assertEqual(adapter.health_checks, 1)
+            self.assertEqual(adapter.screenshot_requests, 2)
+            self.assertIsNotNone(bridge.selected_inspection_result("mumu-0"))
+            self.assertEqual(bridge.snapshot().last_command_result.command_type.value, "tap")
 
     def test_dispatch_manual_actions_update_live_queue_and_global_stop_state(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -121,6 +148,8 @@ class OperatorConsoleRuntimeBridgeTests(unittest.TestCase):
 
             self.assertEqual(vision.workspace.selected_repository_id, "common")
             self.assertIsNotNone(vision.readiness)
+            self.assertIsNotNone(vision.preview)
+            self.assertEqual(vision.preview.metadata["kind"], "runtime_preview")
             self.assertIsNotNone(vision.capture.selected_artifact)
             self.assertEqual(vision.capture.selected_artifact.image_path, str((Path(temp_dir) / "mumu-0.png")))
             self.assertTrue(vision.failure.failure_id)
