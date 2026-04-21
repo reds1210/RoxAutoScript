@@ -15,60 +15,60 @@
           "summary": "Daily UI fixed-flow tasks require a production runtime action-dispatch bridge.",
           "satisfied": true,
           "blocking": true,
-          "details": "runtime_bridge=implemented runtime_input_builder=roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_input task_spec_builder=roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_task_spec",
+          "details": "runtime_bridge=implemented runtime_input_builder=roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_input runtime_seam_builder=roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_seam task_spec_builder=roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_task_spec",
           "metadata": {
             "domain": "runtime"
           }
         }
       ],
-      "warning_requirements": [
-        {
-          "requirement_id": "warning.daily_ui.claim_rewards:template:daily_ui.reward_panel",
-          "domain": "asset",
-          "summary": "Template asset is still placeholder scaffolding.",
-          "satisfied": false,
-          "blocking": false,
-          "details": "asset_status=placeholder source_path=assets/templates/daily_ui/manifest.json#daily_ui.reward_panel",
-          "metadata": {}
-        },
-        {
-          "requirement_id": "warning.daily_ui.claim_rewards:template:daily_ui.claim_reward",
-          "domain": "asset",
-          "summary": "Template asset is still placeholder scaffolding.",
-          "satisfied": false,
-          "blocking": false,
-          "details": "asset_status=placeholder source_path=assets/templates/daily_ui/manifest.json#daily_ui.claim_reward",
-          "metadata": {}
-        },
-        {
-          "requirement_id": "warning.daily_ui.claim_rewards:template:daily_ui.reward_confirm_state",
-          "domain": "asset",
-          "summary": "Template asset is still placeholder scaffolding.",
-          "satisfied": false,
-          "blocking": false,
-          "details": "asset_status=placeholder source_path=assets/templates/daily_ui/manifest.json#daily_ui.reward_confirm_state",
-          "metadata": {}
-        },
-        {
-          "requirement_id": "warning.daily_ui.claim_rewards:golden:reward_panel",
-          "domain": "asset",
-          "summary": "Golden screenshots are still planned and not curated yet.",
-          "satisfied": false,
-          "blocking": false,
-          "details": "asset_status=planned source_path=daily_ui/daily_ui_claim_rewards/reward_panel/daily_ui_claim_rewards__reward_panel__baseline__v1.png",
-          "metadata": {}
-        },
-        {
-          "requirement_id": "warning.daily_ui.claim_rewards:golden:reward_confirm_modal",
-          "domain": "asset",
-          "summary": "Golden screenshots are still planned and not curated yet.",
-          "satisfied": false,
-          "blocking": false,
-          "details": "asset_status=planned source_path=daily_ui/daily_ui_claim_rewards/reward_confirm_modal/daily_ui_claim_rewards__reward_confirm_modal__baseline__v1.png",
-          "metadata": {}
-        }
-      ],
+      "warning_requirements": [],
       "metadata": {
+        "builder_input": {
+          "task_id": "daily_ui.claim_rewards",
+          "pack_id": "daily_ui",
+          "manifest_path": "packs/daily_ui/daily_claim_rewards.task.json",
+          "fixture_profile_paths": [
+            "fixture_profiles/default_tw_daily.fixture.json"
+          ],
+          "required_anchors": [
+            "daily_ui.reward_panel",
+            "daily_ui.claim_reward",
+            "daily_ui.reward_confirm_state",
+            "common.confirm_button",
+            "common.close_button"
+          ],
+          "asset_requirement_ids": [],
+          "runtime_requirement_ids": [
+            "runtime.daily_ui.dispatch_bridge"
+          ],
+          "calibration_requirement_ids": [],
+          "foundation_requirement_ids": [],
+          "metadata": {
+            "asset_state": "curated",
+            "inventory_source": "curated_inventory",
+            "preset_id": "daily_ui.claim_rewards.mvp",
+            "runtime_seam": {
+              "result_signal_keys": [
+                "failure_reason_id",
+                "outcome_code",
+                "expected_panel_states",
+                "inspection_attempts",
+                "signals",
+                "step_outcome",
+                "telemetry",
+                "task_action"
+              ],
+              "runtime_input_builder": "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_input",
+              "runtime_seam_builder": "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_seam",
+              "signal_contract_version": "claim_rewards.v2",
+              "task_display_builder": "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_task_display_model",
+              "task_preset_builder": "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_task_preset",
+              "task_spec_builder": "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_task_spec"
+            },
+            "signal_contract_version": "claim_rewards.v2",
+            "source": "task_foundations"
+          }
+        },
         "implementation_state": "fixtured"
       }
     },
@@ -115,6 +115,28 @@
         }
       ],
       "metadata": {
+        "builder_input": {
+          "task_id": "daily_ui.guild_check_in",
+          "pack_id": "daily_ui",
+          "manifest_path": "packs/daily_ui/guild_check_in.task.json",
+          "fixture_profile_paths": [
+            "fixture_profiles/default_tw_guild.fixture.json"
+          ],
+          "required_anchors": [
+            "common.close_button",
+            "daily_ui.guild_check_in_button"
+          ],
+          "asset_requirement_ids": [
+            "asset.daily_ui.guild_check_in_button"
+          ],
+          "runtime_requirement_ids": [],
+          "calibration_requirement_ids": [],
+          "foundation_requirement_ids": [],
+          "metadata": {
+            "inventory_source": "curated_inventory",
+            "source": "task_foundations"
+          }
+        },
         "implementation_state": "spec_only"
       }
     },
@@ -167,6 +189,28 @@
         }
       ],
       "metadata": {
+        "builder_input": {
+          "task_id": "odin.preset_entry",
+          "pack_id": "odin",
+          "manifest_path": "packs/odin/odin_preset_entry.task.json",
+          "fixture_profile_paths": [
+            "fixture_profiles/default_tw_odin.fixture.json"
+          ],
+          "required_anchors": [
+            "common.close_button",
+            "odin.start_button"
+          ],
+          "asset_requirement_ids": [],
+          "runtime_requirement_ids": [],
+          "calibration_requirement_ids": [
+            "calibration.odin.idle_state_profile"
+          ],
+          "foundation_requirement_ids": [],
+          "metadata": {
+            "inventory_source": "curated_inventory",
+            "source": "task_foundations"
+          }
+        },
         "implementation_state": "spec_only"
       }
     }

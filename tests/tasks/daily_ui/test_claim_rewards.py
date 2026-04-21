@@ -21,6 +21,7 @@ from roxauto.tasks.daily_ui import (
     ClaimRewardsNavigationPlan,
     ClaimRewardsPanelState,
     build_claim_rewards_runtime_input,
+    build_claim_rewards_runtime_seam,
     TemplateMatcherClaimRewardsVisionGateway,
     build_claim_rewards_task_spec,
     load_claim_rewards_anchor_specs,
@@ -241,6 +242,31 @@ class ClaimRewardsTaskBuilderTests(unittest.TestCase):
             runtime_input.display_metadata.metadata["signal_contract_version"],
             "claim_rewards.v2",
         )
+        self.assertEqual(
+            runtime_input.builder_input.metadata["runtime_seam"]["runtime_seam_builder"],
+            "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_seam",
+        )
+        self.assertEqual(
+            runtime_input.metadata["runtime_seam"]["task_spec_builder"],
+            "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_task_spec",
+        )
+        self.assertEqual(
+            runtime_input.metadata["result_signal_keys"],
+            [
+                "failure_reason_id",
+                "outcome_code",
+                "expected_panel_states",
+                "inspection_attempts",
+                "signals",
+                "step_outcome",
+                "telemetry",
+                "task_action",
+            ],
+        )
+        self.assertEqual(
+            runtime_input.metadata["golden_screen_slugs"],
+            ["reward_panel", "claim_button", "confirm_state"],
+        )
 
     def test_task_spec_builder_embeds_runtime_input_metadata(self) -> None:
         adapter = FakeAdapter()
@@ -262,6 +288,23 @@ class ClaimRewardsTaskBuilderTests(unittest.TestCase):
         self.assertEqual(spec.metadata["implementation_readiness_state"], "ready")
         self.assertEqual(spec.metadata["builder_input"]["task_id"], "daily_ui.claim_rewards")
         self.assertEqual(spec.metadata["runtime_input"]["fixture_id"], "fixture.tw.daily_ui.default")
+        self.assertEqual(
+            spec.metadata["runtime_seam"]["metadata"]["runtime_seam_builder"],
+            "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_seam",
+        )
+        self.assertEqual(
+            spec.metadata["runtime_seam"]["result_signal_keys"],
+            [
+                "failure_reason_id",
+                "outcome_code",
+                "expected_panel_states",
+                "inspection_attempts",
+                "signals",
+                "step_outcome",
+                "telemetry",
+                "task_action",
+            ],
+        )
         self.assertEqual(spec.metadata["product_display"]["display_name"], "每日領獎")
         self.assertEqual(spec.metadata["task_preset"]["display_name"], "每日領獎")
         self.assertEqual(spec.name, "每日領獎")
@@ -270,6 +313,45 @@ class ClaimRewardsTaskBuilderTests(unittest.TestCase):
             [step.step_id for step in runtime_input.step_specs],
         )
         self.assertEqual(spec.steps[0].description, "開啟固定的每日獎勵面板。")
+
+    def test_runtime_seam_builds_task_spec_for_runtime_registration_path(self) -> None:
+        adapter = FakeAdapter()
+        gateway = ScriptedVisionGateway(
+            [
+                _inspection(ClaimRewardsPanelState.CLAIMED, close_point=(1180, 80)),
+                _inspection(ClaimRewardsPanelState.CLAIMED, close_point=(1180, 80)),
+            ]
+        )
+        runtime_input = build_claim_rewards_runtime_input(foundation_repository=self.repository)
+        runtime_seam = build_claim_rewards_runtime_seam(runtime_input=runtime_input)
+
+        spec = runtime_seam.build_task_spec(
+            adapter=adapter,
+            navigation_plan=self.navigation_plan,
+            vision_gateway=gateway,
+        )
+
+        self.assertEqual(runtime_seam.task_id, "daily_ui.claim_rewards")
+        self.assertEqual(runtime_seam.signal_contract_version, "claim_rewards.v2")
+        self.assertEqual(
+            runtime_seam.metadata["runtime_seam_builder"],
+            "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_seam",
+        )
+        self.assertEqual(
+            runtime_seam.result_signal_keys,
+            [
+                "failure_reason_id",
+                "outcome_code",
+                "expected_panel_states",
+                "inspection_attempts",
+                "signals",
+                "step_outcome",
+                "telemetry",
+                "task_action",
+            ],
+        )
+        self.assertEqual(spec.task_id, runtime_seam.task_id)
+        self.assertEqual(spec.metadata["runtime_seam"]["signal_contract_version"], "claim_rewards.v2")
 
     def test_load_display_metadata_and_task_preset_for_gui(self) -> None:
         display_metadata = load_claim_rewards_display_metadata(self.repository)
@@ -323,6 +405,35 @@ class ClaimRewardsTaskBuilderTests(unittest.TestCase):
         self.assertEqual(display_model.steps[2].failure_reason.reason_id, "claim_tap_no_effect")
         self.assertEqual(display_model.steps[2].metadata["outcome_code"], "claim_tap_no_effect")
         self.assertIn("畫面沒有進入已領取或待確認狀態", display_model.status_summary)
+
+    def test_build_display_model_prefers_runtime_expected_panel_states_for_confirmation_step(self) -> None:
+        adapter = FakeAdapter()
+        gateway = ScriptedVisionGateway(
+            [
+                _inspection(ClaimRewardsPanelState.CLAIMABLE, claim_point=(640, 360)),
+                _inspection(ClaimRewardsPanelState.CONFIRM_REQUIRED, confirm_point=(700, 500)),
+                _inspection(ClaimRewardsPanelState.CLAIMED, close_point=(1180, 80)),
+                _inspection(ClaimRewardsPanelState.CLAIMED, close_point=(1180, 80)),
+            ]
+        )
+        runtime_input = build_claim_rewards_runtime_input(foundation_repository=self.repository)
+        spec = build_claim_rewards_task_spec(
+            adapter=adapter,
+            navigation_plan=self.navigation_plan,
+            runtime_input=runtime_input,
+            vision_gateway=gateway,
+        )
+        run = TaskRunner().run_task(
+            spec=spec,
+            context=TaskExecutionContext(instance=self.instance),
+        )
+
+        display_model = build_claim_rewards_task_display_model(run=run, runtime_input=runtime_input)
+
+        self.assertEqual(run.status, TaskRunStatus.SUCCEEDED)
+        self.assertEqual(display_model.steps[3].metadata["outcome_code"], "confirm_completed")
+        self.assertEqual(display_model.steps[3].metadata["expected_panel_states"], ["claimed"])
+        self.assertEqual(display_model.steps[3].metadata["observed_panel_state"], "claimed")
 
     def test_template_match_gateway_classifies_reward_panel_states(self) -> None:
         anchors = load_claim_rewards_anchor_specs()
@@ -434,6 +545,57 @@ class ClaimRewardsTaskBuilderTests(unittest.TestCase):
                     self.assertTrue(inspection.signals["confirm_state_visible"])
                 else:
                     self.assertEqual(inspection.close_point, expected_point)
+
+    def test_template_match_gateway_requires_claim_specific_confirmation_signal(self) -> None:
+        anchors = load_claim_rewards_anchor_specs()
+        cases = [
+            (
+                "confirm_button_only",
+                {
+                    "common.confirm_button": [
+                        VisionMatch(
+                            anchor_id="common.confirm_button",
+                            confidence=0.98,
+                            bbox=(400, 500, 120, 60),
+                            source_image="captures/frame.png",
+                        )
+                    ]
+                },
+                ClaimRewardsPanelState.UNAVAILABLE,
+            ),
+            (
+                "confirm_state_only",
+                {
+                    "daily_ui.reward_confirm_state": [
+                        VisionMatch(
+                            anchor_id="daily_ui.reward_confirm_state",
+                            confidence=0.96,
+                            bbox=(300, 180, 640, 360),
+                            source_image="captures/frame.png",
+                        )
+                    ]
+                },
+                ClaimRewardsPanelState.CONFIRM_REQUIRED,
+            ),
+        ]
+
+        for label, matches_by_anchor, expected_state in cases:
+            with self.subTest(label=label):
+                gateway = TemplateMatcherClaimRewardsVisionGateway(FakeMatcher(matches_by_anchor))
+
+                inspection = gateway.inspect(
+                    instance=self.instance,
+                    screenshot_path=Path("captures/frame.png"),
+                    anchor_specs=anchors,
+                    metadata={"reason": label},
+                )
+
+                self.assertEqual(inspection.state, expected_state)
+                if label == "confirm_button_only":
+                    self.assertFalse(inspection.signals["reward_panel_visible"])
+                    self.assertTrue(inspection.signals["confirm_button_visible"])
+                if label == "confirm_state_only":
+                    self.assertTrue(inspection.signals["confirm_state_visible"])
 
     def test_claim_rewards_run_succeeds_without_confirmation(self) -> None:
         adapter = FakeAdapter()

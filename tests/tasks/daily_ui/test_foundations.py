@@ -24,6 +24,10 @@ class DailyUiFoundationsTests(unittest.TestCase):
                 "common.close_button",
             ],
         )
+        self.assertEqual(
+            catalog.entries[0].metadata["runtime_seam"]["task_spec_builder"],
+            "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_task_spec",
+        )
 
     def test_loads_daily_ui_blueprints(self) -> None:
         blueprints = load_daily_ui_blueprints()
@@ -42,6 +46,10 @@ class DailyUiFoundationsTests(unittest.TestCase):
                 "common.close_button",
             ],
         )
+        self.assertEqual(
+            [case.screen_slug for case in blueprints[0].golden_cases],
+            ["reward_panel", "claim_button", "confirm_state"],
+        )
 
     def test_daily_ui_readiness_states(self) -> None:
         repository = TaskFoundationRepository.load_default()
@@ -49,4 +57,5 @@ class DailyUiFoundationsTests(unittest.TestCase):
 
         self.assertEqual(reports["daily_ui.claim_rewards"].builder_readiness_state.value, "ready")
         self.assertEqual(reports["daily_ui.claim_rewards"].implementation_readiness_state.value, "ready")
+        self.assertEqual(reports["daily_ui.claim_rewards"].warning_requirements, [])
         self.assertEqual(reports["daily_ui.guild_check_in"].builder_readiness_state.value, "blocked_by_asset")

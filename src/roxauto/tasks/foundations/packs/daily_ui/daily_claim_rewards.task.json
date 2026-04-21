@@ -14,8 +14,16 @@
       ]
     },
     {
+      "notes": "Claimable panel state with the enabled reward button.",
+      "screen_slug": "claim_button",
+      "variants": [
+        "baseline",
+        "failure"
+      ]
+    },
+    {
       "notes": "Claim confirmation modal state.",
-      "screen_slug": "reward_confirm_modal",
+      "screen_slug": "confirm_state",
       "variants": [
         "baseline",
         "confirm_ready",
@@ -222,6 +230,39 @@
     "runtime_requirement_ids": [
       "runtime.daily_ui.dispatch_bridge"
     ],
+    "runtime_seam": {
+      "runtime_input_builder": "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_input",
+      "runtime_seam_builder": "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_seam",
+      "task_spec_builder": "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_task_spec",
+      "task_preset_builder": "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_task_preset",
+      "task_display_builder": "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_task_display_model",
+      "signal_contract_version": "claim_rewards.v2",
+      "result_signal_keys": [
+        "failure_reason_id",
+        "outcome_code",
+        "expected_panel_states",
+        "inspection_attempts",
+        "signals",
+        "step_outcome",
+        "telemetry",
+        "task_action"
+      ]
+    },
+    "golden_asset_sources": {
+      "reward_panel": {
+        "source_path": "assets/templates/daily_ui/goldens/claim_rewards/daily_ui_claim_rewards__reward_panel__baseline__v1.png",
+        "variant": "baseline"
+      },
+      "claim_button": {
+        "source_path": "assets/templates/daily_ui/goldens/claim_rewards/daily_ui_claim_rewards__claim_button__baseline__v1.png",
+        "variant": "baseline"
+      },
+      "confirm_state": {
+        "source_path": "assets/templates/daily_ui/goldens/claim_rewards/daily_ui_claim_rewards__confirm_state__baseline__v1.png",
+        "variant": "baseline"
+      }
+    },
+    "asset_state": "curated",
     "task_pack_owner": "engine_d"
   },
   "notes": "Fixtured fixed-UI reward claim task with a headless runtime bridge and deterministic panel flow.",
