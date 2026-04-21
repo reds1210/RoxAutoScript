@@ -34,6 +34,8 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
             },
         )
         self.assertIn("daily_ui.claim_reward", blueprints[0].required_anchors)
+        self.assertIn("daily_ui.reward_panel", blueprints[0].required_anchors)
+        self.assertIn("daily_ui.reward_confirm_state", blueprints[0].required_anchors)
         self.assertTrue(blueprints[0].steps)
 
     def test_loads_fixture_profiles_and_convention(self) -> None:
@@ -62,6 +64,16 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
         self.assertEqual([catalog.pack_id for catalog in catalogs], ["daily_ui", "odin"])
         self.assertEqual(catalogs[0].entries[0].task_id, "daily_ui.claim_rewards")
         self.assertEqual(catalogs[0].entries[0].display_name, "每日領獎")
+        self.assertEqual(
+            catalogs[0].entries[0].required_anchors,
+            [
+                "daily_ui.reward_panel",
+                "daily_ui.claim_reward",
+                "daily_ui.reward_confirm_state",
+                "common.confirm_button",
+                "common.close_button",
+            ],
+        )
 
     def test_builds_asset_inventory(self) -> None:
         inventory = self.repository.build_asset_inventory()
@@ -69,6 +81,14 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
 
         self.assertEqual(
             records["daily_ui.claim_rewards:template:daily_ui.claim_reward"].status.value,
+            "placeholder",
+        )
+        self.assertEqual(
+            records["daily_ui.claim_rewards:template:daily_ui.reward_panel"].status.value,
+            "placeholder",
+        )
+        self.assertEqual(
+            records["daily_ui.claim_rewards:template:daily_ui.reward_confirm_state"].status.value,
             "placeholder",
         )
         self.assertEqual(
@@ -91,9 +111,11 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
         self.assertEqual(
             by_task["daily_ui.claim_rewards"].required_anchors,
             [
-                "common.close_button",
-                "common.confirm_button",
+                "daily_ui.reward_panel",
                 "daily_ui.claim_reward",
+                "daily_ui.reward_confirm_state",
+                "common.confirm_button",
+                "common.close_button",
             ],
         )
         self.assertEqual(
@@ -118,6 +140,10 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
         self.assertIn(
             "runtime_input_builder=roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_input",
             by_task["daily_ui.claim_rewards"].implementation_requirements[0].details,
+        )
+        self.assertIn(
+            "warning.daily_ui.claim_rewards:template:daily_ui.claim_reward",
+            [item.requirement_id for item in by_task["daily_ui.claim_rewards"].warning_requirements],
         )
         self.assertEqual(by_task["daily_ui.guild_check_in"].builder_readiness_state.value, "blocked_by_asset")
         self.assertEqual(

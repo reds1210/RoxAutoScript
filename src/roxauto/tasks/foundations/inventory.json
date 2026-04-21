@@ -19,9 +19,11 @@
       },
       "pack_id": "daily_ui",
       "required_anchors": [
-        "common.close_button",
+        "daily_ui.reward_panel",
+        "daily_ui.claim_reward",
+        "daily_ui.reward_confirm_state",
         "common.confirm_button",
-        "daily_ui.claim_reward"
+        "common.close_button"
       ],
       "task_id": "daily_ui.claim_rewards"
     },

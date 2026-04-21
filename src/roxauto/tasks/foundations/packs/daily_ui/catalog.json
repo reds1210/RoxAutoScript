@@ -10,14 +10,17 @@
         "fixture_profiles/default_tw_daily.fixture.json"
       ],
       "required_anchors": [
-        "common.close_button",
+        "daily_ui.reward_panel",
+        "daily_ui.claim_reward",
+        "daily_ui.reward_confirm_state",
         "common.confirm_button",
-        "daily_ui.claim_reward"
+        "common.close_button"
       ],
       "metadata": {
         "phase": "pre_gate_3",
         "product_display_name": "每日領獎",
-        "preset_id": "daily_ui.claim_rewards.mvp"
+        "preset_id": "daily_ui.claim_rewards.mvp",
+        "signal_contract_version": "claim_rewards.v2"
       }
     },
     {
