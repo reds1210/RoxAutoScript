@@ -156,6 +156,92 @@ class OperatorConsoleRuntimeBridgeTests(unittest.TestCase):
             self.assertEqual(vision.failure.instance_id, "mumu-0")
             self.assertGreaterEqual(vision.readiness.template_dependency_count, 1)
 
+    def test_claim_rewards_workflow_can_queue_run_and_apply_editor_state(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            adapter = FakeAdapter(Path(temp_dir), healthy=True)
+            bridge = OperatorConsoleRuntimeBridge(
+                workspace_root=Path(__file__).resolve().parents[2],
+                doctor_report_provider=_doctor_report,
+                adapter=adapter,
+                discovery=lambda: [_instance("mumu-0")],
+                profile_resolver=lambda instance: _profile_binding(instance.instance_id),
+            )
+            bridge.refresh()
+
+            captured = bridge.capture_claim_rewards_source("mumu-0", source_kind="preview")
+            bridge.update_claim_rewards_workflow(
+                "mumu-0",
+                workflow_mode="claimable",
+                crop_region=(1, 2, 120, 80),
+                match_region=(10, 20, 240, 120),
+                confidence_threshold=0.96,
+                capture_scale=1.5,
+                capture_offset=(7, 8),
+            )
+            queued = bridge.queue_claim_rewards("mumu-0")
+            queued_pane = bridge.claim_rewards_pane("mumu-0")
+
+            dispatch = bridge.run_claim_rewards("mumu-0")
+            pane = bridge.claim_rewards_pane("mumu-0")
+            vision = bridge.vision_tooling_state("mumu-0")
+
+            self.assertEqual(captured, str((Path(temp_dir) / "mumu-0.png")))
+            self.assertEqual(queued.task_id, "daily_ui.claim_rewards")
+            self.assertEqual(queued_pane.workflow_status, "queued")
+            self.assertTrue(queued_pane.is_queued)
+            self.assertEqual(queued_pane.editor.artifact_count, 1)
+            self.assertEqual(queued_pane.editor.crop_region_text, "1,2,120,80")
+            self.assertEqual(
+                queued_pane.runtime_gate_summary,
+                "No blocking runtime readiness requirement recorded.",
+            )
+            self.assertEqual(dispatch.command_type.value, "start_queue")
+            self.assertEqual(pane.workflow_status, "succeeded")
+            self.assertEqual(pane.last_run_status, "succeeded")
+            self.assertEqual(
+                [row.status for row in pane.step_rows],
+                ["succeeded", "succeeded", "pending", "pending", "pending"],
+            )
+            self.assertEqual(vision.workspace.selected_repository_id, "daily_ui")
+            self.assertIsNotNone(vision.calibration.selected_resolution)
+            self.assertEqual(
+                vision.calibration.selected_resolution.effective_confidence_threshold,
+                0.96,
+            )
+            self.assertIsNotNone(vision.capture.crop_region)
+            self.assertEqual(vision.capture.crop_region.to_tuple(), (1, 2, 120, 80))
+
+    def test_claim_rewards_workflow_reports_failed_step_and_failure_surface(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            adapter = FakeAdapter(Path(temp_dir), healthy=True)
+            bridge = OperatorConsoleRuntimeBridge(
+                workspace_root=Path(__file__).resolve().parents[2],
+                doctor_report_provider=_doctor_report,
+                adapter=adapter,
+                discovery=lambda: [_instance("mumu-0")],
+                profile_resolver=lambda instance: _profile_binding(instance.instance_id),
+            )
+            bridge.refresh()
+            bridge.capture_claim_rewards_source("mumu-0", source_kind="preview")
+            bridge.update_claim_rewards_workflow("mumu-0", workflow_mode="ambiguous")
+
+            bridge.run_claim_rewards("mumu-0")
+            pane = bridge.claim_rewards_pane("mumu-0")
+            vision = bridge.vision_tooling_state("mumu-0")
+
+            self.assertEqual(pane.workflow_status, "failed")
+            self.assertEqual(pane.failure_step_id, "verify_claim_affordance")
+            self.assertIn("ambiguous", pane.failure_summary)
+            self.assertEqual(pane.step_rows[0].status, "succeeded")
+            self.assertEqual(pane.step_rows[1].status, "failed")
+            self.assertEqual(
+                [row.status for row in pane.step_rows[2:]],
+                ["pending", "pending", "pending"],
+            )
+            self.assertTrue(vision.failure.failure_id)
+            self.assertEqual(vision.failure.anchor_id, "daily_ui.claim_reward")
+            self.assertEqual(vision.failure.status.value, "missed")
+
 
 def _instance(instance_id: str) -> InstanceState:
     return InstanceState(

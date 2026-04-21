@@ -2,6 +2,9 @@
 
 from roxauto.app.runtime_bridge import OperatorConsoleRuntimeBridge
 from roxauto.app.viewmodels import (
+    ClaimRewardsEditorView,
+    ClaimRewardsPaneView,
+    ClaimRewardsStepView,
     ConsoleSnapshot,
     ConsoleSummaryView,
     InstanceCardView,
@@ -26,6 +29,9 @@ from roxauto.app.viewmodels import (
 )
 
 __all__ = [
+    "ClaimRewardsEditorView",
+    "ClaimRewardsPaneView",
+    "ClaimRewardsStepView",
     "ConsoleSnapshot",
     "ConsoleSummaryView",
     "InstanceCardView",

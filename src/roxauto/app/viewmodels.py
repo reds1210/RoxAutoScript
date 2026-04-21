@@ -149,11 +149,13 @@ class TaskReadinessRowView:
     implementation_blockers: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     required_anchors: list[str] = field(default_factory=list)
+    fixture_profile_paths: list[str] = field(default_factory=list)
     asset_requirement_ids: list[str] = field(default_factory=list)
     runtime_requirement_ids: list[str] = field(default_factory=list)
     calibration_requirement_ids: list[str] = field(default_factory=list)
     foundation_requirement_ids: list[str] = field(default_factory=list)
     is_related_to_selected_instance: bool = False
+    scope_reasons: list[str] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -173,6 +175,62 @@ class TaskReadinessPaneView:
 
 
 @dataclass(slots=True)
+class ClaimRewardsStepView:
+    step_id: str = ""
+    title: str = ""
+    action: str = ""
+    status: str = "pending"
+    summary: str = ""
+    success_condition: str = ""
+    failure_condition: str = ""
+    screenshot_path: str = ""
+    is_current: bool = False
+
+
+@dataclass(slots=True)
+class ClaimRewardsEditorView:
+    workflow_mode: str = "claimable"
+    selected_source_kind: str = "preview"
+    selected_source_image: str = ""
+    selected_anchor_id: str = "daily_ui.claim_reward"
+    crop_region_text: str = ""
+    match_region_text: str = ""
+    confidence_threshold_text: str = ""
+    capture_scale_text: str = ""
+    capture_offset_text: str = ""
+    artifact_count: int = 0
+    last_applied_summary: str = ""
+
+
+@dataclass(slots=True)
+class ClaimRewardsPaneView:
+    task_id: str = "daily_ui.claim_rewards"
+    task_name: str = "Daily Reward Claim"
+    manifest_path: str = ""
+    workflow_status: str = "idle"
+    workflow_banner: str = "Select an instance to inspect the claim rewards workflow."
+    runtime_gate_summary: str = ""
+    queue_summary: str = ""
+    last_run_summary: str = ""
+    active_step_summary: str = ""
+    failure_summary: str = ""
+    preview_summary: str = ""
+    selected_anchor_summary: str = ""
+    selected_scope_summary: str = ""
+    can_queue: bool = False
+    can_run_now: bool = False
+    is_queued: bool = False
+    queue_depth: int = 0
+    last_run_id: str = ""
+    last_run_status: str = ""
+    failure_reason: str = ""
+    failure_step_id: str = ""
+    failure_snapshot_id: str = ""
+    step_rows: list[ClaimRewardsStepView] = field(default_factory=list)
+    editor: ClaimRewardsEditorView = field(default_factory=ClaimRewardsEditorView)
+
+
+@dataclass(slots=True)
 class OperatorConsoleState:
     snapshot: ConsoleSnapshot
     runtime_snapshot: LiveRuntimeSnapshot
@@ -186,6 +244,7 @@ class OperatorConsoleState:
     logs: LogPaneView
     manual_controls: ManualControlsView
     task_readiness: TaskReadinessPaneView
+    claim_rewards: ClaimRewardsPaneView
     vision: VisionToolingState
     global_emergency_stop_active: bool = False
 
@@ -742,7 +801,11 @@ def build_task_readiness_pane(
 ) -> TaskReadinessPaneView:
     report_list = list(reports)
     builder_inputs_by_task = {item.task_id: item for item in builder_inputs}
-    selected_task_ids = _selected_task_ids(selected_instance_snapshot)
+    selected_task_scope = _selected_task_scope(
+        selected_instance_snapshot,
+        known_task_ids={report.task_id for report in report_list},
+    )
+    selected_task_ids = list(selected_task_scope)
 
     rows = [
         TaskReadinessRowView(
@@ -770,6 +833,9 @@ def build_task_readiness_pane(
             required_anchors=list(builder_inputs_by_task.get(report.task_id).required_anchors)
             if report.task_id in builder_inputs_by_task
             else [],
+            fixture_profile_paths=list(builder_inputs_by_task.get(report.task_id).fixture_profile_paths)
+            if report.task_id in builder_inputs_by_task
+            else [],
             asset_requirement_ids=list(builder_inputs_by_task.get(report.task_id).asset_requirement_ids)
             if report.task_id in builder_inputs_by_task
             else [],
@@ -782,11 +848,19 @@ def build_task_readiness_pane(
             foundation_requirement_ids=list(builder_inputs_by_task.get(report.task_id).foundation_requirement_ids)
             if report.task_id in builder_inputs_by_task
             else [],
-            is_related_to_selected_instance=report.task_id in selected_task_ids,
+            is_related_to_selected_instance=report.task_id in selected_task_scope,
+            scope_reasons=list(selected_task_scope.get(report.task_id, [])),
         )
         for report in report_list
     ]
-    rows.sort(key=lambda row: (not row.is_related_to_selected_instance, row.task_id))
+    rows.sort(
+        key=lambda row: (
+            not row.is_related_to_selected_instance,
+            "active" not in row.scope_reasons,
+            "queued" not in row.scope_reasons,
+            row.task_id,
+        )
+    )
 
     return TaskReadinessPaneView(
         total_tasks=len(report_list),
@@ -836,6 +910,7 @@ def build_operator_console_state(
     global_emergency_stop_active: bool = False,
     task_readiness_reports: Iterable[TaskReadinessReport] = (),
     task_runtime_builder_inputs: Iterable[TaskRuntimeBuilderInput] = (),
+    claim_rewards: ClaimRewardsPaneView | None = None,
 ) -> OperatorConsoleState:
     resolved_instance_id = selected_instance_id
     if not resolved_instance_id and runtime_snapshot.instance_snapshots:
@@ -889,6 +964,7 @@ def build_operator_console_state(
         logs=logs,
         manual_controls=manual_controls,
         task_readiness=task_readiness,
+        claim_rewards=claim_rewards or ClaimRewardsPaneView(),
         vision=vision_state,
         global_emergency_stop_active=global_emergency_stop_active,
     )
@@ -949,25 +1025,26 @@ def _event_emitted_at(event: AppEvent | LiveRuntimeEventRecord) -> object:
     return event.emitted_at
 
 
-def _selected_task_ids(
+def _selected_task_scope(
     selected_instance_snapshot: LiveRuntimeInstanceSnapshot | None,
-) -> list[str]:
-    if selected_instance_snapshot is None or selected_instance_snapshot.context is None:
-        return []
-    task_ids: list[str] = []
+    *,
+    known_task_ids: set[str],
+) -> dict[str, list[str]]:
+    if selected_instance_snapshot is None:
+        return {}
+    scope: dict[str, list[str]] = {}
     context = selected_instance_snapshot.context
-    if context.active_task_id:
-        task_ids.append(context.active_task_id)
-    if context.profile_binding is not None:
-        task_ids.extend(task_id for task_id in context.profile_binding.allowed_tasks if task_id)
-    seen: set[str] = set()
-    result: list[str] = []
-    for task_id in task_ids:
-        if task_id in seen:
-            continue
-        seen.add(task_id)
-        result.append(task_id)
-    return result
+    if context is not None and context.active_task_id:
+        scope[str(context.active_task_id)] = ["active"]
+    for queue_item in selected_instance_snapshot.queue_items:
+        reasons = scope.setdefault(queue_item.task_id, [])
+        if "queued" not in reasons:
+            reasons.append("queued")
+    return {
+        task_id: reasons
+        for task_id, reasons in scope.items()
+        if task_id in known_task_ids
+    }
 
 
 def _format_requirement_summary(requirement) -> str:

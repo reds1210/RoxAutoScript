@@ -5,6 +5,7 @@ from pathlib import Path
 
 import tests._bootstrap  # noqa: F401
 from roxauto.app.viewmodels import (
+    ClaimRewardsPaneView,
     build_console_snapshot,
     build_console_snapshot_from_runtime,
     build_log_pane,
@@ -79,6 +80,10 @@ class ConsoleSnapshotTests(unittest.TestCase):
             global_emergency_stop_active=False,
             task_readiness_reports=_task_foundations().evaluate_task_readinesses(),
             task_runtime_builder_inputs=_task_foundations().build_runtime_builder_inputs(),
+            claim_rewards=ClaimRewardsPaneView(
+                workflow_status="queued",
+                selected_scope_summary="instance=mumu-9 | active",
+            ),
         )
 
         self.assertEqual(snapshot.instances[0].metadata["queue_depth"], 2)
@@ -94,6 +99,8 @@ class ConsoleSnapshotTests(unittest.TestCase):
         self.assertIsNotNone(state.selected_inspection_result)
         self.assertEqual(state.task_readiness.blocked_by_runtime_count, 0)
         self.assertEqual(state.task_readiness.blocked_by_asset_count, 1)
+        self.assertEqual(state.claim_rewards.workflow_status, "queued")
+        self.assertEqual(state.claim_rewards.selected_scope_summary, "instance=mumu-9 | active")
         self.assertEqual(state.vision.workspace.selected_repository_id, "common")
         self.assertIsNotNone(state.vision.readiness)
 
@@ -160,8 +167,20 @@ class ConsoleSnapshotTests(unittest.TestCase):
         self.assertEqual(pane.blocked_by_asset_count, 1)
         self.assertEqual(pane.blocked_by_runtime_count, 0)
         self.assertEqual(pane.blocked_by_calibration_count, 1)
-        self.assertIn("daily_ui.claim_rewards", pane.selected_task_ids)
+        self.assertEqual(pane.selected_task_ids, ["daily_ui.claim_rewards"])
+        self.assertNotIn("odin.preset_entry", pane.selected_task_ids)
         self.assertTrue(any(row.is_related_to_selected_instance for row in pane.rows))
+        focused_row = pane.rows[0]
+        self.assertEqual(focused_row.task_id, "daily_ui.claim_rewards")
+        self.assertEqual(focused_row.scope_reasons, ["active"])
+        self.assertEqual(
+            focused_row.fixture_profile_paths,
+            ["fixture_profiles/default_tw_daily.fixture.json"],
+        )
+        self.assertEqual(
+            focused_row.runtime_requirement_ids,
+            ["runtime.daily_ui.dispatch_bridge"],
+        )
 
 
 def _runtime_snapshot() -> LiveRuntimeSnapshot:
