@@ -2,131 +2,112 @@
 
 ## Scope
 
-- Engine A kept changes inside `core/`, `emulator/`, and owned tests only.
-- The runtime side now exposes a clearer production execution path for real ADB-backed actions and a clearer session-driving API for GUI polling.
-- No GUI, vision, or task-pack code was changed in this round.
+- Engine A kept this round inside owned `core/`, `emulator/`, owned tests, and shared runtime docs only.
+- This round completed the minimum production execution path needed for the first fixed UI task: `daily_ui.claim_rewards`.
+- No GUI files, no vision files, and no task foundation/task-pack definitions were changed.
 
 ## Changed Files
 
+- `docs/architecture-contracts.md`
+- `docs/handoffs/core-runtime-orchestration.md`
 - `src/roxauto/core/__init__.py`
 - `src/roxauto/core/runtime.py`
 - `src/roxauto/emulator/__init__.py`
-- `src/roxauto/emulator/adapter.py`
 - `src/roxauto/emulator/execution.py`
 - `src/roxauto/emulator/live_runtime.py`
 - `tests/core/test_runtime.py`
-- `tests/emulator/test_adapter.py`
 - `tests/emulator/test_execution.py`
 - `tests/emulator/test_live_runtime.py`
 
 ## Public APIs Added Or Changed
 
-- `roxauto.emulator.adapter.EmulatorAdapter` remains the stable emulator contract; `roxauto.emulator.execution.EmulatorActionAdapter` now explicitly extends the same contract instead of drifting into a parallel subset.
-- `roxauto.emulator.adapter.AdbEmulatorAdapter` is the production-facing implementation for:
-  - `capture_screenshot()`
-  - `tap()`
-  - `swipe()`
-  - `input_text()`
-  - `launch_app()`
-  - `health_check()`
-- `roxauto.emulator.adapter.AdbTransport`, `SubprocessAdbTransport`, `AdbCommandResult`, and `AdbCommandError` are now exported from `roxauto.emulator` so the app line can inject real or test transports without reaching into private internals.
-- Added `RuntimeInspectionResult` in `roxauto.core.runtime`.
-- Added `RuntimeCoordinator.inspect_instance()` and `inspect_instances()` for poll-driven health/preview/failure updates without forcing GUI code through ad hoc refresh-command stitching.
-- `LiveRuntimeSession` now exposes:
-  - `refresh_runtime_contexts(instance_id=None, run_health_check=True, capture_preview=True)`
-  - `poll(instance_id=None, refresh_runtime=False, run_health_check=True, capture_preview=True)`
-  - `last_sync_ok`
-  - `last_inspection_results`
-- `LiveRuntimeSnapshot` now includes:
-  - `last_sync_ok`
-  - `last_inspection_results`
-- `dispatch_command(refresh)` now backfills `last_inspection_results` from the refreshed runtime contexts, so old app code and new polling code see one consistent inspection surface.
+- `roxauto.core.runtime`
+  - `TaskActionDispatchResult`
+  - `TaskHealthCheckResult`
+  - `TaskActionBridge`
+  - `TaskExecutionContext.action_bridge`
+  - `TaskExecutionContext.require_action_bridge()`
+- Queue-driven runtime execution now injects a runtime-backed task action bridge before task step handlers run.
+- `roxauto.emulator.execution`
+  - `RuntimeExecutionPath`
+  - `build_runtime_execution_path(adapter, ...)`
+  - `build_adb_execution_path(...)`
+- `roxauto.emulator.live_runtime`
+  - `LiveRuntimeSession(adapter=None, execution_path=None, ...)`
+  - `LiveRuntimeSession.adapter`
+  - `LiveRuntimeSession.execution_path`
+  - `build_adb_live_runtime_session(...)`
+- `roxauto.emulator.__init__` now exports the new execution-path builders and bundle type.
 
 ## What Shipped
 
-- The real-device execution path is now explicit and test-covered: screenshot, tap, swipe, text input, app launch, and health check all route through the same ADB transport contract.
-- `AdbEmulatorAdapter.health_check()` now follows a concrete runtime path:
-  - `adb get-state`
-  - then a cheap shell probe `echo health_check`
-  - returns `False` on transport failure, bad device state, or probe mismatch.
-- `RuntimeCoordinator.inspect_instance()` now gives Engine B a stable runtime-facing read/update operation that refreshes:
-  - per-instance health state
-  - preview frame
-  - runtime health failure snapshot
-  - derived runtime status
-- Inspection preserves long-lived runtime semantics better than the old refresh-only path:
-  - disconnected instances skip device calls
-  - busy instances stay `busy` when polled healthy
-  - paused instances stay `paused`
-  - healthy `error` instances can recover to `ready`
-- Runtime health failure snapshots are now updated in place instead of being recreated on every poll loop; the snapshot payload can refresh, but repeated polling no longer needs to emit a new failure event unless the failure state meaningfully changed.
-- `LiveRuntimeSession` now supports two stable GUI patterns:
-  - compatibility mode: `poll()` only syncs discovery, matching current fallback bridge expectations
-  - production polling mode: `poll(refresh_runtime=True)` syncs discovery and refreshes runtime contexts in one call
-- `refresh_runtime_contexts()` gives the GUI an explicit timer-driven API for preview/health/failure refresh without dispatching synthetic commands.
-- `last_inspection_results` and `LiveRuntimeSnapshot.last_inspection_results` provide a stable output surface for app state reducers, even when the caller still uses the existing refresh command path.
+- The production emulator path is now explicit instead of being implied across several constructors.
+- One `RuntimeExecutionPath` bundles the real adapter plus the three runtime-facing services that matter for task execution:
+  - command dispatch
+  - health checks
+  - preview capture
+- `build_adb_execution_path(...)` is now the formal ADB-backed service builder.
+- `build_adb_live_runtime_session(...)` is now the formal top-level entry point for Engine B or any runtime consumer that wants a production `LiveRuntimeSession` without hand-wiring services.
+- `LiveRuntimeSession` still supports the old `LiveRuntimeSession(adapter, ...)` path for compatibility, but it can now also accept a fully prepared execution bundle.
+- `daily_ui.claim_rewards` can now rely on a real runtime path for:
+  - dispatching deterministic interaction commands through the shared execution layer
+  - refreshing runtime health
+  - capturing previews
+  - surfacing failure snapshots when an ADB-backed task step throws
+- ADB-backed tests now prove the real path works for:
+  - production refresh with preview + runtime failure snapshot
+  - first-task queue execution
+  - first-task failure snapshot when a task-side tap fails through the real adapter
 
-## Production-Facing Runtime API
+## Current Runtime Contract For Engine D
 
-- Emulator execution contract:
-  - `EmulatorAdapter`
-  - `EmulatorActionAdapter`
-  - `AdbEmulatorAdapter`
-  - `AdbTransport`
-  - `SubprocessAdbTransport`
-- Session driving:
-  - `LiveRuntimeSession.sync_instances()`
-  - `LiveRuntimeSession.refresh_runtime_contexts()`
-  - `LiveRuntimeSession.poll(refresh_runtime=True)`
-  - `LiveRuntimeSession.revision`
-  - `LiveRuntimeSession.last_sync_ok`
-  - `LiveRuntimeSession.last_sync_error`
-- Runtime reads for GUI:
-  - `LiveRuntimeSession.last_snapshot`
-  - `LiveRuntimeSession.snapshot(instance_id=None)`
-  - `LiveRuntimeSession.get_instance_snapshot(instance_id)`
-  - `LiveRuntimeSession.get_runtime_context(instance_id)`
-  - `LiveRuntimeSnapshot.instance_snapshots`
-  - `LiveRuntimeSnapshot.last_inspection_results`
-  - `LiveRuntimeSnapshot.recent_events`
-- Stable operator outputs:
-  - `LiveRuntimeSession.last_command_result`
-  - `LiveRuntimeSession.last_queue_result`
-  - `LiveRuntimeSession.last_inspection_results`
+- Task step handlers should use `TaskExecutionContext.require_action_bridge()`.
+- The bridge currently exposes:
+  - `dispatch(command)`
+  - `tap(point)`
+  - `swipe(start, end, duration_ms=250)`
+  - `input_text(text)`
+  - `capture_preview()`
+  - `check_health()`
+- Task code should not import `AdbEmulatorAdapter`, `ActionExecutor`, or GUI helpers directly.
+- On failure, let bridge-backed adapter exceptions bubble unless the task intentionally converts them into `step_failure(...)`; runtime already records the failed run and failure snapshot.
 
-## App Integration Notes
+## Current Runtime Contract For Engine B
 
-- Current fallback bridge can keep working as-is because `poll()` still defaults to discovery-only sync.
-- Engine B should move toward:
-  - `session.poll(refresh_runtime=True)` on GUI refresh cadence
-  - or `session.sync_instances()` + `session.refresh_runtime_contexts()` if the UI wants tighter control
-- After that switch, the app can drop the current per-instance `refresh()` loop and consume:
-  - `snapshot.instance_snapshots`
-  - `snapshot.last_inspection_results`
-  - `snapshot.last_command_result`
-  - `snapshot.last_queue_result`
-  - `snapshot.recent_events`
+- Recommended production wiring:
+  - `build_adb_live_runtime_session(...)`
+- That gives Engine B one fully wired object with:
+  - `session.adapter`
+  - `session.execution_path`
+  - `session.poll(refresh_runtime=True)`
+  - `session.refresh_runtime_contexts()`
+  - `session.refresh(instance_id)`
+- Engine B does not need to instantiate `ActionExecutor`, `HealthCheckService`, or `ScreenshotCapturePipeline` directly anymore.
 
 ## Assumptions
 
-- ADB remains the only real-device transport on this branch.
-- GUI polling is still single-threaded; queue execution remains synchronous.
-- Because there is still no async worker, `active_run_id` is only observable during the immediate queue execution call stack, not as a long-lived background task.
+- `daily_ui.claim_rewards` remains the only task this round needs to support.
+- Deterministic reward collection is satisfied by existing interaction primitives plus preview/health/failure observability.
+- No async worker or background execution model is required for this milestone.
 
 ## Verification
 
+- `python -m unittest tests.core.test_runtime`
+- `python -m unittest tests.emulator.test_execution`
+- `python -m unittest tests.emulator.test_live_runtime`
 - `python -m unittest discover -s tests/core -t .`
 - `python -m unittest discover -s tests/emulator -t .`
-- `python -m unittest discover -s tests/profiles -t .`
 - `python -m unittest discover -s tests/app -t .`
 - `python -m unittest discover -s tests -t .`
-- Result: `98` tests passed
+- Result: `117` tests passed
 
 ## Blockers
 
-- Engine B still needs to replace the current compatibility refresh loop with `poll(refresh_runtime=True)` or `refresh_runtime_contexts()`.
-- Queue orchestration is still synchronous; true long-lived `active_run_id` observation still requires a later async/background worker design.
+- `src/roxauto/tasks/foundations/readiness_report.json` still reports `daily_ui.claim_rewards` as `blocked_by_runtime`, but this branch was explicitly not allowed to edit task foundations snapshots.
+- Engine D still needs to implement the concrete `daily_ui.claim_rewards` steps against the bridge.
+- Claim-state vision verification still depends on curated `daily_ui` templates and goldens.
 
 ## Recommended Next Step
 
-- In the GUI line, instantiate `LiveRuntimeSession` with `AdbEmulatorAdapter` plus the profile resolver, then replace the fallback refresh stitching with a timer-driven call to `poll(refresh_runtime=True)`.
+- Engine B: switch production runtime creation to `build_adb_live_runtime_session(...)`, then drive the UI from `poll(refresh_runtime=True)` / `refresh_runtime_contexts()`.
+- Engine D: implement `daily_ui.claim_rewards` step handlers against `TaskExecutionContext.require_action_bridge()`, and use the runtime-provided preview / failure surfaces instead of adapter-local wiring.

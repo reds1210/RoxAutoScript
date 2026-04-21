@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Protocol
 
 from roxauto.core.commands import CommandDispatchResult, InstanceCommand, InstanceCommandType
@@ -23,12 +24,13 @@ from roxauto.core.models import InstanceRuntimeContext, InstanceState, PreviewFr
 from roxauto.core.queue import QueuedTask, TaskQueue
 from roxauto.core.runtime import AuditSink, QueueRunResult, RuntimeCoordinator, RuntimeInspectionResult
 from roxauto.core.time import utc_now
+from roxauto.emulator.adapter import AdbTransport
 from roxauto.emulator.discovery import discover_instances
 from roxauto.emulator.execution import (
-    ActionExecutor,
     EmulatorActionAdapter,
-    HealthCheckService,
-    ScreenshotCapturePipeline,
+    RuntimeExecutionPath,
+    build_adb_execution_path,
+    build_runtime_execution_path,
 )
 
 _RUNTIME_EVENT_NAMES = (
@@ -130,8 +132,9 @@ class LiveRuntimeSnapshot:
 class LiveRuntimeSession:
     def __init__(
         self,
-        adapter: EmulatorActionAdapter,
+        adapter: EmulatorActionAdapter | None = None,
         *,
+        execution_path: RuntimeExecutionPath | None = None,
         discovery: InstanceDiscovery | None = None,
         profile_resolver: ProfileResolver | None = None,
         event_bus: EventBus | None = None,
@@ -154,22 +157,21 @@ class LiveRuntimeSession:
         self._last_queue_result: QueueRunResult | None = None
         self._last_inspection_results: list[RuntimeInspectionResult] = []
         self._last_snapshot: LiveRuntimeSnapshot | None = None
+        if execution_path is not None and adapter is not None:
+            raise ValueError("Provide either adapter or execution_path, not both")
+        if execution_path is None:
+            if adapter is None:
+                raise ValueError("adapter or execution_path is required")
+            execution_path = build_runtime_execution_path(
+                adapter,
+                event_bus=self._event_bus,
+                audit_sink=self._audit_sink,
+            )
+        self._execution_path = execution_path
         self._coordinator = RuntimeCoordinator(
-            command_executor=ActionExecutor(
-                adapter,
-                event_bus=self._event_bus,
-                audit_sink=self._audit_sink,
-            ),
-            health_checker=HealthCheckService(
-                adapter,
-                event_bus=self._event_bus,
-                audit_sink=self._audit_sink,
-            ),
-            preview_capture=ScreenshotCapturePipeline(
-                adapter,
-                event_bus=self._event_bus,
-                audit_sink=self._audit_sink,
-            ),
+            command_executor=self._execution_path.command_executor,
+            health_checker=self._execution_path.health_checker,
+            preview_capture=self._execution_path.preview_capture,
             event_bus=self._event_bus,
             audit_sink=self._audit_sink,
         )
@@ -178,6 +180,14 @@ class LiveRuntimeSession:
     @property
     def event_bus(self) -> EventBus:
         return self._event_bus
+
+    @property
+    def adapter(self) -> EmulatorActionAdapter:
+        return self._execution_path.adapter
+
+    @property
+    def execution_path(self) -> RuntimeExecutionPath:
+        return self._execution_path
 
     @property
     def coordinator(self) -> RuntimeCoordinator:
@@ -499,3 +509,36 @@ class LiveRuntimeSession:
     def _touch(self) -> None:
         self._revision += 1
         self._last_snapshot = None
+
+
+def build_adb_live_runtime_session(
+    *,
+    adb_executable: Path | str | None = None,
+    transport: AdbTransport | None = None,
+    screenshot_dir: Path | str | None = None,
+    command_timeout_sec: float = 10.0,
+    screenshot_timeout_sec: float = 20.0,
+    discovery: InstanceDiscovery | None = None,
+    profile_resolver: ProfileResolver | None = None,
+    event_bus: EventBus | None = None,
+    audit_sink: AuditSink | None = None,
+    max_recent_events: int = 100,
+) -> LiveRuntimeSession:
+    resolved_event_bus = event_bus or EventBus()
+    execution_path = build_adb_execution_path(
+        adb_executable=adb_executable,
+        transport=transport,
+        screenshot_dir=Path(screenshot_dir) if screenshot_dir is not None else None,
+        command_timeout_sec=command_timeout_sec,
+        screenshot_timeout_sec=screenshot_timeout_sec,
+        event_bus=resolved_event_bus,
+        audit_sink=audit_sink,
+    )
+    return LiveRuntimeSession(
+        execution_path=execution_path,
+        discovery=discovery,
+        profile_resolver=profile_resolver,
+        event_bus=resolved_event_bus,
+        audit_sink=audit_sink,
+        max_recent_events=max_recent_events,
+    )

@@ -22,7 +22,7 @@ from roxauto.core.events import (
 from roxauto.core.models import InstanceState, PreviewFrame
 from roxauto.core.runtime import AuditSink
 from roxauto.core.time import utc_now
-from roxauto.emulator.adapter import EmulatorAdapter
+from roxauto.emulator.adapter import AdbEmulatorAdapter, AdbTransport, EmulatorAdapter
 from roxauto.logs.audit import write_preview_audit
 
 
@@ -75,6 +75,14 @@ class HealthCheckResult:
     checked_at: object = field(default_factory=utc_now)
     message: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class RuntimeExecutionPath:
+    adapter: EmulatorActionAdapter
+    command_executor: ActionExecutor
+    health_checker: HealthCheckService
+    preview_capture: ScreenshotCapturePipeline
 
 
 class ScreenshotCapturePipeline:
@@ -260,3 +268,57 @@ class HealthCheckService:
                 },
             )
         return result
+
+
+def build_runtime_execution_path(
+    adapter: EmulatorActionAdapter,
+    *,
+    router: CommandRouter | None = None,
+    event_bus: Any | None = None,
+    audit_sink: AuditSink | None = None,
+) -> RuntimeExecutionPath:
+    return RuntimeExecutionPath(
+        adapter=adapter,
+        command_executor=ActionExecutor(
+            adapter,
+            router=router,
+            event_bus=event_bus,
+            audit_sink=audit_sink,
+        ),
+        health_checker=HealthCheckService(
+            adapter,
+            event_bus=event_bus,
+            audit_sink=audit_sink,
+        ),
+        preview_capture=ScreenshotCapturePipeline(
+            adapter,
+            event_bus=event_bus,
+            audit_sink=audit_sink,
+        ),
+    )
+
+
+def build_adb_execution_path(
+    *,
+    adb_executable: Path | str | None = None,
+    transport: AdbTransport | None = None,
+    screenshot_dir: Path | None = None,
+    command_timeout_sec: float = 10.0,
+    screenshot_timeout_sec: float = 20.0,
+    router: CommandRouter | None = None,
+    event_bus: Any | None = None,
+    audit_sink: AuditSink | None = None,
+) -> RuntimeExecutionPath:
+    adapter = AdbEmulatorAdapter(
+        adb_executable=adb_executable,
+        transport=transport,
+        screenshot_dir=screenshot_dir,
+        command_timeout_sec=command_timeout_sec,
+        screenshot_timeout_sec=screenshot_timeout_sec,
+    )
+    return build_runtime_execution_path(
+        adapter,
+        router=router,
+        event_bus=event_bus,
+        audit_sink=audit_sink,
+    )
