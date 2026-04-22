@@ -1,80 +1,83 @@
 # Engine Roster
 
-This repo now uses a fixed 4-engine parallel development model.
+This repo currently uses a fixed 4-engine parallel model plus one optional support engine.
 
-For round 6, the active strategy is the `claim_rewards` production-hardening wave. One optional support engine may be added only for live screenshots and goldens.
+The active wave is `round-7 claim_rewards live production validation`.
 
 ## Model Policy
 
 - default delegated model: `gpt-5.4`
-- do not use mini variants for engine work unless the user explicitly asks for a smaller model
-- each engine keeps a stable specialization; do not rotate ownership casually
+- do not use mini variants for engine work unless the user explicitly asks for them
+- each engine keeps a stable specialization
+- for round 7, reuse the existing worktree and branch for the same engine instead of creating a new one
 
 ## Standard Engine Lineup
 
 ### Engine A: Runtime
 
 - model: `gpt-5.4`
-- primary branch family: `codex/core-runtime-*`
-- standard active branch: `codex/core-runtime-step-telemetry`
+- branch: `codex/core-runtime-step-telemetry`
+- worktree: `C:\code\RoxAutoScript-wt-core-runtime-step-telemetry`
 - owns: `src/roxauto/core/`, `src/roxauto/emulator/`, `src/roxauto/logs/`, `src/roxauto/profiles/`, `tests/core/`, `tests/emulator/`, `tests/profiles/`
 - may edit: `docs/architecture-contracts.md`
-- worktree path: `..\RoxAutoScript-wt-core-runtime-step-telemetry`
 
 ### Engine B: GUI
 
 - model: `gpt-5.4`
-- primary branch family: `codex/gui-console-*`
-- standard active branch: `codex/gui-claim-rewards-production-telemetry`
+- branch: `codex/gui-claim-rewards-production-telemetry`
+- worktree: `C:\code\RoxAutoScript-wt-gui-claim-rewards-production`
 - owns: `src/roxauto/app/`, `assets/ui/`, `tests/app/`
-- worktree path: `..\RoxAutoScript-wt-gui-claim-rewards-production`
 
 ### Engine C: Vision
 
 - model: `gpt-5.4`
-- primary branch family: `codex/vision-lab-*`
-- standard active branch: `codex/vision-claim-rewards-live-captures`
+- branch: `codex/vision-claim-rewards-live-captures`
+- worktree: `C:\code\RoxAutoScript-wt-vision-claim-rewards-live`
 - owns: `src/roxauto/vision/`, `assets/templates/`, `docs/vision/`, `tests/vision/`
-- worktree path: `..\RoxAutoScript-wt-vision-claim-rewards-live`
 
 ### Engine D: Tasks
 
 - model: `gpt-5.4`
-- primary branch family: `codex/task-*` and `codex/plugin-event-framework`
-- standard active branch: `codex/task-claim-rewards-runtime-seam`
-- owns: `src/roxauto/tasks/`, `tests/tasks/`, task-specific template assets
-- worktree path: `..\RoxAutoScript-wt-task-claim-rewards-runtime`
+- branch: `codex/task-claim-rewards-runtime-seam`
+- worktree: `C:\code\RoxAutoScript-wt-task-claim-rewards-runtime`
+- owns: `src/roxauto/tasks/`, `tests/tasks/`, task-specific foundations and task assets
 
 ### Optional Engine E: Goldens
 
 - model: `gpt-5.4`
-- primary branch family: `codex/claim-rewards-*`
-- standard active branch: `codex/claim-rewards-goldens`
+- branch: `codex/claim-rewards-goldens`
+- worktree: `C:\code\RoxAutoScript-wt-claim-rewards-goldens`
 - owns: `assets/templates/`, `tests/tasks/fixtures/`, `docs/vision/`
-- worktree path: `..\RoxAutoScript-wt-claim-rewards-goldens`
+- open only when live screenshots or goldens become the primary blocker
 
-## Active Branch Order
+## Active Order
 
-Use this lineup as the default round-6 start order:
+Default round-7 start order:
 
-1. `codex/claim-rewards-goldens` only when live capture becomes the primary blocker
-2. `codex/vision-claim-rewards-live-captures`
-3. `codex/task-claim-rewards-runtime-seam`
-4. `codex/core-runtime-step-telemetry`
-5. `codex/gui-claim-rewards-production-telemetry`
+1. `Engine C`
+2. `Engine D`
+3. `Engine A`
+4. `Engine B`
+5. `Engine E` only when live capture collection is blocking C or D
 
-Later branch progression:
+Default round-7 merge order:
 
-- Engine A: `codex/core-runtime-step-telemetry` -> `codex/core-runtime-registered-task-seam`
-- Engine B: `codex/gui-claim-rewards-production-telemetry` -> `codex/gui-claim-rewards-operator-guidance`
-- Engine C: `codex/vision-claim-rewards-live-captures` -> `codex/vision-claim-rewards-failure-cases`
-- Engine D: `codex/task-claim-rewards-runtime-seam` -> `codex/task-guild-check-in-foundations`
-- Optional Engine E: `codex/claim-rewards-goldens` -> `codex/claim-rewards-live-goldens`
+1. `Engine E` when used
+2. `Engine C`
+3. `Engine D`
+4. `Engine A`
+5. `Engine B`
+
+## Reuse Policy
+
+- do not create a new worktree just because a new round started
+- each engine should continue on its existing round-6/round-7 branch and worktree until the user explicitly asks for a branch rollover
+- before starting a new thread on one of these engines, sync that worktree with `main`
 
 ## Non-Negotiable Rules
 
-- maximum active engine worktrees: `4`
-- optional temporary asset-capture worktree: `1`
+- maximum active primary engines: `4`
+- optional support engine: `1`
 - maximum active worktrees per engine: `1`
 - each engine keeps its owned paths
-- task engines do not start gameplay automation before platform Gate 3
+- `daily_ui.claim_rewards` remains the only task in scope for this wave
