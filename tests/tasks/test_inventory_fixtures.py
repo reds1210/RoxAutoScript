@@ -32,7 +32,8 @@ class TaskFixtureExamplesTests(unittest.TestCase):
     def test_curated_asset_inventory_matches_expected_gaps(self) -> None:
         repository = TaskFoundationRepository.load_default()
         inventory = repository.load_asset_inventory()
-        statuses = {record.asset_id: record.status for record in inventory.records}
+        records = {record.asset_id: record for record in inventory.records}
+        statuses = {asset_id: record.status for asset_id, record in records.items()}
 
         self.assertEqual(
             statuses["daily_ui.guild_check_in:template:daily_ui.guild_check_in_button"],
@@ -50,6 +51,16 @@ class TaskFixtureExamplesTests(unittest.TestCase):
             statuses["daily_ui.claim_rewards:golden:confirm_state"],
             TaskAssetStatus.PRESENT,
         )
+        self.assertEqual(
+            records["daily_ui.claim_rewards:template:daily_ui.claim_reward"].metadata["replacement_target"],
+            "approved_live_zh_tw_capture",
+        )
+        self.assertFalse(
+            records["daily_ui.claim_rewards:template:daily_ui.claim_reward"].metadata["live_capture"]
+        )
+        self.assertTrue(
+            records["daily_ui.claim_rewards:template:daily_ui.reward_panel"].metadata["live_capture"]
+        )
 
     def test_curated_readiness_report_matches_expected_states(self) -> None:
         repository = TaskFoundationRepository.load_default()
@@ -58,7 +69,10 @@ class TaskFixtureExamplesTests(unittest.TestCase):
 
         self.assertEqual(by_task["daily_ui.claim_rewards"].implementation_readiness_state.value, "ready")
         self.assertTrue(by_task["daily_ui.claim_rewards"].implementation_requirements[0].satisfied)
-        self.assertEqual(by_task["daily_ui.claim_rewards"].warning_requirements, [])
+        self.assertEqual(
+            [item.metadata["anchor_id"] for item in by_task["daily_ui.claim_rewards"].warning_requirements],
+            ["daily_ui.claim_reward", "daily_ui.reward_confirm_state"],
+        )
         self.assertIn(
             "runtime_seam_builder=roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_seam",
             by_task["daily_ui.claim_rewards"].implementation_requirements[0].details,

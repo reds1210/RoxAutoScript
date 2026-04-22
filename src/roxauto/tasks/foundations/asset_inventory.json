@@ -1,281 +1,322 @@
 {
   "inventory_id": "pre_gate_3_task_asset_inventory",
-  "version": "0.1.0",
+  "metadata": {
+    "purpose": "task_asset_inventory"
+  },
   "records": [
     {
       "asset_id": "daily_ui.claim_rewards:fixture:default_tw_daily.fixture",
-      "pack_id": "daily_ui",
-      "task_id": "daily_ui.claim_rewards",
       "asset_kind": "fixture_profile",
-      "status": "present",
-      "source_path": "fixture_profiles/default_tw_daily.fixture.json",
       "metadata": {
         "source": "fixture_profile"
-      }
+      },
+      "pack_id": "daily_ui",
+      "source_path": "fixture_profiles/default_tw_daily.fixture.json",
+      "status": "present",
+      "task_id": "daily_ui.claim_rewards"
     },
     {
       "asset_id": "daily_ui.claim_rewards:template:daily_ui.reward_panel",
-      "pack_id": "daily_ui",
-      "task_id": "daily_ui.claim_rewards",
       "asset_kind": "template",
-      "status": "present",
-      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.reward_panel",
       "metadata": {
         "anchor_id": "daily_ui.reward_panel",
-        "source": "template_manifest",
-        "template_path": "anchors/daily_reward_panel.png",
+        "curation_status": "curated",
+        "inspection_role": "reward_panel",
+        "live_capture": true,
         "placeholder": false,
-        "curation_status": "curated"
-      }
+        "provenance_kind": "live_capture",
+        "source": "template_manifest",
+        "source_kind": "live_zh_tw_rox_capture",
+        "stage": "open_reward_panel",
+        "template_path": "anchors/daily_reward_panel.png"
+      },
+      "pack_id": "daily_ui",
+      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.reward_panel",
+      "status": "present",
+      "task_id": "daily_ui.claim_rewards"
     },
     {
       "asset_id": "daily_ui.claim_rewards:template:daily_ui.claim_reward",
-      "pack_id": "daily_ui",
-      "task_id": "daily_ui.claim_rewards",
       "asset_kind": "template",
-      "status": "present",
-      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.claim_reward",
       "metadata": {
         "anchor_id": "daily_ui.claim_reward",
-        "source": "template_manifest",
-        "template_path": "anchors/daily_claim_button.png",
+        "curation_status": "curated",
+        "inspection_role": "claim_reward_button",
+        "live_capture": false,
         "placeholder": false,
-        "curation_status": "curated"
-      }
+        "provenance_kind": "curated_stand_in",
+        "replacement_target": "approved_live_zh_tw_capture",
+        "source": "template_manifest",
+        "source_kind": "repo_curated_screenshot_style",
+        "stage": "verify_claim_affordance",
+        "template_path": "anchors/daily_claim_button.png"
+      },
+      "pack_id": "daily_ui",
+      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.claim_reward",
+      "status": "present",
+      "task_id": "daily_ui.claim_rewards"
     },
     {
       "asset_id": "daily_ui.claim_rewards:template:daily_ui.reward_confirm_state",
-      "pack_id": "daily_ui",
-      "task_id": "daily_ui.claim_rewards",
       "asset_kind": "template",
-      "status": "present",
-      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.reward_confirm_state",
       "metadata": {
         "anchor_id": "daily_ui.reward_confirm_state",
-        "source": "template_manifest",
-        "template_path": "anchors/daily_reward_confirm_state.png",
+        "curation_status": "curated",
+        "inspection_role": "confirm_state",
+        "live_capture": false,
         "placeholder": false,
-        "curation_status": "curated"
-      }
+        "provenance_kind": "curated_stand_in",
+        "replacement_target": "approved_live_zh_tw_capture",
+        "source": "template_manifest",
+        "source_kind": "repo_curated_screenshot_style",
+        "stage": "verify_claim_affordance",
+        "template_path": "anchors/daily_reward_confirm_state.png"
+      },
+      "pack_id": "daily_ui",
+      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.reward_confirm_state",
+      "status": "present",
+      "task_id": "daily_ui.claim_rewards"
     },
     {
       "asset_id": "daily_ui.claim_rewards:template:common.confirm_button",
-      "pack_id": "daily_ui",
-      "task_id": "daily_ui.claim_rewards",
       "asset_kind": "template",
-      "status": "present",
-      "source_path": "assets/templates/common/manifest.json#common.confirm_button",
       "metadata": {
         "anchor_id": "common.confirm_button",
-        "source": "template_manifest",
-        "template_path": "anchors/common_confirm_button.svg",
+        "curation_status": "",
         "placeholder": false,
-        "curation_status": ""
-      }
+        "source": "template_manifest",
+        "template_path": "anchors/common_confirm_button.svg"
+      },
+      "pack_id": "daily_ui",
+      "source_path": "assets/templates/common/manifest.json#common.confirm_button",
+      "status": "present",
+      "task_id": "daily_ui.claim_rewards"
     },
     {
       "asset_id": "daily_ui.claim_rewards:template:common.close_button",
-      "pack_id": "daily_ui",
-      "task_id": "daily_ui.claim_rewards",
       "asset_kind": "template",
-      "status": "present",
-      "source_path": "assets/templates/common/manifest.json#common.close_button",
       "metadata": {
         "anchor_id": "common.close_button",
-        "source": "template_manifest",
-        "template_path": "anchors/common_close_button.svg",
+        "curation_status": "",
         "placeholder": false,
-        "curation_status": ""
-      }
+        "source": "template_manifest",
+        "template_path": "anchors/common_close_button.svg"
+      },
+      "pack_id": "daily_ui",
+      "source_path": "assets/templates/common/manifest.json#common.close_button",
+      "status": "present",
+      "task_id": "daily_ui.claim_rewards"
     },
     {
       "asset_id": "daily_ui.claim_rewards:golden:reward_panel",
-      "pack_id": "daily_ui",
-      "task_id": "daily_ui.claim_rewards",
       "asset_kind": "golden_screenshot",
-      "status": "present",
-      "source_path": "assets/templates/daily_ui/goldens/claim_rewards/daily_ui_claim_rewards__reward_panel__baseline__v1.png",
       "metadata": {
+        "anchor_id": "daily_ui.reward_panel",
+        "golden_id": "reward_panel_open_baseline_v1",
+        "inspection_role": "reward_panel",
+        "live_capture": true,
+        "reference_id": "reward_panel_baseline_v1",
+        "scene_id": "reward_panel_open",
+        "source": "golden_asset_sources",
+        "source_kind": "live_zh_tw_rox_capture",
+        "stage": "open_reward_panel",
+        "variant": "baseline",
         "variants": [
           "baseline",
           "reward_claimable",
           "reward_claimed",
           "failure"
-        ],
-        "source": "golden_asset_sources",
-        "variant": "baseline"
-      }
+        ]
+      },
+      "pack_id": "daily_ui",
+      "source_path": "assets/templates/daily_ui/goldens/claim_rewards/daily_ui_claim_rewards__reward_panel__baseline__v1.png",
+      "status": "present",
+      "task_id": "daily_ui.claim_rewards"
     },
     {
       "asset_id": "daily_ui.claim_rewards:golden:claim_button",
-      "pack_id": "daily_ui",
-      "task_id": "daily_ui.claim_rewards",
       "asset_kind": "golden_screenshot",
-      "status": "present",
-      "source_path": "assets/templates/daily_ui/goldens/claim_rewards/daily_ui_claim_rewards__claim_button__baseline__v1.png",
       "metadata": {
+        "anchor_id": "daily_ui.claim_reward",
+        "golden_id": "reward_panel_claimable_baseline_v1",
+        "inspection_role": "claim_reward_button",
+        "live_capture": false,
+        "reference_id": "claim_button_baseline_v1",
+        "scene_id": "reward_panel_claimable",
+        "source": "golden_asset_sources",
+        "source_kind": "repo_curated_screenshot_style",
+        "stage": "verify_claim_affordance",
+        "variant": "baseline",
         "variants": [
           "baseline",
           "failure"
-        ],
-        "source": "golden_asset_sources",
-        "variant": "baseline"
-      }
+        ]
+      },
+      "pack_id": "daily_ui",
+      "source_path": "assets/templates/daily_ui/goldens/claim_rewards/daily_ui_claim_rewards__claim_button__baseline__v1.png",
+      "status": "present",
+      "task_id": "daily_ui.claim_rewards"
     },
     {
       "asset_id": "daily_ui.claim_rewards:golden:confirm_state",
-      "pack_id": "daily_ui",
-      "task_id": "daily_ui.claim_rewards",
       "asset_kind": "golden_screenshot",
-      "status": "present",
-      "source_path": "assets/templates/daily_ui/goldens/claim_rewards/daily_ui_claim_rewards__confirm_state__baseline__v1.png",
       "metadata": {
+        "anchor_id": "daily_ui.reward_confirm_state",
+        "golden_id": "reward_confirm_modal_baseline_v1",
+        "inspection_role": "confirm_state",
+        "live_capture": false,
+        "reference_id": "confirm_state_baseline_v1",
+        "scene_id": "reward_confirm_modal",
+        "source": "golden_asset_sources",
+        "source_kind": "repo_curated_screenshot_style",
+        "stage": "verify_claim_affordance",
+        "variant": "baseline",
         "variants": [
           "baseline",
           "confirm_ready",
           "failure"
-        ],
-        "source": "golden_asset_sources",
-        "variant": "baseline"
-      }
+        ]
+      },
+      "pack_id": "daily_ui",
+      "source_path": "assets/templates/daily_ui/goldens/claim_rewards/daily_ui_claim_rewards__confirm_state__baseline__v1.png",
+      "status": "present",
+      "task_id": "daily_ui.claim_rewards"
     },
     {
       "asset_id": "daily_ui.guild_check_in:fixture:default_tw_guild.fixture",
-      "pack_id": "daily_ui",
-      "task_id": "daily_ui.guild_check_in",
       "asset_kind": "fixture_profile",
-      "status": "present",
-      "source_path": "fixture_profiles/default_tw_guild.fixture.json",
       "metadata": {
         "source": "fixture_profile"
-      }
+      },
+      "pack_id": "daily_ui",
+      "source_path": "fixture_profiles/default_tw_guild.fixture.json",
+      "status": "present",
+      "task_id": "daily_ui.guild_check_in"
     },
     {
       "asset_id": "daily_ui.guild_check_in:template:common.close_button",
-      "pack_id": "daily_ui",
-      "task_id": "daily_ui.guild_check_in",
       "asset_kind": "template",
-      "status": "present",
-      "source_path": "assets/templates/common/manifest.json#common.close_button",
       "metadata": {
         "anchor_id": "common.close_button",
-        "source": "template_manifest",
-        "template_path": "anchors/common_close_button.svg",
+        "curation_status": "",
         "placeholder": false,
-        "curation_status": ""
-      }
+        "source": "template_manifest",
+        "template_path": "anchors/common_close_button.svg"
+      },
+      "pack_id": "daily_ui",
+      "source_path": "assets/templates/common/manifest.json#common.close_button",
+      "status": "present",
+      "task_id": "daily_ui.guild_check_in"
     },
     {
       "asset_id": "daily_ui.guild_check_in:template:daily_ui.guild_check_in_button",
-      "pack_id": "daily_ui",
-      "task_id": "daily_ui.guild_check_in",
       "asset_kind": "template",
-      "status": "placeholder",
-      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.guild_check_in_button",
       "metadata": {
         "anchor_id": "daily_ui.guild_check_in_button",
-        "source": "template_manifest",
-        "template_path": "anchors/daily_guild_check_in_button.svg",
+        "curation_status": "",
         "placeholder": true,
-        "curation_status": ""
-      }
+        "source": "template_manifest",
+        "template_path": "anchors/daily_guild_check_in_button.svg"
+      },
+      "pack_id": "daily_ui",
+      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.guild_check_in_button",
+      "status": "placeholder",
+      "task_id": "daily_ui.guild_check_in"
     },
     {
       "asset_id": "daily_ui.guild_check_in:golden:guild_hub",
-      "pack_id": "daily_ui",
-      "task_id": "daily_ui.guild_check_in",
       "asset_kind": "golden_screenshot",
-      "status": "planned",
-      "source_path": "daily_ui/daily_ui_guild_check_in/guild_hub/daily_ui_guild_check_in__guild_hub__baseline__v1.png",
       "metadata": {
+        "source": "golden_convention",
+        "variant": "baseline",
         "variants": [
           "baseline",
           "check_in_ready",
           "checked_in",
           "failure"
-        ],
-        "source": "golden_convention",
-        "variant": "baseline"
-      }
+        ]
+      },
+      "pack_id": "daily_ui",
+      "source_path": "daily_ui/daily_ui_guild_check_in/guild_hub/daily_ui_guild_check_in__guild_hub__baseline__v1.png",
+      "status": "planned",
+      "task_id": "daily_ui.guild_check_in"
     },
     {
       "asset_id": "odin.preset_entry:fixture:default_tw_odin.fixture",
-      "pack_id": "odin",
-      "task_id": "odin.preset_entry",
       "asset_kind": "fixture_profile",
-      "status": "present",
-      "source_path": "fixture_profiles/default_tw_odin.fixture.json",
       "metadata": {
         "source": "fixture_profile"
-      }
+      },
+      "pack_id": "odin",
+      "source_path": "fixture_profiles/default_tw_odin.fixture.json",
+      "status": "present",
+      "task_id": "odin.preset_entry"
     },
     {
       "asset_id": "odin.preset_entry:template:common.close_button",
-      "pack_id": "odin",
-      "task_id": "odin.preset_entry",
       "asset_kind": "template",
-      "status": "present",
-      "source_path": "assets/templates/common/manifest.json#common.close_button",
       "metadata": {
         "anchor_id": "common.close_button",
-        "source": "template_manifest",
-        "template_path": "anchors/common_close_button.svg",
+        "curation_status": "",
         "placeholder": false,
-        "curation_status": ""
-      }
+        "source": "template_manifest",
+        "template_path": "anchors/common_close_button.svg"
+      },
+      "pack_id": "odin",
+      "source_path": "assets/templates/common/manifest.json#common.close_button",
+      "status": "present",
+      "task_id": "odin.preset_entry"
     },
     {
       "asset_id": "odin.preset_entry:template:odin.start_button",
-      "pack_id": "odin",
-      "task_id": "odin.preset_entry",
       "asset_kind": "template",
-      "status": "placeholder",
-      "source_path": "assets/templates/odin/manifest.json#odin.start_button",
       "metadata": {
         "anchor_id": "odin.start_button",
-        "source": "template_manifest",
-        "template_path": "anchors/odin_start_button.svg",
+        "curation_status": "",
         "placeholder": true,
-        "curation_status": ""
-      }
+        "source": "template_manifest",
+        "template_path": "anchors/odin_start_button.svg"
+      },
+      "pack_id": "odin",
+      "source_path": "assets/templates/odin/manifest.json#odin.start_button",
+      "status": "placeholder",
+      "task_id": "odin.preset_entry"
     },
     {
       "asset_id": "odin.preset_entry:golden:odin_setup_panel",
-      "pack_id": "odin",
-      "task_id": "odin.preset_entry",
       "asset_kind": "golden_screenshot",
-      "status": "planned",
-      "source_path": "odin/odin_preset_entry/odin_setup_panel/odin_preset_entry__odin_setup_panel__baseline__v1.png",
       "metadata": {
+        "source": "golden_convention",
+        "variant": "baseline",
         "variants": [
           "baseline",
           "preset_ready",
           "consumable_low",
           "failure"
-        ],
-        "source": "golden_convention",
-        "variant": "baseline"
-      }
+        ]
+      },
+      "pack_id": "odin",
+      "source_path": "odin/odin_preset_entry/odin_setup_panel/odin_preset_entry__odin_setup_panel__baseline__v1.png",
+      "status": "planned",
+      "task_id": "odin.preset_entry"
     },
     {
       "asset_id": "odin.preset_entry:golden:odin_idle_state",
-      "pack_id": "odin",
-      "task_id": "odin.preset_entry",
       "asset_kind": "golden_screenshot",
-      "status": "planned",
-      "source_path": "odin/odin_preset_entry/odin_idle_state/odin_preset_entry__odin_idle_state__baseline__v1.png",
       "metadata": {
+        "source": "golden_convention",
+        "variant": "baseline",
         "variants": [
           "baseline",
           "combat_active",
           "failure"
-        ],
-        "source": "golden_convention",
-        "variant": "baseline"
-      }
+        ]
+      },
+      "pack_id": "odin",
+      "source_path": "odin/odin_preset_entry/odin_idle_state/odin_preset_entry__odin_idle_state__baseline__v1.png",
+      "status": "planned",
+      "task_id": "odin.preset_entry"
     }
   ],
-  "metadata": {
-    "purpose": "task_asset_inventory"
-  }
+  "version": "0.1.0"
 }
