@@ -5,7 +5,6 @@ from typing import Any, Iterable
 
 from roxauto.core.commands import CommandDispatchResult, InstanceCommand, InstanceCommandType
 from roxauto.core.events import AppEvent, EVENT_INSTANCE_ERROR, EVENT_TASK_FAILURE_SNAPSHOT_RECORDED
-from roxauto.core.queue import QueuedTask
 from roxauto.core.runtime import QueueRunResult, RuntimeInspectionResult
 from roxauto.emulator import LiveRuntimeEventRecord, LiveRuntimeInstanceSnapshot, LiveRuntimeSnapshot
 from roxauto.tasks import TaskReadinessReport, TaskRuntimeBuilderInput

@@ -17,6 +17,8 @@ Docs to read before starting work:
 3. `docs/worktree-playbook.md`
 4. `docs/architecture-contracts.md`
 5. `docs/tracks/README.md`
+6. `docs/autonomy-loop.md`
+7. `docs/codex-subscription-setup.md`
 
 Parallel development docs:
 
@@ -37,3 +39,15 @@ Helper scripts:
 - `scripts/bootstrap-dev.ps1`
 - `scripts/new-worktree.ps1`
 - `scripts/bootstrap-four-engines.ps1`
+- `scripts/run-autonomy-loop.ps1`
+
+Autonomy loop:
+
+- `python -m roxauto quality-gate --output runtime_logs/autonomy/quality-gate.json`
+- `python -m roxauto agent-packet --quality-gate runtime_logs/autonomy/quality-gate.json --output runtime_logs/autonomy/agent-packet.json`
+- `python -m roxauto handoff-brief --quality-gate runtime_logs/autonomy/quality-gate.json --agent-packet runtime_logs/autonomy/agent-packet.json --output runtime_logs/autonomy/handoff-brief.md`
+
+Subscription-only Codex note:
+
+- the default repo loop uses ChatGPT/Codex sign-in and does not require `OPENAI_API_KEY`
+- use Codex GitHub automatic review or `@codex review` on pull requests for official review flows

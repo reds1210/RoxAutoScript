@@ -4,7 +4,6 @@ import importlib.util
 import json
 import platform
 import sys
-from pathlib import Path
 
 from roxauto.core.serde import to_primitive
 from roxauto.emulator.discovery import discover_instances, find_adb_executable
@@ -40,4 +39,3 @@ def print_doctor_report() -> int:
     report = build_doctor_report()
     print(json.dumps(to_primitive(report), indent=2, ensure_ascii=False))
     return 0
-

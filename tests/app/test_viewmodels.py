@@ -21,13 +21,11 @@ from roxauto.core.models import (
     PreviewFrame,
     ProfileBinding,
     TaskManifest,
-    TaskRun,
-    TaskRunStatus,
     TaskSpec,
     VisionMatch,
 )
 from roxauto.core.queue import QueuedTask
-from roxauto.core.runtime import QueueRunResult, RuntimeInspectionResult, TaskStep, step_success
+from roxauto.core.runtime import RuntimeInspectionResult, TaskStep, step_success
 from roxauto.core.time import utc_now
 from roxauto.emulator import LiveRuntimeEventRecord, LiveRuntimeInstanceSnapshot, LiveRuntimeSnapshot
 from roxauto.tasks import TaskFoundationRepository

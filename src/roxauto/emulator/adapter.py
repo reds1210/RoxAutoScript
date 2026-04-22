@@ -4,7 +4,7 @@ import subprocess
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Protocol, Sequence, runtime_checkable
+from typing import Protocol, Sequence, runtime_checkable
 from uuid import uuid4
 
 from roxauto.core.models import InstanceState

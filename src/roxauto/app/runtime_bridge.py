@@ -9,7 +9,6 @@ import threading
 import time
 from types import SimpleNamespace
 from typing import Callable
-from uuid import uuid4
 
 from roxauto.app.viewmodels import (
     ClaimRewardsEditorView,
@@ -32,7 +31,6 @@ from roxauto.core.models import (
     PreviewFrame,
     ProfileBinding,
     StepStatus,
-    TaskManifest,
     TaskRun,
     TaskRunTelemetry,
     TaskSpec,
@@ -41,7 +39,7 @@ from roxauto.core.models import (
     VisionMatch,
 )
 from roxauto.core.queue import QueuedTask
-from roxauto.core.runtime import RuntimeInspectionResult, TaskStep, step_failure, step_success
+from roxauto.core.runtime import RuntimeInspectionResult, step_failure, step_success
 from roxauto.core.time import utc_now
 from roxauto.doctor import build_doctor_report
 from roxauto.emulator import (
