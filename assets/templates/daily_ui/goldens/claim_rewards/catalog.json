@@ -28,8 +28,8 @@
       "sha256": "82a48f798b8d3cae294f0ffdf8eced1e1cd53031a8918672f64fc02099c3103a",
       "source_kind": "live_zh_tw_rox_capture",
       "live_capture": true,
-      "proves": "Shows the real daily-sign-in reward panel already open in live zh-TW ROX and is the canonical panel-open golden for anchor verification.",
-      "failure_case": "Use when the flow fails to detect the opened reward panel or lands on the wrong reward surface before the claim-state checks start.",
+      "failure_case": "reward_panel_not_open_or_wrong_surface",
+      "proves": "Shows the opened daily-sign-in reward panel on live zh-TW ROX UI and serves as the canonical panel-open golden for anchor verification.",
       "supporting_capture_ids": [
         "reward_panel_live_capture_emulator_5560_daily_signin",
         "entry_context_live_capture_emulator_5556_after_fuli_tap",
@@ -54,8 +54,8 @@
       "sha256": "3d69da22c38d59b291e40dbf1ea2d35664f84a20d178c10eb53e15718e66dc51",
       "source_kind": "repo_curated_screenshot_style",
       "live_capture": false,
-      "proves": "Shows the expected claimable reward-panel layout with an enabled claim button for the pre-tap affordance check.",
-      "failure_case": "Use when the flow reaches the reward panel but cannot verify an enabled claim button before tapping.",
+      "failure_case": "claim_button_missing_or_not_tappable",
+      "proves": "Shows the claimable reward panel state with an enabled claim button for pre-tap verification.",
       "supporting_capture_ids": [
         "non_claimable_daily_signin_live_capture_emulator_5556_after_daily_tab_attempt_2"
       ],
@@ -79,8 +79,8 @@
       "sha256": "86a6aa741dc9b22ab2e9b7779a077909b007637ca852fc9ebc1379b5f384b143",
       "source_kind": "repo_curated_screenshot_style",
       "live_capture": false,
-      "proves": "Shows the expected confirmation modal layout that should appear after the claim tap and anchors the confirm-state crop.",
-      "failure_case": "Use when the flow taps claim but cannot verify the reward confirmation modal.",
+      "failure_case": "confirm_modal_missing_after_claim_tap",
+      "proves": "Shows the confirmation modal state that appears after tapping the claim button and anchors the confirm-state crop.",
       "supporting_capture_ids": [
         "non_reward_confirm_modal_live_capture_emulator_5560_exit_game_prompt"
       ],

@@ -7,88 +7,90 @@ Track:
 Scope:
 
 - Kept scope on `daily_ui.claim_rewards` only.
-- Stayed inside Engine C ownership for code, templates, vision docs, and tests; no task/runtime/app directories were edited.
-- Promoted the `daily_ui.reward_panel` baseline from a screenshot-style stand-in to a live zh-TW ROX capture while keeping the three claim-rewards anchor ids stable.
-- Kept `daily_ui.claim_reward` and `daily_ui.reward_confirm_state` as curated stand-ins, but made the readiness and failure surfaces explicit about that difference.
+- Stayed inside Engine C ownership for vision contracts, template metadata, supporting raw captures, and tests.
+- Did not edit `src/roxauto/core/`, `src/roxauto/emulator/`, `src/roxauto/tasks/`, or `src/roxauto/app/`.
+- Left the three anchor ids stable:
+  - `daily_ui.reward_panel`
+  - `daily_ui.claim_reward`
+  - `daily_ui.reward_confirm_state`
 
 Files changed:
 
-- `src/roxauto/vision/models.py`
 - `src/roxauto/vision/tooling.py`
 - `src/roxauto/vision/validation.py`
-- `src/roxauto/vision/__init__.py`
-- `assets/templates/daily_ui/anchors/daily_reward_panel.png`
-- `assets/templates/daily_ui/goldens/claim_rewards/daily_ui_claim_rewards__reward_panel__baseline__v1.png`
-- `assets/templates/daily_ui/goldens/claim_rewards/catalog.json`
-- `assets/templates/daily_ui/goldens/claim_rewards/live/daily_ui_claim_rewards__reward_panel__live_capture__emulator_5560__daily_signin.png`
-- `assets/templates/daily_ui/goldens/claim_rewards/live/daily_ui_claim_rewards__entry_context__live_capture__emulator_5556__after_fuli_tap.png`
 - `assets/templates/daily_ui/manifest.json`
+- `assets/templates/daily_ui/goldens/claim_rewards/catalog.json`
 - `docs/vision/README.md`
 - `docs/vision/claim_rewards_live/raw/*`
 - `tests/vision/test_repository.py`
-- `tests/vision/test_serialization.py`
 - `tests/vision/test_tooling.py`
 - `tests/vision/test_validation.py`
 - `docs/handoffs/vision-claim-rewards-live-captures.md`
 
 Public APIs added or changed:
 
-- Added `AnchorAssetProvenanceKind`.
-- Added `AnchorAssetProvenance`.
-- `AnchorCurationProfile` now exposes:
-  - `provenance`
-  - `provenance_kind`
-  - `provenance_summary`
-  - `is_live_capture`
-- `TemplateDependencyReadiness` now exposes:
-  - `provenance_kind`
-  - `provenance_summary`
-- `AnchorInspectionRow`, `MatchInspectorState`, `ClaimRewardsCheckState`, and `FailureInspectorState` now expose:
-  - `provenance_kind`
-  - `provenance_summary`
-- `ClaimRewardsInspectorState` now exposes:
-  - `selected_provenance_kind`
-  - `selected_provenance_summary`
+- `TemplateDependencyReadiness` now also exposes:
+  - `failure_case`
+- `MatchInspectorState` now also exposes:
+  - `selected_region`
+  - `selected_region_summary`
+  - `failure_case`
+- `ClaimRewardsCheckState` now also exposes:
+  - `selected_region`
+  - `selected_region_summary`
+  - `failure_case`
+- `ClaimRewardsInspectorState` now also exposes:
+  - `selected_region`
+  - `selected_region_summary`
+  - `selected_failure_case`
+- `FailureInspectorState` now also exposes:
+  - `selected_region`
+  - `selected_region_summary`
+  - `failure_case`
 
 Contract changes:
 
-- `daily_ui.claim_rewards` anchors now require `metadata.curation.provenance` in addition to the existing curation fields.
-- Validation now rejects a claim-rewards anchor when `metadata.curation.provenance` is missing.
-- Validation now rejects a curated anchor when its provenance still claims `placeholder`.
-- Readiness now distinguishes:
-  - `ready` + `live_capture`
-  - `ready` + `curated_stand_in`
-  - `placeholder`
-  - `inventory_mismatch`
-- `metadata.task_support.daily_ui.claim_rewards.golden_catalog_path` now points at `goldens/claim_rewards/catalog.json`, and each curated anchor maps back to a `golden_id` entry in that catalog.
-- The shipped claim-rewards anchors are now explicitly marked as:
-  - `daily_ui.reward_panel`: `provenance.kind = live_capture`, `locale = zh-TW`, `source = mumu_emulator_5556`
-  - `daily_ui.claim_reward`: `provenance.kind = curated_stand_in`, `locale = zh-TW`, `source = repo_curated_baseline`
-  - `daily_ui.reward_confirm_state`: `provenance.kind = curated_stand_in`, `locale = zh-TW`, `source = repo_curated_baseline`
-- Failure/match/check summaries now carry explicit provenance context so GUI does not need to reopen manifest metadata to explain what kind of baseline was used.
+- `metadata.task_support["daily_ui.claim_rewards"]` now carries `live_capture_coverage`:
+  - `live_anchor_ids`
+  - `stand_in_anchor_ids`
+  - `blocked_scene_ids`
+- claim-rewards anchor curation metadata now requires a machine-readable `metadata.curation.metadata.failure_case`.
+- claim-rewards catalog entries now mirror `failure_case` so catalog and anchor metadata stay aligned.
+- validation now rejects:
+  - missing `failure_case`
+  - missing `live_capture_coverage`
+  - live/stand-in coverage lists that do not match anchor provenance
+  - catalog entries whose `failure_case` diverges from anchor metadata
+- readiness metadata now carries `claim_rewards_live_capture_coverage`, and each template dependency now carries its own `failure_case`.
+- failure and match tooling now flatten the currently selected region directly instead of forcing GUI to inspect nested overlay payloads to find the operative area.
 
-What is live vs stand-in now:
+Current live vs stand-in status:
 
 - Live capture:
   - `daily_ui.reward_panel`
-  - primary baseline: `assets/templates/daily_ui/goldens/claim_rewards/daily_ui_claim_rewards__reward_panel__baseline__v1.png`
-  - supplemental captures:
+  - canonical baseline:
+    - `assets/templates/daily_ui/goldens/claim_rewards/daily_ui_claim_rewards__reward_panel__baseline__v1.png`
+  - supplemental live captures:
     - `assets/templates/daily_ui/goldens/claim_rewards/live/daily_ui_claim_rewards__reward_panel__live_capture__emulator_5560__daily_signin.png`
     - `assets/templates/daily_ui/goldens/claim_rewards/live/daily_ui_claim_rewards__entry_context__live_capture__emulator_5556__after_fuli_tap.png`
 - Curated stand-in:
   - `daily_ui.claim_reward`
   - `daily_ui.reward_confirm_state`
-- Raw supporting screenshots copied for traceability:
+- Traceability-only raw captures copied into this worktree:
   - `docs/vision/claim_rewards_live/raw/`
+  - includes additional round-7 screenshots such as `emulator-5560-reward-recovery*.png` and `runtime-previews-latest-20-sheet.png`
+  - these are not promoted to canonical baselines unless they appear in `catalog.json`
 
 Assumptions:
 
-- The available live capture evidence is sufficient to promote the panel-open baseline only.
-- The claimable-button and confirm-modal baselines still do not have approved live zh-TW ROX captures in this worktree.
-- When those captures become available later, the intended upgrade path is to change provenance from `curated_stand_in` to `live_capture` without redesigning the surrounding readiness or failure surfaces.
+- The currently available live evidence is still only strong enough to keep `reward_panel_open` as the sole canonical live claim-rewards baseline.
+- The extra round-7 raw captures are useful for traceability and operator context, but they do not prove the claimable-button or confirm-modal scenes.
+- GUI and downstream tracks should use the new machine-readable `failure_case`, `selected_region`, and coverage metadata rather than English message parsing.
 
 Verification performed:
 
+- `python -m json.tool assets/templates/daily_ui/manifest.json`
+- `python -m json.tool assets/templates/daily_ui/goldens/claim_rewards/catalog.json`
 - `python -m unittest tests.vision.test_repository`
 - `python -m unittest tests.vision.test_serialization`
 - `python -m unittest tests.vision.test_validation`
@@ -99,9 +101,10 @@ Verification performed:
 
 Known limitations:
 
-- Only the panel-open baseline has been promoted to a live capture in this pass.
-- `failure_explanation` now warns when a claim-rewards baseline is still a curated stand-in, which currently still applies to the claim-button and confirm-state checks.
-- Engine D's asset inventory remains conservative, so the existing `daily_ui.claim_reward` inventory mismatch is still expected until that track intentionally updates its inventory policy.
+- `daily_ui.claim_reward` still does not have an approved live zh-TW ROX claimable-panel capture.
+- `daily_ui.reward_confirm_state` still does not have an approved live zh-TW ROX confirmation-modal capture.
+- `selected_region` is intentionally the currently selected inspection overlay region; for matched checks that may be the runtime match bbox rather than the repository match window.
+- Engine D still owns the task inventory policy, so the existing `daily_ui.claim_reward` inventory mismatch remains expected until that track updates it.
 
 Blockers:
 
@@ -112,6 +115,6 @@ Blockers:
 
 Recommended next step:
 
-- Capture approved live zh-TW ROX screenshots for `reward_panel_claimable` and `reward_confirm_modal` and replace the current screenshot-style baselines.
-- After those assets land, update `metadata.curation.provenance` for those two anchors from `curated_stand_in` to `live_capture` and keep the same flattened readiness/failure surface.
-- Engine B can optionally surface `selected_provenance_kind` / `selected_provenance_summary` in the claim-rewards diagnostics pane, but no new manifest parsing should be required.
+- Capture approved live zh-TW ROX screenshots for `reward_panel_claimable` and `reward_confirm_modal`.
+- Once those are available, replace the current stand-in baselines in place, move those anchors from `stand_in_anchor_ids` to `live_anchor_ids`, and remove their scene ids from `blocked_scene_ids`.
+- Engine B should render `selected_region`, `selected_region_summary`, and `failure_case` directly instead of deriving region/action hints from overlay summaries or English failure strings.

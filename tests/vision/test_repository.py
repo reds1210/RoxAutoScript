@@ -53,6 +53,14 @@ class AnchorRepositoryTests(unittest.TestCase):
             repository.get_task_support("daily_ui.claim_rewards")["golden_catalog_path"],
             "goldens/claim_rewards/catalog.json",
         )
+        self.assertEqual(
+            repository.get_task_support("daily_ui.claim_rewards")["live_capture_coverage"]["live_anchor_ids"],
+            ["daily_ui.reward_panel"],
+        )
+        self.assertEqual(
+            reward_panel_curation.metadata["failure_case"],
+            "reward_panel_not_open_or_wrong_surface",
+        )
 
     def test_repository_exposes_manifest_and_search_helpers(self) -> None:
         repository = AnchorRepository.load(self.templates_root / "common")

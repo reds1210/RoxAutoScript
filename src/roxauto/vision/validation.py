@@ -163,6 +163,7 @@ class TemplateDependencyReadiness:
     provenance_kind: AnchorAssetProvenanceKind | None = None
     provenance_summary: str = ""
     curation_summary: str = ""
+    failure_case: str = ""
     issue_codes: list[str] = field(default_factory=list)
     message: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -209,6 +210,7 @@ class TemplateDependencyReadiness:
             provenance_kind=provenance_kind,
             provenance_summary=str(data.get("provenance_summary", "")),
             curation_summary=str(data.get("curation_summary", "")),
+            failure_case=str(data.get("failure_case", "")),
             issue_codes=[str(code) for code in data.get("issue_codes", [])],
             message=str(data.get("message", "")),
             metadata=dict(data.get("metadata", {})),
@@ -627,6 +629,7 @@ def build_vision_workspace_readiness_report(
                 provenance_kind=curation.provenance_kind if curation is not None else None,
                 provenance_summary=_provenance_summary(curation),
                 curation_summary=_curation_summary(curation),
+                failure_case=_failure_case(curation),
                 issue_codes=issue_codes,
                 message=message,
                 metadata={
@@ -648,6 +651,7 @@ def build_vision_workspace_readiness_report(
             "asset_inventory_is_file": inventory_path.is_file(),
             "inventory_id": str(document.get("inventory_id", "")),
             "inventory_version": str(document.get("version", "")),
+            "claim_rewards_live_capture_coverage": _claim_rewards_live_capture_coverage(repositories_by_id.get("daily_ui")),
         },
     )
 
@@ -713,6 +717,23 @@ def _validate_anchor_curation(
                 metadata={"task_id": "daily_ui.claim_rewards"},
             )
         )
+
+    if "daily_ui.claim_rewards" in task_ids:
+        failure_case = str(curation.metadata.get("failure_case", "")).strip()
+        if not failure_case:
+            issues.append(
+                TemplateValidationIssue(
+                    code="missing_anchor_failure_case",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=(
+                        f"Anchor '{anchor.anchor_id}' must define metadata.curation.metadata.failure_case "
+                        "so claim-rewards diagnostics can stay machine-readable."
+                    ),
+                    anchor_id=anchor.anchor_id,
+                    path=str(repository.manifest_path),
+                    metadata={"task_id": "daily_ui.claim_rewards"},
+                )
+            )
 
     if curation.status == AnchorCurationStatus.CURATED:
         if bool(metadata.get("placeholder", False)):
@@ -1036,6 +1057,22 @@ def _validate_claim_rewards_golden_catalog(
                 )
             )
 
+        failure_case = str(curation_metadata.get("failure_case", "")).strip()
+        catalog_failure_case = str(catalog_entry.get("failure_case", "")).strip()
+        if failure_case and catalog_failure_case != failure_case:
+            issues.append(
+                TemplateValidationIssue(
+                    code="anchor_golden_catalog_failure_case_mismatch",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=(
+                        f"Golden catalog entry '{golden_id}' failure_case does not match "
+                        f"the curation metadata for anchor '{anchor.anchor_id}'."
+                    ),
+                    anchor_id=anchor.anchor_id,
+                    path=str(resolved_catalog_path),
+                )
+            )
+
     return issues
 
 
@@ -1284,20 +1321,21 @@ def _validate_task_support_contract(
     for task_id, support in task_support.items():
         if not isinstance(support, dict):
             continue
+        normalized_task_id = str(task_id)
         required_roles = [str(role).strip() for role in support.get("required_anchor_roles", []) if str(role).strip()]
-        role_map = anchor_roles.get(str(task_id), {})
-        for anchor_id in anchors_missing_roles.get(str(task_id), []):
+        role_map = anchor_roles.get(normalized_task_id, {})
+        for anchor_id in anchors_missing_roles.get(normalized_task_id, []):
             issues.append(
                 TemplateValidationIssue(
                     code="missing_anchor_task_support_role",
                     severity=TemplateValidationSeverity.ERROR,
                     message=(
-                        f"Anchor '{anchor_id}' is assigned to task '{task_id}' but is missing "
+                        f"Anchor '{anchor_id}' is assigned to task '{normalized_task_id}' but is missing "
                         "metadata.inspection_role."
                     ),
                     anchor_id=anchor_id,
                     path=str(repository.manifest_path),
-                    metadata={"task_id": str(task_id)},
+                    metadata={"task_id": normalized_task_id},
                 )
             )
         for role in required_roles:
@@ -1308,10 +1346,10 @@ def _validate_task_support_contract(
                         code="missing_task_support_anchor_role",
                         severity=TemplateValidationSeverity.ERROR,
                         message=(
-                            f"Task '{task_id}' requires an anchor with inspection role '{role}'."
+                            f"Task '{normalized_task_id}' requires an anchor with inspection role '{role}'."
                         ),
                         path=str(repository.manifest_path),
-                        metadata={"task_id": str(task_id), "inspection_role": role},
+                        metadata={"task_id": normalized_task_id, "inspection_role": role},
                     )
                 )
                 continue
@@ -1321,17 +1359,19 @@ def _validate_task_support_contract(
                         code="duplicate_task_support_anchor_role",
                         severity=TemplateValidationSeverity.ERROR,
                         message=(
-                            f"Task '{task_id}' has multiple anchors for inspection role '{role}'."
+                            f"Task '{normalized_task_id}' has multiple anchors for inspection role '{role}'."
                         ),
                         anchor_id=anchor_ids[0],
                         path=str(repository.manifest_path),
                         metadata={
-                            "task_id": str(task_id),
+                            "task_id": normalized_task_id,
                             "inspection_role": role,
                             "anchor_ids": anchor_ids,
                         },
                     )
                 )
+        if normalized_task_id == "daily_ui.claim_rewards":
+            issues.extend(_validate_claim_rewards_live_capture_coverage(repository, support))
     return issues
 
 
@@ -1370,6 +1410,164 @@ def _provenance_summary(curation: AnchorCurationProfile | None) -> str:
     if curation is None:
         return ""
     return curation.provenance_summary
+
+
+def _failure_case(curation: AnchorCurationProfile | None) -> str:
+    if curation is None:
+        return ""
+    return str(curation.metadata.get("failure_case", "")).strip()
+
+
+def _claim_rewards_live_capture_coverage(repository: AnchorRepository | None) -> dict[str, Any]:
+    if repository is None:
+        return {}
+    coverage = repository.get_task_support("daily_ui.claim_rewards").get("live_capture_coverage", {})
+    return dict(coverage) if isinstance(coverage, dict) else {}
+
+
+def _validate_claim_rewards_live_capture_coverage(
+    repository: AnchorRepository,
+    support: dict[str, Any],
+) -> list[TemplateValidationIssue]:
+    coverage = support.get("live_capture_coverage")
+    if not isinstance(coverage, dict):
+        return [
+            TemplateValidationIssue(
+                code="missing_claim_rewards_live_capture_coverage",
+                severity=TemplateValidationSeverity.ERROR,
+                message=(
+                    "Task support for 'daily_ui.claim_rewards' must define "
+                    "metadata.task_support[task_id].live_capture_coverage."
+                ),
+                path=str(repository.manifest_path),
+                metadata={"task_id": "daily_ui.claim_rewards"},
+            )
+        ]
+
+    live_anchor_ids = {
+        str(anchor_id).strip()
+        for anchor_id in coverage.get("live_anchor_ids", [])
+        if str(anchor_id).strip()
+    }
+    stand_in_anchor_ids = {
+        str(anchor_id).strip()
+        for anchor_id in coverage.get("stand_in_anchor_ids", [])
+        if str(anchor_id).strip()
+    }
+    blocked_scene_ids = {
+        str(scene_id).strip()
+        for scene_id in coverage.get("blocked_scene_ids", [])
+        if str(scene_id).strip()
+    }
+
+    issues: list[TemplateValidationIssue] = []
+    if live_anchor_ids & stand_in_anchor_ids:
+        issues.append(
+            TemplateValidationIssue(
+                code="claim_rewards_live_capture_coverage_overlap",
+                severity=TemplateValidationSeverity.ERROR,
+                message=(
+                    "Claim-rewards live_capture_coverage cannot list the same anchor "
+                    "in both live_anchor_ids and stand_in_anchor_ids."
+                ),
+                path=str(repository.manifest_path),
+                metadata={
+                    "task_id": "daily_ui.claim_rewards",
+                    "anchor_ids": sorted(live_anchor_ids & stand_in_anchor_ids),
+                },
+            )
+        )
+
+    claim_rewards_anchor_ids = {
+        anchor.anchor_id
+        for anchor in repository.list_anchors()
+        if "daily_ui.claim_rewards" in _anchor_task_ids(dict(anchor.metadata))
+    }
+    unknown_anchor_ids = (live_anchor_ids | stand_in_anchor_ids) - claim_rewards_anchor_ids
+    if unknown_anchor_ids:
+        issues.append(
+            TemplateValidationIssue(
+                code="unknown_claim_rewards_live_capture_anchor",
+                severity=TemplateValidationSeverity.ERROR,
+                message=(
+                    "Claim-rewards live_capture_coverage must only reference anchors "
+                    "assigned to daily_ui.claim_rewards."
+                ),
+                path=str(repository.manifest_path),
+                metadata={"task_id": "daily_ui.claim_rewards", "anchor_ids": sorted(unknown_anchor_ids)},
+            )
+        )
+
+    for anchor_id in sorted(claim_rewards_anchor_ids):
+        curation = repository.get_anchor_curation(anchor_id)
+        if curation is None or curation.provenance_kind is None:
+            continue
+        if curation.provenance_kind == AnchorAssetProvenanceKind.LIVE_CAPTURE and anchor_id not in live_anchor_ids:
+            issues.append(
+                TemplateValidationIssue(
+                    code="claim_rewards_live_anchor_missing_from_coverage",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=(
+                        f"Anchor '{anchor_id}' is marked as live_capture but is missing from "
+                        "live_capture_coverage.live_anchor_ids."
+                    ),
+                    anchor_id=anchor_id,
+                    path=str(repository.manifest_path),
+                    metadata={"task_id": "daily_ui.claim_rewards"},
+                )
+            )
+        if curation.provenance_kind == AnchorAssetProvenanceKind.CURATED_STAND_IN and anchor_id not in stand_in_anchor_ids:
+            issues.append(
+                TemplateValidationIssue(
+                    code="claim_rewards_stand_in_anchor_missing_from_coverage",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=(
+                        f"Anchor '{anchor_id}' is marked as curated_stand_in but is missing from "
+                        "live_capture_coverage.stand_in_anchor_ids."
+                    ),
+                    anchor_id=anchor_id,
+                    path=str(repository.manifest_path),
+                    metadata={"task_id": "daily_ui.claim_rewards"},
+                )
+            )
+        if (
+            curation.provenance_kind == AnchorAssetProvenanceKind.CURATED_STAND_IN
+            and curation.scene_id
+            and curation.scene_id not in blocked_scene_ids
+        ):
+            issues.append(
+                TemplateValidationIssue(
+                    code="claim_rewards_blocked_scene_missing_from_coverage",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=(
+                        f"Anchor '{anchor_id}' is still a curated stand-in, so scene "
+                        f"'{curation.scene_id}' must appear in live_capture_coverage.blocked_scene_ids."
+                    ),
+                    anchor_id=anchor_id,
+                    path=str(repository.manifest_path),
+                    metadata={"task_id": "daily_ui.claim_rewards", "scene_id": curation.scene_id},
+                )
+            )
+        if (
+            curation.provenance_kind == AnchorAssetProvenanceKind.LIVE_CAPTURE
+            and curation.scene_id
+            and curation.scene_id in blocked_scene_ids
+        ):
+            issues.append(
+                TemplateValidationIssue(
+                    code="claim_rewards_live_scene_marked_blocked",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=(
+                        f"Anchor '{anchor_id}' is already a live capture, so scene "
+                        f"'{curation.scene_id}' cannot remain in blocked_scene_ids."
+                    ),
+                    anchor_id=anchor_id,
+                    path=str(repository.manifest_path),
+                    metadata={"task_id": "daily_ui.claim_rewards", "scene_id": curation.scene_id},
+                )
+            )
+
+    return issues
 
 
 def _resolve_template_readiness_status(

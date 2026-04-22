@@ -183,12 +183,15 @@ class MatchInspectorState:
     selected_source_image: str = ""
     selected_overlay: InspectionOverlay | None = None
     selected_overlay_summary: str = ""
+    selected_region: CropRegion | None = None
+    selected_region_summary: str = ""
     selected_template_path: str = ""
     selected_reference_image_path: str = ""
     curation_status: AnchorCurationStatus | None = None
     provenance_kind: AnchorAssetProvenanceKind | None = None
     provenance_summary: str = ""
     curation_summary: str = ""
+    failure_case: str = ""
     failure_explanation: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -267,6 +270,8 @@ class FailureInspectorState:
     selected_source_image: str = ""
     selected_overlay: InspectionOverlay | None = None
     selected_overlay_summary: str = ""
+    selected_region: CropRegion | None = None
+    selected_region_summary: str = ""
     selected_anchor_label: str = ""
     selected_template_path: str = ""
     selected_reference_image_path: str = ""
@@ -274,6 +279,7 @@ class FailureInspectorState:
     provenance_kind: AnchorAssetProvenanceKind | None = None
     provenance_summary: str = ""
     curation_summary: str = ""
+    failure_case: str = ""
     failure_explanation: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -304,12 +310,15 @@ class ClaimRewardsCheckState:
     selected_source_image: str = ""
     selected_overlay: InspectionOverlay | None = None
     selected_overlay_summary: str = ""
+    selected_region: CropRegion | None = None
+    selected_region_summary: str = ""
     selected_template_path: str = ""
     selected_reference_image_path: str = ""
     curation_status: AnchorCurationStatus | None = None
     provenance_kind: AnchorAssetProvenanceKind | None = None
     provenance_summary: str = ""
     curation_summary: str = ""
+    failure_case: str = ""
     failure_explanation: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -335,6 +344,8 @@ class ClaimRewardsInspectorState:
     selected_source_image: str = ""
     selected_overlay: InspectionOverlay | None = None
     selected_overlay_summary: str = ""
+    selected_region: CropRegion | None = None
+    selected_region_summary: str = ""
     selected_anchor_label: str = ""
     selected_template_path: str = ""
     selected_reference_image_path: str = ""
@@ -342,6 +353,7 @@ class ClaimRewardsInspectorState:
     selected_provenance_kind: AnchorAssetProvenanceKind | None = None
     selected_provenance_summary: str = ""
     selected_curation_summary: str = ""
+    selected_failure_case: str = ""
     selected_check_summary: str = ""
     workflow_summary: str = ""
     failure_explanation: str = ""
@@ -606,12 +618,25 @@ def build_match_inspector(
             selected_source_image=_inspection_source_image(inspection, fallback=source_image),
             selected_overlay=inspection.selected_overlay,
             selected_overlay_summary=inspection.selected_overlay_summary,
+            selected_region=_selected_region(
+                inspection,
+                calibration_resolution=calibration_resolution,
+                fallback=selected_anchor.match_region if selected_anchor is not None else None,
+            ),
+            selected_region_summary=_format_region(
+                _selected_region(
+                    inspection,
+                    calibration_resolution=calibration_resolution,
+                    fallback=selected_anchor.match_region if selected_anchor is not None else None,
+                )
+            ),
             selected_template_path=selected_template_path,
             selected_reference_image_path=selected_reference_image_path,
             curation_status=curation.status if curation is not None else None,
             provenance_kind=curation.provenance_kind if curation is not None else None,
             provenance_summary=_provenance_summary(curation),
             curation_summary=_curation_summary(curation),
+            failure_case=_failure_case(curation),
             failure_explanation=_match_failure_explanation(
                 anchor_id=expected_anchor_id,
                 anchor_label=selected_anchor.label if selected_anchor is not None else "",
@@ -674,12 +699,25 @@ def build_match_inspector(
         selected_source_image=_inspection_source_image(inspection, fallback=source_image or match_result.source_image),
         selected_overlay=inspection.selected_overlay,
         selected_overlay_summary=inspection.selected_overlay_summary,
+        selected_region=_selected_region(
+            inspection,
+            calibration_resolution=calibration_resolution,
+            fallback=selected_anchor.match_region if selected_anchor is not None else None,
+        ),
+        selected_region_summary=_format_region(
+            _selected_region(
+                inspection,
+                calibration_resolution=calibration_resolution,
+                fallback=selected_anchor.match_region if selected_anchor is not None else None,
+            )
+        ),
         selected_template_path=selected_template_path,
         selected_reference_image_path=selected_reference_image_path,
         curation_status=curation.status if curation is not None else None,
         provenance_kind=curation.provenance_kind if curation is not None else None,
         provenance_summary=_provenance_summary(curation),
         curation_summary=_curation_summary(curation),
+        failure_case=_failure_case(curation),
         failure_explanation=_match_failure_explanation(
             anchor_id=match_result.expected_anchor_id,
             anchor_label=selected_anchor.label if selected_anchor is not None else "",
@@ -769,6 +807,8 @@ def build_failure_inspector(
     )
     selected_overlay = failure_inspection.selected_overlay
     selected_overlay_summary = failure_inspection.selected_overlay_summary
+    selected_region = match_state.selected_region
+    selected_region_summary = match_state.selected_region_summary
     selected_anchor_label = match_state.expected_anchor_label
     selected_template_path = match_state.selected_template_path
     selected_reference_image_path = match_state.selected_reference_image_path
@@ -776,6 +816,7 @@ def build_failure_inspector(
     provenance_kind = match_state.provenance_kind
     provenance_summary = match_state.provenance_summary
     curation_summary = match_state.curation_summary
+    failure_case = match_state.failure_case
     failure_explanation = _match_failure_explanation(
         anchor_id=resolved_anchor_id,
         anchor_label=selected_anchor_label,
@@ -817,6 +858,8 @@ def build_failure_inspector(
         selected_source_image = selected_claim_check.selected_source_image
         selected_overlay = selected_claim_check.selected_overlay
         selected_overlay_summary = selected_claim_check.selected_overlay_summary
+        selected_region = selected_claim_check.selected_region
+        selected_region_summary = selected_claim_check.selected_region_summary
         selected_anchor_label = selected_claim_check.anchor_label
         selected_template_path = selected_claim_check.selected_template_path
         selected_reference_image_path = selected_claim_check.selected_reference_image_path
@@ -824,6 +867,7 @@ def build_failure_inspector(
         provenance_kind = selected_claim_check.provenance_kind
         provenance_summary = selected_claim_check.provenance_summary
         curation_summary = selected_claim_check.curation_summary
+        failure_case = selected_claim_check.failure_case
         failure_explanation = selected_claim_check.failure_explanation or failure_explanation
 
     return FailureInspectorState(
@@ -850,6 +894,8 @@ def build_failure_inspector(
         selected_source_image=selected_source_image,
         selected_overlay=selected_overlay,
         selected_overlay_summary=selected_overlay_summary,
+        selected_region=selected_region,
+        selected_region_summary=selected_region_summary,
         selected_anchor_label=selected_anchor_label,
         selected_template_path=selected_template_path,
         selected_reference_image_path=selected_reference_image_path,
@@ -857,6 +903,7 @@ def build_failure_inspector(
         provenance_kind=provenance_kind,
         provenance_summary=provenance_summary,
         curation_summary=curation_summary,
+        failure_case=failure_case,
         failure_explanation=failure_explanation,
         metadata=dict(failure_record.metadata),
     )
@@ -1204,6 +1251,23 @@ def _inspection_source_image(inspection: ImageInspectionState | None, *, fallbac
     return inspection.source_image or fallback
 
 
+def _selected_region(
+    inspection: ImageInspectionState | None,
+    *,
+    calibration_resolution: CalibrationOverrideResolution | None = None,
+    fallback: CropRegion | tuple[int, int, int, int] | None = None,
+) -> CropRegion | None:
+    if inspection is not None and inspection.selected_overlay is not None:
+        overlay_region = CropRegion.from_value(inspection.selected_overlay.region)
+        if overlay_region is not None:
+            return overlay_region
+    if calibration_resolution is not None:
+        calibration_region = CropRegion.from_value(calibration_resolution.effective_match_region)
+        if calibration_region is not None:
+            return calibration_region
+    return CropRegion.from_value(fallback)
+
+
 def _selected_anchor_curation(
     *,
     repository: AnchorRepository | None,
@@ -1267,6 +1331,12 @@ def _provenance_summary(curation: AnchorCurationProfile | None) -> str:
     if curation is None:
         return ""
     return curation.provenance_summary
+
+
+def _failure_case(curation: AnchorCurationProfile | None) -> str:
+    if curation is None:
+        return ""
+    return str(curation.metadata.get("failure_case", "")).strip()
 
 
 def _append_curation_note(message: str, curation: AnchorCurationProfile | None) -> str:
@@ -1397,10 +1467,14 @@ def _claim_rewards_check_summary(check: ClaimRewardsCheckState | None) -> str:
         f"{check.label} | anchor={check.anchor_id} | threshold={check.threshold:.3f} | "
         f"image={check.selected_image_path or 'n/a'} | message={check.message or 'n/a'}"
     )
+    if check.selected_region_summary:
+        summary += f" | region={check.selected_region_summary}"
     if check.provenance_summary:
         summary += f" | provenance={check.provenance_summary}"
     if check.curation_summary:
         summary += f" | curation={check.curation_summary}"
+    if check.failure_case:
+        summary += f" | failure_case={check.failure_case}"
     return summary
 
 
@@ -1439,12 +1513,15 @@ def _mark_claim_rewards_check_selection(
         selected_source_image=check.selected_source_image,
         selected_overlay=check.selected_overlay,
         selected_overlay_summary=check.selected_overlay_summary,
+        selected_region=check.selected_region,
+        selected_region_summary=check.selected_region_summary,
         selected_template_path=check.selected_template_path,
         selected_reference_image_path=check.selected_reference_image_path,
         curation_status=check.curation_status,
         provenance_kind=check.provenance_kind,
         provenance_summary=check.provenance_summary,
         curation_summary=check.curation_summary,
+        failure_case=check.failure_case,
         failure_explanation=check.failure_explanation,
         metadata=dict(check.metadata),
     )
@@ -1530,12 +1607,15 @@ def _build_claim_rewards_inspector(
                 selected_source_image=match_state.selected_source_image,
                 selected_overlay=match_state.selected_overlay,
                 selected_overlay_summary=match_state.selected_overlay_summary,
+                selected_region=match_state.selected_region,
+                selected_region_summary=match_state.selected_region_summary,
                 selected_template_path=selected_template_path,
                 selected_reference_image_path=selected_reference_image_path,
                 curation_status=match_state.curation_status,
                 provenance_kind=match_state.provenance_kind,
                 provenance_summary=match_state.provenance_summary,
                 curation_summary=match_state.curation_summary,
+                failure_case=match_state.failure_case,
                 failure_explanation=match_state.failure_explanation,
                 metadata={**dict(anchor.metadata), **dict(payload.get("metadata", {}))},
             )
@@ -1571,6 +1651,8 @@ def _build_claim_rewards_inspector(
         selected_source_image=selected_check.selected_source_image if selected_check is not None else "",
         selected_overlay=selected_check.selected_overlay if selected_check is not None else None,
         selected_overlay_summary=selected_check.selected_overlay_summary if selected_check is not None else "",
+        selected_region=selected_check.selected_region if selected_check is not None else None,
+        selected_region_summary=selected_check.selected_region_summary if selected_check is not None else "",
         selected_anchor_label=selected_check.anchor_label if selected_check is not None else "",
         selected_template_path=selected_check.selected_template_path if selected_check is not None else "",
         selected_reference_image_path=selected_check.selected_reference_image_path if selected_check is not None else "",
@@ -1578,6 +1660,7 @@ def _build_claim_rewards_inspector(
         selected_provenance_kind=selected_check.provenance_kind if selected_check is not None else None,
         selected_provenance_summary=selected_check.provenance_summary if selected_check is not None else "",
         selected_curation_summary=selected_check.curation_summary if selected_check is not None else "",
+        selected_failure_case=selected_check.failure_case if selected_check is not None else "",
         selected_check_summary=_claim_rewards_check_summary(selected_check),
         workflow_summary=_claim_rewards_workflow_summary(checks, current_check_id=current_check_id),
         failure_explanation=selected_check.failure_explanation if selected_check is not None else "",
