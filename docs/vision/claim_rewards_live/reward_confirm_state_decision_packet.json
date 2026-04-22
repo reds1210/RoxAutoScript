@@ -1,0 +1,95 @@
+{
+  "task_id": "daily_ui.claim_rewards",
+  "scene_id": "reward_confirm_modal",
+  "decision_question": "Do we have a true live confirm-modal capture yet?",
+  "answer": {
+    "value": false,
+    "status": "blocked",
+    "summary": "No reviewed raw capture shows a like-for-like live reward confirmation modal before the claim resolves."
+  },
+  "review_context": {
+    "route": "route-a",
+    "capture_round": "round-8",
+    "reviewed_at": "2026-04-22",
+    "current_probe": {
+      "adb_visible_devices": [],
+      "notes": "The current workspace probe saw no adb-visible devices, so this pass audited existing evidence only and did not add new raw screenshots."
+    }
+  },
+  "evidence_totals": {
+    "devices_reviewed": 4,
+    "devices_with_claimable_live_panel": 4,
+    "devices_with_true_live_confirm_modal": 0,
+    "devices_with_direct_post_tap_claimed_or_result_state": 3,
+    "devices_with_post_tap_reward_overlay": 1
+  },
+  "device_matrix": [
+    {
+      "adb_serial": "127.0.0.1:5559",
+      "claimable_capture_path": "raw/127.0.0.1-5559-after-daily-signin.png",
+      "post_tap_capture_path": "raw/127.0.0.1-5559-after-claim-tap.png",
+      "post_tap_observation": "Claim tap resolves directly to a claimed/result state.",
+      "qualifies_as_true_live_confirm_modal": false,
+      "disqualifier": "No explicit confirm-button modal action surface is visible before the claim resolves."
+    },
+    {
+      "adb_serial": "127.0.0.1:5563",
+      "claimable_capture_path": "raw/127.0.0.1-5563-after-daily-signin-tab.png",
+      "post_tap_capture_path": "raw/127.0.0.1-5563-after-claim-tap.png",
+      "post_tap_observation": "Claim tap resolves directly to a claimed/result state.",
+      "qualifies_as_true_live_confirm_modal": false,
+      "disqualifier": "No explicit confirm-button modal action surface is visible before the claim resolves."
+    },
+    {
+      "adb_serial": "emulator-5556",
+      "claimable_capture_path": "raw/emulator-5556-after-fuli-tap-2026-04-22.png",
+      "post_tap_capture_path": "raw/emulator-5556-after-day7-claim-tap-2026-04-22.png",
+      "post_tap_observation": "Claim tap resolves to a reward-acquired overlay after the claim completes.",
+      "qualifies_as_true_live_confirm_modal": false,
+      "disqualifier": "The live overlay is useful post-tap evidence, but it is not the current confirm-modal shape and does not expose the pre-resolution confirm action surface."
+    },
+    {
+      "adb_serial": "emulator-5560",
+      "claimable_capture_path": "raw/emulator-5560-after-daily-signin-attempt.png",
+      "post_tap_capture_path": "raw/emulator-5560-after-claim-tap.png",
+      "post_tap_observation": "Claim tap resolves directly to a claimed/result state.",
+      "qualifies_as_true_live_confirm_modal": false,
+      "disqualifier": "No explicit confirm-button modal action surface is visible before the claim resolves."
+    }
+  ],
+  "reviewed_candidates": [
+    {
+      "capture_path": "raw/emulator-5556-after-day7-claim-tap-2026-04-22.png",
+      "candidate_kind": "post_tap_reward_overlay",
+      "qualifies_as_true_live_confirm_modal": false,
+      "why_not": "It shows a reward-acquired overlay after the tap resolved, not the explicit reward confirmation modal."
+    },
+    {
+      "capture_path": "live/daily_ui_claim_rewards__post_tap_reward_overlay__live_capture__emulator_5556__after_day7_claim_tap_2026_04_22.png",
+      "candidate_kind": "promoted_supporting_capture",
+      "qualifies_as_true_live_confirm_modal": false,
+      "why_not": "It remains valid supporting evidence for a broadened post-tap contract, but not for a like-for-like modal replacement."
+    },
+    {
+      "capture_path": "live/daily_ui_claim_rewards__non_reward_confirm_modal__live_capture__emulator_5560__exit_game_prompt.png",
+      "candidate_kind": "generic_confirmation_dialog",
+      "qualifies_as_true_live_confirm_modal": false,
+      "why_not": "It is explicitly a non-reward confirm dialog and must stay a negative case."
+    }
+  ],
+  "decision_support": {
+    "strict_confirm_modal_only": {
+      "supported_by_evidence": true,
+      "reason": "No reviewed raw/live capture proves the current confirm-modal contract on a live account."
+    },
+    "direct_result_overlay_is_valid": {
+      "supported_by_evidence": true,
+      "reason": "Live evidence shows real post-tap success states without a modal: one reward-acquired overlay on emulator-5556 and direct claimed/result states on three additional devices.",
+      "warning": "This would broaden the task and vision contract; it is not a like-for-like live replacement for the current confirm-modal baseline."
+    }
+  },
+  "recommended_next_capture": {
+    "goal": "Capture a live screen that still exposes the explicit reward confirmation action surface before the claim resolves.",
+    "blocked_until": "A reachable account/day-state still shows the pre-resolution reward confirmation modal."
+  }
+}

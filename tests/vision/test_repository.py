@@ -62,6 +62,14 @@ class AnchorRepositoryTests(unittest.TestCase):
             [],
         )
         self.assertEqual(
+            repository.get_claim_rewards_post_tap_contract()["dispatch_recommendation"],
+            "direct_result_overlay_is_valid",
+        )
+        self.assertEqual(
+            repository.get_claim_rewards_post_tap_contract()["observed_live_outcome_scene_ids"],
+            ["reward_post_tap_overlay", "reward_claimed_result_state"],
+        )
+        self.assertEqual(
             reward_panel_curation.metadata["failure_case"],
             "reward_panel_not_open_or_wrong_surface",
         )
@@ -69,7 +77,7 @@ class AnchorRepositoryTests(unittest.TestCase):
         self.assertIsNotNone(claim_rewards_catalog)
         self.assertEqual(claim_rewards_catalog.task_id, "daily_ui.claim_rewards")
         self.assertEqual(len(claim_rewards_catalog.goldens), 3)
-        self.assertEqual(len(claim_rewards_catalog.supporting_captures), 6)
+        self.assertEqual(len(claim_rewards_catalog.supporting_captures), 9)
         reward_panel_golden = repository.get_claim_rewards_anchor_golden("daily_ui.reward_panel")
         self.assertIsNotNone(reward_panel_golden)
         self.assertEqual(reward_panel_golden.golden_id, "reward_panel_open_baseline_v1")

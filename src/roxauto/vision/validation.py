@@ -733,6 +733,7 @@ def build_vision_workspace_readiness_report(
             "inventory_version": str(document.get("version", "")),
             "claim_rewards_live_capture_coverage": _claim_rewards_live_capture_coverage(repositories_by_id.get("daily_ui")),
             "claim_rewards_capture_inventory": _claim_rewards_capture_inventory(repositories_by_id.get("daily_ui")),
+            "claim_rewards_post_tap_contract": _claim_rewards_post_tap_contract(repositories_by_id.get("daily_ui")),
         },
     )
 
@@ -1731,6 +1732,7 @@ def _validate_task_support_contract(
                 )
         if normalized_task_id == "daily_ui.claim_rewards":
             issues.extend(_validate_claim_rewards_live_capture_coverage(repository, support))
+            issues.extend(_validate_claim_rewards_post_tap_contract(repository, support))
     return issues
 
 
@@ -1915,6 +1917,54 @@ def _claim_rewards_capture_inventory(repository: AnchorRepository | None) -> dic
         return {}
     capture_inventory = catalog.metadata.get("capture_inventory", {})
     return dict(capture_inventory) if isinstance(capture_inventory, dict) else {}
+
+
+def _claim_rewards_post_tap_contract(repository: AnchorRepository | None) -> dict[str, Any]:
+    if repository is None:
+        return {}
+    return _normalize_claim_rewards_post_tap_contract(repository.get_claim_rewards_post_tap_contract())
+
+
+def _claim_rewards_catalog_post_tap_contract(repository: AnchorRepository | None) -> dict[str, Any]:
+    if repository is None:
+        return {}
+    catalog = repository.get_claim_rewards_golden_catalog()
+    if catalog is None:
+        return {}
+    contract = catalog.metadata.get("post_tap_contract", {})
+    return _normalize_claim_rewards_post_tap_contract(contract)
+
+
+def _normalize_claim_rewards_post_tap_contract(contract: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(contract, dict):
+        return {}
+    return {
+        "anchor_id": str(contract.get("anchor_id", "")).strip(),
+        "current_scene_id": str(contract.get("current_scene_id", "")).strip(),
+        "current_contract_kind": str(contract.get("current_contract_kind", "")).strip(),
+        "dispatch_recommendation": str(contract.get("dispatch_recommendation", "")).strip(),
+        "observed_live_outcome_scene_ids": [
+            str(scene_id).strip()
+            for scene_id in contract.get("observed_live_outcome_scene_ids", [])
+            if str(scene_id).strip()
+        ],
+        "observed_live_outcome_capture_ids": [
+            str(capture_id).strip()
+            for capture_id in contract.get("observed_live_outcome_capture_ids", [])
+            if str(capture_id).strip()
+        ],
+        "missing_live_scene_ids": [
+            str(scene_id).strip()
+            for scene_id in contract.get("missing_live_scene_ids", [])
+            if str(scene_id).strip()
+        ],
+        "observed_live_device_serials": [
+            str(serial).strip()
+            for serial in contract.get("observed_live_device_serials", [])
+            if str(serial).strip()
+        ],
+        "summary": str(contract.get("summary", "")).strip(),
+    }
 
 
 def _file_sha256(path: Path) -> str:
@@ -2133,6 +2183,199 @@ def _validate_claim_rewards_live_capture_coverage(
                     anchor_id=anchor_id,
                     path=str(repository.manifest_path),
                     metadata={"task_id": "daily_ui.claim_rewards", "scene_id": curation.scene_id},
+                )
+            )
+
+    return issues
+
+
+def _validate_claim_rewards_post_tap_contract(
+    repository: AnchorRepository,
+    support: dict[str, Any],
+) -> list[TemplateValidationIssue]:
+    raw_contract = support.get("post_tap_contract")
+    if not isinstance(raw_contract, dict):
+        return [
+            TemplateValidationIssue(
+                code="missing_claim_rewards_post_tap_contract",
+                severity=TemplateValidationSeverity.ERROR,
+                message=(
+                    "Task support for 'daily_ui.claim_rewards' must define "
+                    "metadata.task_support[task_id].post_tap_contract."
+                ),
+                path=str(repository.manifest_path),
+                metadata={"task_id": "daily_ui.claim_rewards"},
+            )
+        ]
+
+    contract = _normalize_claim_rewards_post_tap_contract(raw_contract)
+    catalog_contract = _claim_rewards_catalog_post_tap_contract(repository)
+    issues: list[TemplateValidationIssue] = []
+
+    anchor_id = contract.get("anchor_id", "")
+    recommendation = contract.get("dispatch_recommendation", "")
+    current_contract_kind = contract.get("current_contract_kind", "")
+    current_scene_id = contract.get("current_scene_id", "")
+    observed_capture_ids = [
+        str(capture_id)
+        for capture_id in contract.get("observed_live_outcome_capture_ids", [])
+    ]
+
+    claim_rewards_anchor_ids = {
+        anchor.anchor_id
+        for anchor in repository.list_anchors()
+        if "daily_ui.claim_rewards" in _anchor_task_ids(dict(anchor.metadata))
+    }
+    if not anchor_id or anchor_id not in claim_rewards_anchor_ids:
+        issues.append(
+            TemplateValidationIssue(
+                code="claim_rewards_post_tap_contract_unknown_anchor",
+                severity=TemplateValidationSeverity.ERROR,
+                message=(
+                    "Claim-rewards post_tap_contract.anchor_id must point at an anchor "
+                    "assigned to daily_ui.claim_rewards."
+                ),
+                path=str(repository.manifest_path),
+                metadata={"task_id": "daily_ui.claim_rewards", "anchor_id": anchor_id},
+            )
+        )
+    allowed_contract_values = {
+        "strict_confirm_modal_only",
+        "direct_result_overlay_is_valid",
+    }
+    if current_contract_kind not in allowed_contract_values:
+        issues.append(
+            TemplateValidationIssue(
+                code="invalid_claim_rewards_post_tap_contract_kind",
+                severity=TemplateValidationSeverity.ERROR,
+                message=(
+                    "Claim-rewards post_tap_contract.current_contract_kind must be one of "
+                    "'strict_confirm_modal_only' or 'direct_result_overlay_is_valid'."
+                ),
+                path=str(repository.manifest_path),
+                metadata={
+                    "task_id": "daily_ui.claim_rewards",
+                    "current_contract_kind": current_contract_kind,
+                },
+            )
+        )
+    if recommendation not in allowed_contract_values:
+        issues.append(
+            TemplateValidationIssue(
+                code="invalid_claim_rewards_post_tap_contract_recommendation",
+                severity=TemplateValidationSeverity.ERROR,
+                message=(
+                    "Claim-rewards post_tap_contract.dispatch_recommendation must be one of "
+                    "'strict_confirm_modal_only' or 'direct_result_overlay_is_valid'."
+                ),
+                path=str(repository.manifest_path),
+                metadata={
+                    "task_id": "daily_ui.claim_rewards",
+                    "dispatch_recommendation": recommendation,
+                },
+            )
+        )
+    if recommendation == "direct_result_overlay_is_valid" and not observed_capture_ids:
+        issues.append(
+            TemplateValidationIssue(
+                code="missing_claim_rewards_post_tap_contract_capture_ids",
+                severity=TemplateValidationSeverity.ERROR,
+                message=(
+                    "Claim-rewards post_tap_contract must record observed_live_outcome_capture_ids "
+                    "when it recommends broadening the contract to direct-result overlays."
+                ),
+                path=str(repository.manifest_path),
+                metadata={"task_id": "daily_ui.claim_rewards"},
+            )
+        )
+
+    if anchor_id and repository.has_anchor(anchor_id):
+        curation = repository.get_anchor_curation(anchor_id)
+        if curation is not None and current_scene_id and curation.scene_id != current_scene_id:
+            issues.append(
+                TemplateValidationIssue(
+                    code="claim_rewards_post_tap_contract_scene_mismatch",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=(
+                        f"Claim-rewards post_tap_contract.current_scene_id does not match the "
+                        f"curation scene for anchor '{anchor_id}'."
+                    ),
+                    anchor_id=anchor_id,
+                    path=str(repository.manifest_path),
+                    metadata={
+                        "task_id": "daily_ui.claim_rewards",
+                        "expected_scene_id": curation.scene_id,
+                        "current_scene_id": current_scene_id,
+                    },
+                )
+            )
+
+    catalog = repository.get_claim_rewards_golden_catalog()
+    if catalog is None or not catalog_contract:
+        issues.append(
+            TemplateValidationIssue(
+                code="missing_claim_rewards_catalog_post_tap_contract",
+                severity=TemplateValidationSeverity.ERROR,
+                message=(
+                    "Claim-rewards golden catalog metadata must mirror the post_tap_contract "
+                    "decision packet."
+                ),
+                path=str(repository.resolve_claim_rewards_catalog_path() or repository.manifest_path),
+                metadata={"task_id": "daily_ui.claim_rewards"},
+            )
+        )
+        return issues
+
+    if catalog_contract != contract:
+        issues.append(
+            TemplateValidationIssue(
+                code="claim_rewards_post_tap_contract_catalog_mismatch",
+                severity=TemplateValidationSeverity.ERROR,
+                message=(
+                    "Claim-rewards catalog metadata.post_tap_contract must stay in sync with "
+                    "manifest task-support post_tap_contract."
+                ),
+                path=str(repository.resolve_claim_rewards_catalog_path()),
+                metadata={
+                    "task_id": "daily_ui.claim_rewards",
+                    "manifest_contract": contract,
+                    "catalog_contract": catalog_contract,
+                },
+            )
+        )
+
+    for capture_id in observed_capture_ids:
+        capture = catalog.get_supporting_capture(capture_id)
+        if capture is None:
+            issues.append(
+                TemplateValidationIssue(
+                    code="unknown_claim_rewards_post_tap_contract_capture",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=(
+                        f"Claim-rewards post_tap_contract references capture '{capture_id}', "
+                        "but that supporting-capture entry is missing from the catalog."
+                    ),
+                    path=str(repository.resolve_claim_rewards_catalog_path()),
+                    metadata={"task_id": "daily_ui.claim_rewards", "capture_id": capture_id},
+                )
+            )
+            continue
+        if anchor_id and capture.anchor_id and capture.anchor_id != anchor_id:
+            issues.append(
+                TemplateValidationIssue(
+                    code="claim_rewards_post_tap_contract_capture_anchor_mismatch",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=(
+                        f"Claim-rewards post_tap_contract capture '{capture_id}' points at "
+                        f"anchor '{capture.anchor_id}', not '{anchor_id}'."
+                    ),
+                    path=str(repository.resolve_claim_rewards_catalog_path()),
+                    metadata={
+                        "task_id": "daily_ui.claim_rewards",
+                        "capture_id": capture_id,
+                        "anchor_id": capture.anchor_id,
+                        "expected_anchor_id": anchor_id,
+                    },
                 )
             )
 
