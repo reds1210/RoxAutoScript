@@ -694,6 +694,11 @@ class TaskRunner:
         step_telemetry = telemetry.steps[step_index]
         step_telemetry.status = TaskStepTelemetryStatus.RUNNING
         step_telemetry.message = ""
+        step_telemetry.data = self._project_step_runtime_projection(
+            step_id=step.step_id,
+            data=step_telemetry.data,
+            context=context,
+        )
         step_telemetry.started_at = step_telemetry.started_at or started_at
         step_telemetry.finished_at = None
         telemetry.current_step_id = step.step_id
@@ -747,7 +752,19 @@ class TaskRunner:
         result: TaskStepResult,
         context: TaskExecutionContext,
     ) -> dict[str, Any]:
-        data = dict(result.data)
+        return self._project_step_runtime_projection(
+            step_id=step_id,
+            data=dict(result.data),
+            context=context,
+        )
+
+    def _project_step_runtime_projection(
+        self,
+        *,
+        step_id: str,
+        data: dict[str, Any],
+        context: TaskExecutionContext,
+    ) -> dict[str, Any]:
         projection = self._project_step_spec_runtime_fields(
             context=context,
             step_id=step_id,
