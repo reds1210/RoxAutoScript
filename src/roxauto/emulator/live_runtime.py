@@ -150,6 +150,12 @@ class LiveRuntimeInstanceSnapshot:
             return None
         return self.context.last_task_run
 
+    @property
+    def last_failed_task_run(self) -> TaskRunTelemetry | None:
+        if self.context is None:
+            return None
+        return self.context.last_failed_task_run
+
 
 @dataclass(slots=True)
 class LiveRuntimeSnapshot:
@@ -213,6 +219,15 @@ class LiveRuntimeInstanceSummary:
     last_failure_reason_id: str = ""
     last_failure_outcome_code: str = ""
     last_failure_inspection_attempt_count: int = 0
+    last_failed_task_id: str = ""
+    last_failed_run_id: str = ""
+    last_failed_run_status: str = ""
+    last_failed_step_count: int = 0
+    last_failed_completed_step_count: int = 0
+    last_failed_step_id: str = ""
+    last_failed_step_status: str = ""
+    last_failed_step_failure_reason_id: str = ""
+    last_failed_step_outcome_code: str = ""
 
 
 @dataclass(slots=True, frozen=True)
@@ -1006,6 +1021,15 @@ class LiveRuntimeSession:
         last_failure_reason_id = ""
         last_failure_outcome_code = ""
         last_failure_inspection_attempt_count = 0
+        last_failed_task_id = ""
+        last_failed_run_id = ""
+        last_failed_run_status = ""
+        last_failed_step_count = 0
+        last_failed_completed_step_count = 0
+        last_failed_step_id = ""
+        last_failed_step_status = ""
+        last_failed_step_failure_reason_id = ""
+        last_failed_step_outcome_code = ""
         queue_depth = 0
         active_task_id = ""
         active_run_id = ""
@@ -1080,6 +1104,20 @@ class LiveRuntimeSession:
                 last_failure_inspection_attempt_count = self._read_snapshot_inspection_attempt_count(
                     context.last_failure_snapshot
                 )
+            if context.last_failed_task_run is not None:
+                last_failed_task_id = context.last_failed_task_run.task_id
+                last_failed_run_id = context.last_failed_task_run.run_id
+                last_failed_run_status = context.last_failed_task_run.status.value
+                last_failed_step_count = context.last_failed_task_run.step_count
+                last_failed_completed_step_count = context.last_failed_task_run.completed_step_count
+                last_failed_step = self._latest_projected_step(context.last_failed_task_run)
+                if last_failed_step is not None:
+                    last_failed_step_id = last_failed_step.step_id
+                    last_failed_step_status = last_failed_step.status.value
+                    last_failed_step_failure_reason_id = self._read_step_failure_reason_id(
+                        last_failed_step
+                    )
+                    last_failed_step_outcome_code = self._read_step_outcome_code(last_failed_step)
         return LiveRuntimeInstanceSummary(
             instance_id=instance.instance_id,
             label=instance.label,
@@ -1117,6 +1155,15 @@ class LiveRuntimeSession:
             last_failure_reason_id=last_failure_reason_id,
             last_failure_outcome_code=last_failure_outcome_code,
             last_failure_inspection_attempt_count=last_failure_inspection_attempt_count,
+            last_failed_task_id=last_failed_task_id,
+            last_failed_run_id=last_failed_run_id,
+            last_failed_run_status=last_failed_run_status,
+            last_failed_step_count=last_failed_step_count,
+            last_failed_completed_step_count=last_failed_completed_step_count,
+            last_failed_step_id=last_failed_step_id,
+            last_failed_step_status=last_failed_step_status,
+            last_failed_step_failure_reason_id=last_failed_step_failure_reason_id,
+            last_failed_step_outcome_code=last_failed_step_outcome_code,
         )
 
     def _latest_projected_step(self, telemetry: TaskRunTelemetry) -> TaskStepTelemetry | None:

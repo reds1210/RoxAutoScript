@@ -236,6 +236,21 @@ class LiveRuntimeSessionTests(unittest.TestCase):
         self.assertEqual(state.selected_instance.last_failure_reason_id, "claim_tap_no_effect")
         self.assertEqual(state.selected_instance.last_failure_outcome_code, "claim_tap_no_effect")
         self.assertEqual(state.selected_instance.last_failure_inspection_attempt_count, 2)
+        self.assertEqual(state.selected_instance.last_failed_task_id, "daily_ui.claim_rewards")
+        self.assertEqual(state.selected_instance.last_failed_run_status, "failed")
+        self.assertEqual(state.selected_instance.last_failed_step_count, 2)
+        self.assertEqual(state.selected_instance.last_failed_completed_step_count, 2)
+        self.assertEqual(state.selected_instance.last_failed_step_id, "claim_reward")
+        self.assertEqual(state.selected_instance.last_failed_step_status, "failed")
+        self.assertEqual(
+            state.selected_instance.last_failed_step_failure_reason_id,
+            "claim_tap_no_effect",
+        )
+        self.assertEqual(state.selected_instance.last_failed_step_outcome_code, "claim_tap_no_effect")
+        snapshot = session.get_instance_snapshot("mumu-0")
+        self.assertIsNotNone(snapshot)
+        self.assertIsNotNone(snapshot.last_failed_task_run)
+        self.assertEqual(snapshot.last_failed_task_run.status.value, "failed")
 
     def test_live_state_preserves_last_failure_summary_after_successful_retry(self) -> None:
         adapter = FakeAdapter(healthy=True)
@@ -293,6 +308,17 @@ class LiveRuntimeSessionTests(unittest.TestCase):
         self.assertEqual(recovered_state.selected_instance.last_failure_reason_id, "claim_tap_no_effect")
         self.assertEqual(recovered_state.selected_instance.last_failure_outcome_code, "claim_tap_no_effect")
         self.assertEqual(recovered_state.selected_instance.last_failure_inspection_attempt_count, 2)
+        self.assertEqual(recovered_state.selected_instance.last_failed_task_id, "daily_ui.claim_rewards")
+        self.assertEqual(recovered_state.selected_instance.last_failed_run_status, "failed")
+        self.assertEqual(recovered_state.selected_instance.last_failed_step_id, "claim_reward")
+        self.assertEqual(
+            recovered_state.selected_instance.last_failed_step_failure_reason_id,
+            "claim_tap_no_effect",
+        )
+        snapshot = session.get_instance_snapshot("mumu-0")
+        self.assertIsNotNone(snapshot)
+        self.assertIsNotNone(snapshot.last_failed_task_run)
+        self.assertEqual(snapshot.last_failed_task_run.steps[-1].step_id, "claim_reward")
 
     def test_reconnect_preserves_runtime_authority_for_last_run_and_failure_snapshot(self) -> None:
         adapter = FakeAdapter(healthy=True)
@@ -348,11 +374,20 @@ class LiveRuntimeSessionTests(unittest.TestCase):
         self.assertEqual(snapshot.last_task_run.steps[-1].data["failure_reason_id"], "claim_tap_no_effect")
         self.assertIsNotNone(snapshot.last_failure_snapshot)
         self.assertEqual(snapshot.last_failure_snapshot.metadata["failure_reason_id"], "claim_tap_no_effect")
+        self.assertIsNotNone(snapshot.last_failed_task_run)
+        self.assertEqual(snapshot.last_failed_task_run.status.value, "failed")
+        self.assertEqual(snapshot.last_failed_task_run.steps[-1].step_id, "claim_reward")
         self.assertIsNotNone(state.selected_instance)
         self.assertEqual(state.selected_instance.status, "ready")
         self.assertEqual(state.selected_instance.last_run_status, "failed")
         self.assertEqual(state.selected_instance.last_failure_reason_id, "claim_tap_no_effect")
         self.assertEqual(state.selected_instance.last_failure_outcome_code, "claim_tap_no_effect")
+        self.assertEqual(state.selected_instance.last_failed_run_status, "failed")
+        self.assertEqual(state.selected_instance.last_failed_step_id, "claim_reward")
+        self.assertEqual(
+            state.selected_instance.last_failed_step_failure_reason_id,
+            "claim_tap_no_effect",
+        )
 
     def test_build_registered_task_spec_uses_runtime_claim_rewards_context(self) -> None:
         adapter = FakeAdapter(healthy=True)

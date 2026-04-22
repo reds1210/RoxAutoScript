@@ -171,6 +171,7 @@ class InstanceRuntimeContext:
     active_run_id: str | None = None
     active_task_run: TaskRunTelemetry | None = None
     last_task_run: TaskRunTelemetry | None = None
+    last_failed_task_run: TaskRunTelemetry | None = None
     stop_requested: bool = False
     health_check_ok: bool | None = None
     profile_binding: ProfileBinding | None = None

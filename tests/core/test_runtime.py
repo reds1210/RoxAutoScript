@@ -457,6 +457,13 @@ class RuntimeCoordinatorTests(unittest.TestCase):
         )
         self.assertEqual(context.failure_snapshot.snapshot_id, result.runs[0].failure_snapshot.snapshot_id)
         self.assertEqual(context.last_failure_snapshot.snapshot_id, result.runs[0].failure_snapshot.snapshot_id)
+        self.assertIsNotNone(context.last_failed_task_run)
+        self.assertEqual(context.last_failed_task_run.run_id, telemetry.run_id)
+        self.assertEqual(context.last_failed_task_run.status, TaskRunStatus.FAILED)
+        self.assertEqual(
+            context.last_failed_task_run.steps[1].data["failure_reason_id"],
+            "claim_state_ambiguous",
+        )
 
     def test_retry_keeps_last_failure_snapshot_stable_after_successful_rerun(self) -> None:
         coordinator = RuntimeCoordinator(
@@ -492,6 +499,7 @@ class RuntimeCoordinatorTests(unittest.TestCase):
         failed = coordinator.start_queue("mumu-0")
         failed_context = coordinator.get_runtime_context("mumu-0")
         first_failure_snapshot = failed_context.failure_snapshot
+        first_failed_run = failed_context.last_failed_task_run
 
         coordinator.enqueue(QueuedTask(instance_id="mumu-0", spec=success_spec, priority=100))
         succeeded = coordinator.start_queue("mumu-0")
@@ -507,6 +515,14 @@ class RuntimeCoordinatorTests(unittest.TestCase):
         self.assertEqual(recovered_context.last_task_run.status, TaskRunStatus.SUCCEEDED)
         self.assertEqual(recovered_context.last_task_run.attempt, 2)
         self.assertEqual([item.status.value for item in recovered_context.last_task_run.steps], ["succeeded", "succeeded"])
+        self.assertIsNotNone(first_failed_run)
+        self.assertIsNotNone(recovered_context.last_failed_task_run)
+        self.assertEqual(recovered_context.last_failed_task_run.run_id, first_failed_run.run_id)
+        self.assertEqual(recovered_context.last_failed_task_run.status, TaskRunStatus.FAILED)
+        self.assertEqual(
+            recovered_context.last_failed_task_run.steps[-1].step_id,
+            "claim_reward",
+        )
 
     def test_dispatch_refresh_updates_runtime_context(self) -> None:
         coordinator = RuntimeCoordinator(
@@ -672,6 +688,12 @@ class RuntimeCoordinatorTests(unittest.TestCase):
         self.assertEqual(coordinator.registry.get("mumu-0").status, InstanceStatus.ERROR)
         self.assertIsNotNone(context.failure_snapshot)
         self.assertEqual(context.metadata["last_health_check_message"], "health check failed")
+        self.assertIsNotNone(context.last_failed_task_run)
+        self.assertEqual(context.last_failed_task_run.status, TaskRunStatus.ABORTED)
+        self.assertEqual(
+            context.last_failed_task_run.failure_snapshot.reason,
+            FailureSnapshotReason.HEALTH_CHECK_FAILED,
+        )
 
     def test_start_queue_clears_active_execution_after_completion(self) -> None:
         coordinator = RuntimeCoordinator(
