@@ -12,7 +12,6 @@
       "required_anchors": [
         "daily_ui.reward_panel",
         "daily_ui.claim_reward",
-        "daily_ui.reward_confirm_state",
         "common.confirm_button",
         "common.close_button"
       ],
@@ -21,6 +20,28 @@
         "product_display_name": "每日領獎",
         "preset_id": "daily_ui.claim_rewards.mvp",
         "signal_contract_version": "claim_rewards.v2",
+        "supporting_anchor_ids": [
+          "daily_ui.reward_confirm_state"
+        ],
+        "supporting_golden_screen_slugs": [
+          "confirm_state"
+        ],
+        "post_claim_resolution": {
+          "decision": "direct_result_overlay_is_valid",
+          "accepted_post_tap_panel_states": [
+            "claimed",
+            "confirm_required"
+          ],
+          "terminal_success_panel_states": [
+            "claimed"
+          ],
+          "supporting_anchor_ids": [
+            "daily_ui.reward_confirm_state"
+          ],
+          "supporting_golden_screen_slugs": [
+            "confirm_state"
+          ]
+        },
         "runtime_seam": {
           "runtime_input_builder": "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_input",
           "runtime_seam_builder": "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_seam",

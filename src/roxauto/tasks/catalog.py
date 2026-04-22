@@ -231,7 +231,7 @@ class TaskFoundationRepository:
                         metadata={"source": "fixture_profile"},
                     )
                 )
-            for anchor_id in blueprint.required_anchors:
+            for anchor_id in self._tracked_anchor_ids(blueprint):
                 anchor_source = anchor_sources.get(anchor_id)
                 records.append(
                     TaskAssetRecord(
@@ -241,7 +241,11 @@ class TaskFoundationRepository:
                         asset_kind=TaskAssetKind.TEMPLATE,
                         status=anchor_source.status if anchor_source is not None else TaskAssetStatus.MISSING,
                         source_path=anchor_source.source_path if anchor_source is not None else "",
-                        metadata=self._template_asset_metadata(anchor_id, anchor_source),
+                        metadata=self._template_asset_metadata(
+                            anchor_id,
+                            anchor_source,
+                            requirement_level=self._anchor_requirement_level(blueprint, anchor_id),
+                        ),
                     )
                 )
             for case in blueprint.golden_cases:
@@ -259,7 +263,11 @@ class TaskFoundationRepository:
                         asset_kind=TaskAssetKind.GOLDEN_SCREENSHOT,
                         status=golden_asset["status"],
                         source_path=golden_asset["source_path"],
-                        metadata=self._golden_asset_metadata(case, golden_asset),
+                        metadata=self._golden_asset_metadata(
+                            case,
+                            golden_asset,
+                            requirement_level=self._golden_requirement_level(blueprint, case.screen_slug),
+                        ),
                     )
                 )
         return TaskAssetInventory(
@@ -540,6 +548,16 @@ class TaskFoundationRepository:
             metadata["preset_id"] = str(product_display.get("preset_id", ""))
         if product_display.get("display_name"):
             metadata["product_display_name"] = str(product_display.get("display_name", ""))
+        supporting_anchor_ids = self._supporting_anchor_ids(blueprint)
+        if supporting_anchor_ids:
+            metadata["supporting_anchor_ids"] = supporting_anchor_ids
+        supporting_golden_screen_slugs = self._supporting_golden_screen_slugs(blueprint)
+        if supporting_golden_screen_slugs:
+            metadata["supporting_golden_screen_slugs"] = supporting_golden_screen_slugs
+        post_claim_resolution = blueprint.metadata.get("post_claim_resolution")
+        if isinstance(post_claim_resolution, dict):
+            metadata["post_claim_resolution"] = dict(post_claim_resolution)
+        metadata.update(self._claim_rewards_contract_metadata(blueprint))
         return metadata
 
     def _signal_contract_version(self, blueprint: TaskBlueprint) -> str:
@@ -640,15 +658,21 @@ class TaskFoundationRepository:
                     )
                 )
             if self._requires_live_capture_followup(record):
+                requirement_level = str(record.metadata.get("requirement_level", "required")).strip() or "required"
                 requirements.append(
                     TaskReadinessRequirement(
                         requirement_id=f"{requirement_id}.provenance",
                         domain=TaskGapDomain.ASSET,
-                        summary="Template asset still relies on curated stand-in provenance instead of an approved live capture.",
+                        summary=(
+                            "Supporting template asset still relies on curated stand-in provenance instead of an approved live capture."
+                            if requirement_level == "supporting"
+                            else "Template asset still relies on curated stand-in provenance instead of an approved live capture."
+                        ),
                         satisfied=False,
                         blocking=False,
                         details=(
                             f"asset_status={record.status.value} "
+                            f"requirement_level={requirement_level} "
                             f"provenance_kind={record.metadata.get('provenance_kind', '')} "
                             f"live_capture={str(record.metadata.get('live_capture', False)).lower()} "
                             f"replacement_target={record.metadata.get('replacement_target', '')} "
@@ -656,6 +680,7 @@ class TaskFoundationRepository:
                         ),
                         metadata={
                             "anchor_id": str(record.metadata.get("anchor_id", "")),
+                            "requirement_level": requirement_level,
                             "provenance_kind": str(record.metadata.get("provenance_kind", "")),
                             "live_capture": record.metadata.get("live_capture"),
                             "replacement_target": str(record.metadata.get("replacement_target", "")),
@@ -693,6 +718,8 @@ class TaskFoundationRepository:
         self,
         anchor_id: str,
         anchor_source: _DiscoveredTemplateAsset | None,
+        *,
+        requirement_level: str = "required",
     ) -> dict[str, Any]:
         metadata: dict[str, Any] = {
             "anchor_id": anchor_id,
@@ -700,6 +727,7 @@ class TaskFoundationRepository:
             "template_path": anchor_source.template_path if anchor_source is not None else "",
             "placeholder": anchor_source.placeholder if anchor_source is not None else False,
             "curation_status": anchor_source.curation_status if anchor_source is not None else "",
+            "requirement_level": requirement_level,
         }
         if anchor_source is None:
             return metadata
@@ -721,11 +749,14 @@ class TaskFoundationRepository:
         self,
         case: Any,
         golden_asset: dict[str, object],
+        *,
+        requirement_level: str = "required",
     ) -> dict[str, Any]:
         metadata: dict[str, Any] = {
             "variants": list(case.variants),
             "source": golden_asset["source"],
             "variant": golden_asset["variant"],
+            "requirement_level": requirement_level,
         }
         for key in (
             "source_kind",
@@ -752,7 +783,7 @@ class TaskFoundationRepository:
     ) -> dict[str, object]:
         template_provenance: dict[str, list[str]] = {}
         golden_provenance: dict[str, list[str]] = {}
-        for anchor_id in blueprint.required_anchors:
+        for anchor_id in self._tracked_anchor_ids(blueprint):
             anchor_source = anchor_sources.get(anchor_id)
             bucket = self._provenance_bucket(
                 provenance_kind=anchor_source.provenance_kind if anchor_source is not None else "",
@@ -797,6 +828,86 @@ class TaskFoundationRepository:
         if asset_state:
             summary["asset_state"] = asset_state
         return summary
+
+    def _tracked_anchor_ids(self, blueprint: TaskBlueprint) -> list[str]:
+        tracked_anchor_ids: list[str] = []
+        for anchor_id in [*blueprint.required_anchors, *self._supporting_anchor_ids(blueprint)]:
+            normalized_anchor_id = str(anchor_id).strip()
+            if normalized_anchor_id and normalized_anchor_id not in tracked_anchor_ids:
+                tracked_anchor_ids.append(normalized_anchor_id)
+        return tracked_anchor_ids
+
+    def _supporting_anchor_ids(self, blueprint: TaskBlueprint) -> list[str]:
+        raw_value = blueprint.metadata.get("supporting_anchor_ids", [])
+        if not isinstance(raw_value, list):
+            return []
+        supporting_anchor_ids: list[str] = []
+        for item in raw_value:
+            anchor_id = str(item).strip()
+            if anchor_id and anchor_id not in supporting_anchor_ids:
+                supporting_anchor_ids.append(anchor_id)
+        return supporting_anchor_ids
+
+    def _supporting_golden_screen_slugs(self, blueprint: TaskBlueprint) -> list[str]:
+        raw_value = blueprint.metadata.get("supporting_golden_screen_slugs", [])
+        if not isinstance(raw_value, list):
+            return []
+        supporting_screen_slugs: list[str] = []
+        for item in raw_value:
+            screen_slug = str(item).strip()
+            if screen_slug and screen_slug not in supporting_screen_slugs:
+                supporting_screen_slugs.append(screen_slug)
+        return supporting_screen_slugs
+
+    def _anchor_requirement_level(self, blueprint: TaskBlueprint, anchor_id: str) -> str:
+        if anchor_id in self._supporting_anchor_ids(blueprint):
+            return "supporting"
+        return "required"
+
+    def _golden_requirement_level(self, blueprint: TaskBlueprint, screen_slug: str) -> str:
+        if screen_slug in self._supporting_golden_screen_slugs(blueprint):
+            return "supporting"
+        return "required"
+
+    def _claim_rewards_contract_metadata(self, blueprint: TaskBlueprint) -> dict[str, Any]:
+        if blueprint.task_id != "daily_ui.claim_rewards":
+            return {}
+        metadata: dict[str, Any] = {}
+
+        manifest_path = self.repo_root / "assets" / "templates" / "daily_ui" / "manifest.json"
+        if manifest_path.exists():
+            manifest_payload = loads(manifest_path.read_text(encoding="utf-8"))
+            task_support = (
+                manifest_payload.get("metadata", {})
+                .get("task_support", {})
+                .get(blueprint.task_id, {})
+            )
+            if isinstance(task_support, dict):
+                live_capture_coverage = task_support.get("live_capture_coverage")
+                if isinstance(live_capture_coverage, dict):
+                    metadata["claim_rewards_live_capture_coverage"] = dict(live_capture_coverage)
+
+        catalog_path = self.repo_root / "assets" / "templates" / "daily_ui" / "goldens" / "claim_rewards" / "catalog.json"
+        if catalog_path.exists():
+            catalog_payload = loads(catalog_path.read_text(encoding="utf-8"))
+            catalog_metadata = catalog_payload.get("metadata", {})
+            if isinstance(catalog_metadata, dict):
+                capture_inventory = catalog_metadata.get("capture_inventory")
+                if isinstance(capture_inventory, dict):
+                    metadata["claim_rewards_capture_inventory"] = dict(capture_inventory)
+            alternate_post_tap_capture_ids = [
+                capture_id
+                for capture_id in (
+                    str(item.get("capture_id", "")).strip()
+                    for item in catalog_payload.get("supporting_captures", [])
+                    if isinstance(item, dict)
+                    and str(item.get("evidence_role", "")).strip() == "alternate_post_tap_outcome"
+                )
+                if capture_id
+            ]
+            if alternate_post_tap_capture_ids:
+                metadata["claim_rewards_alternate_post_tap_capture_ids"] = alternate_post_tap_capture_ids
+        return metadata
 
     def _provenance_bucket(
         self,

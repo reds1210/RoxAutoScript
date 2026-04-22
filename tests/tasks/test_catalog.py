@@ -35,7 +35,11 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
         )
         self.assertIn("daily_ui.claim_reward", blueprints[0].required_anchors)
         self.assertIn("daily_ui.reward_panel", blueprints[0].required_anchors)
-        self.assertIn("daily_ui.reward_confirm_state", blueprints[0].required_anchors)
+        self.assertNotIn("daily_ui.reward_confirm_state", blueprints[0].required_anchors)
+        self.assertEqual(
+            blueprints[0].metadata["supporting_anchor_ids"],
+            ["daily_ui.reward_confirm_state"],
+        )
         self.assertTrue(blueprints[0].steps)
 
     def test_loads_fixture_profiles_and_convention(self) -> None:
@@ -63,6 +67,18 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
             ["daily_ui.reward_confirm_state"],
         )
         self.assertEqual(
+            curated.records[0].metadata["supporting_anchor_ids"],
+            ["daily_ui.reward_confirm_state"],
+        )
+        self.assertEqual(
+            curated.records[0].metadata["post_claim_resolution"]["decision"],
+            "direct_result_overlay_is_valid",
+        )
+        self.assertEqual(
+            curated.records[0].metadata["claim_rewards_alternate_post_tap_capture_ids"],
+            ["post_tap_reward_overlay_live_capture_emulator_5556_after_day7_claim_tap_2026_04_22"],
+        )
+        self.assertEqual(
             curated.records[0].metadata["runtime_seam"]["runtime_seam_builder"],
             "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_seam",
         )
@@ -79,10 +95,13 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
             [
                 "daily_ui.reward_panel",
                 "daily_ui.claim_reward",
-                "daily_ui.reward_confirm_state",
                 "common.confirm_button",
                 "common.close_button",
             ],
+        )
+        self.assertEqual(
+            catalogs[0].entries[0].metadata["supporting_anchor_ids"],
+            ["daily_ui.reward_confirm_state"],
         )
 
     def test_builds_asset_inventory(self) -> None:
@@ -107,6 +126,10 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
         self.assertEqual(
             records["daily_ui.claim_rewards:template:daily_ui.reward_confirm_state"].status.value,
             "present",
+        )
+        self.assertEqual(
+            records["daily_ui.claim_rewards:template:daily_ui.reward_confirm_state"].metadata["requirement_level"],
+            "supporting",
         )
         self.assertEqual(
             records["daily_ui.claim_rewards:template:common.confirm_button"].status.value,
@@ -167,10 +190,17 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
             [
                 "daily_ui.reward_panel",
                 "daily_ui.claim_reward",
-                "daily_ui.reward_confirm_state",
                 "common.confirm_button",
                 "common.close_button",
             ],
+        )
+        self.assertEqual(
+            by_task["daily_ui.claim_rewards"].metadata["supporting_anchor_ids"],
+            ["daily_ui.reward_confirm_state"],
+        )
+        self.assertEqual(
+            by_task["daily_ui.claim_rewards"].metadata["post_claim_resolution"]["decision"],
+            "direct_result_overlay_is_valid",
         )
         self.assertEqual(
             by_task["daily_ui.guild_check_in"].asset_requirement_ids,
@@ -203,6 +233,10 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
             [item.metadata["anchor_id"] for item in by_task["daily_ui.claim_rewards"].warning_requirements],
             ["daily_ui.reward_confirm_state"],
         )
+        self.assertEqual(
+            [item.metadata["requirement_level"] for item in by_task["daily_ui.claim_rewards"].warning_requirements],
+            ["supporting"],
+        )
         self.assertEqual(by_task["daily_ui.guild_check_in"].builder_readiness_state.value, "blocked_by_asset")
         self.assertEqual(
             by_task["daily_ui.guild_check_in"].implementation_readiness_state.value,
@@ -225,4 +259,8 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
         self.assertEqual(
             [item.metadata["anchor_id"] for item in claim_rewards.warning_requirements],
             ["daily_ui.reward_confirm_state"],
+        )
+        self.assertEqual(
+            [item.metadata["requirement_level"] for item in claim_rewards.warning_requirements],
+            ["supporting"],
         )
