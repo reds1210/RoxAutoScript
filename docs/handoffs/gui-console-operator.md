@@ -92,6 +92,28 @@
   - runtime-owned active-run projection while a claim-rewards run is in progress
   - rebuilding claim-rewards failure diagnostics from runtime `last_task_run` after the cached failure payload is removed
 
+## 2026-04-22 follow-up
+
+- This pass stayed inside Engine B ownership and kept scope locked to `daily_ui.claim_rewards`.
+- The claim-rewards main pane and failure tab now surface vision-owned provenance and curation signals directly:
+  - selected anchor provenance such as `live_capture` vs `curated_stand_in`
+  - selected curation summary
+  - selected failure explanation
+- The GUI no longer only says that readiness is blocked while still leaving `加入佇列` / `立即執行` available:
+  - claim-rewards action enablement now respects current runtime blockers
+  - queued state disables duplicate queueing while still allowing `立即執行`
+  - a running or stop-requested instance disables claim-rewards dispatch actions
+- `OperatorConsoleRuntimeBridge.queue_claim_rewards(...)` now rejects blocked claim-rewards dispatch with a readable blocker summary instead of falling through to a later task-build failure.
+- The claim-rewards banner now uses blocker summaries instead of raw readiness requirement ids.
+- The claim-rewards pane can now render a blocked state without assuming task runtime input is buildable in the current session:
+  - blocked state keeps the product-facing `每日領獎` label
+  - blocked state preserves runtime-gate messaging and disables dispatch actions
+- Added regression coverage for:
+  - queued vs runnable button state after a claim-rewards queue entry already exists
+  - succeeded state keeping claim-rewards actions available for a rerun
+  - blocked readiness disabling claim-rewards actions in both `claim_rewards_pane(...)` and `get_live_state(...)`
+  - blocked readiness causing `queue_claim_rewards(...)` to fail early with the blocker summary
+
 ## Runtime-owned signal now visible in GUI
 
 - Task-owned:
@@ -181,6 +203,12 @@
   - `python -m unittest discover -s tests/app -t .`
   - `python -m unittest discover -s tests -t .`
   - Result: `161` tests passed
+- GUI gating + provenance follow-up on `2026-04-22`:
+  - `python -m py_compile src/roxauto/app/runtime_bridge.py src/roxauto/app/shell.py src/roxauto/app/viewmodels.py tests/app/test_runtime_bridge.py`
+  - `python -m unittest tests.app.test_runtime_bridge`
+  - `python -m unittest tests.app.test_viewmodels`
+  - `python -m unittest discover -s tests -t .`
+  - Result: `168` tests passed
 
 ## Recommended next step
 
