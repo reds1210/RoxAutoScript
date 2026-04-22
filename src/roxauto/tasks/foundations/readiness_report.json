@@ -1,52 +1,70 @@
 {
+  "metadata": {
+    "source": "task_foundations"
+  },
   "report_id": "pre_gate_3_task_readiness",
-  "version": "0.1.0",
   "reports": [
     {
-      "task_id": "daily_ui.claim_rewards",
-      "pack_id": "daily_ui",
       "builder_readiness_state": "ready",
-      "implementation_readiness_state": "ready",
       "builder_requirements": [],
+      "implementation_readiness_state": "ready",
       "implementation_requirements": [
         {
-          "requirement_id": "runtime.daily_ui.dispatch_bridge",
-          "domain": "runtime",
-          "summary": "Daily UI fixed-flow tasks require a production runtime action-dispatch bridge.",
-          "satisfied": true,
           "blocking": true,
           "details": "runtime_bridge=implemented runtime_input_builder=roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_input runtime_seam_builder=roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_seam task_spec_builder=roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_task_spec",
+          "domain": "runtime",
           "metadata": {
             "domain": "runtime"
-          }
+          },
+          "requirement_id": "runtime.daily_ui.dispatch_bridge",
+          "satisfied": true,
+          "summary": "Daily UI fixed-flow tasks require a production runtime action-dispatch bridge."
         }
       ],
-      "warning_requirements": [],
       "metadata": {
         "builder_input": {
-          "task_id": "daily_ui.claim_rewards",
-          "pack_id": "daily_ui",
-          "manifest_path": "packs/daily_ui/daily_claim_rewards.task.json",
+          "asset_requirement_ids": [],
+          "calibration_requirement_ids": [],
           "fixture_profile_paths": [
             "fixture_profiles/default_tw_daily.fixture.json"
           ],
-          "required_anchors": [
-            "daily_ui.reward_panel",
-            "daily_ui.claim_reward",
-            "daily_ui.reward_confirm_state",
-            "common.confirm_button",
-            "common.close_button"
-          ],
-          "asset_requirement_ids": [],
-          "runtime_requirement_ids": [
-            "runtime.daily_ui.dispatch_bridge"
-          ],
-          "calibration_requirement_ids": [],
           "foundation_requirement_ids": [],
+          "manifest_path": "packs/daily_ui/daily_claim_rewards.task.json",
           "metadata": {
-            "asset_state": "curated",
+            "asset_provenance": {
+              "asset_state": "mixed_live_capture_and_curated_stand_in",
+              "golden_case_provenance": {
+                "curated_stand_in": [
+                  "claim_button",
+                  "confirm_state"
+                ],
+                "live_capture": [
+                  "reward_panel"
+                ]
+              },
+              "replacement_pending_anchor_ids": [
+                "daily_ui.claim_reward",
+                "daily_ui.reward_confirm_state"
+              ],
+              "replacement_pending_golden_screen_slugs": [
+                "claim_button",
+                "confirm_state"
+              ],
+              "template_anchor_provenance": {
+                "curated_stand_in": [
+                  "daily_ui.claim_reward",
+                  "daily_ui.reward_confirm_state"
+                ],
+                "live_capture": [
+                  "daily_ui.reward_panel"
+                ]
+              }
+            },
+            "asset_state": "mixed_live_capture_and_curated_stand_in",
             "inventory_source": "curated_inventory",
+            "phase": "pre_gate_3",
             "preset_id": "daily_ui.claim_rewards.mvp",
+            "product_display_name": "\u6bcf\u65e5\u9818\u734e",
             "runtime_seam": {
               "result_signal_keys": [
                 "failure_reason_id",
@@ -67,155 +85,199 @@
             },
             "signal_contract_version": "claim_rewards.v2",
             "source": "task_foundations"
-          }
+          },
+          "pack_id": "daily_ui",
+          "required_anchors": [
+            "daily_ui.reward_panel",
+            "daily_ui.claim_reward",
+            "daily_ui.reward_confirm_state",
+            "common.confirm_button",
+            "common.close_button"
+          ],
+          "runtime_requirement_ids": [
+            "runtime.daily_ui.dispatch_bridge"
+          ],
+          "task_id": "daily_ui.claim_rewards"
         },
         "implementation_state": "fixtured"
-      }
-    },
-    {
-      "task_id": "daily_ui.guild_check_in",
+      },
       "pack_id": "daily_ui",
-      "builder_readiness_state": "blocked_by_asset",
-      "implementation_readiness_state": "blocked_by_asset",
-      "builder_requirements": [
-        {
-          "requirement_id": "asset.daily_ui.guild_check_in_button",
-          "domain": "asset",
-          "summary": "Guild check-in still requires a curated guild check-in button asset, not just placeholder scaffolding.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "asset_status=placeholder source_path=assets/templates/daily_ui/manifest.json#daily_ui.guild_check_in_button",
-          "metadata": {
-            "domain": "asset"
-          }
-        }
-      ],
-      "implementation_requirements": [
-        {
-          "requirement_id": "asset.daily_ui.guild_check_in_button",
-          "domain": "asset",
-          "summary": "Guild check-in still requires a curated guild check-in button asset, not just placeholder scaffolding.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "asset_status=placeholder source_path=assets/templates/daily_ui/manifest.json#daily_ui.guild_check_in_button",
-          "metadata": {
-            "domain": "asset"
-          }
-        }
-      ],
+      "task_id": "daily_ui.claim_rewards",
       "warning_requirements": [
         {
-          "requirement_id": "warning.daily_ui.guild_check_in:golden:guild_hub",
-          "domain": "asset",
-          "summary": "Golden screenshots are still planned and not curated yet.",
-          "satisfied": false,
           "blocking": false,
-          "details": "asset_status=planned source_path=daily_ui/daily_ui_guild_check_in/guild_hub/daily_ui_guild_check_in__guild_hub__baseline__v1.png",
-          "metadata": {}
+          "details": "asset_status=present provenance_kind=curated_stand_in live_capture=false replacement_target=approved_live_zh_tw_capture source_path=assets/templates/daily_ui/manifest.json#daily_ui.claim_reward",
+          "domain": "asset",
+          "metadata": {
+            "anchor_id": "daily_ui.claim_reward",
+            "live_capture": false,
+            "provenance_kind": "curated_stand_in",
+            "replacement_target": "approved_live_zh_tw_capture"
+          },
+          "requirement_id": "warning.daily_ui.claim_rewards:template:daily_ui.claim_reward.provenance",
+          "satisfied": false,
+          "summary": "Template asset still relies on curated stand-in provenance instead of an approved live capture."
+        },
+        {
+          "blocking": false,
+          "details": "asset_status=present provenance_kind=curated_stand_in live_capture=false replacement_target=approved_live_zh_tw_capture source_path=assets/templates/daily_ui/manifest.json#daily_ui.reward_confirm_state",
+          "domain": "asset",
+          "metadata": {
+            "anchor_id": "daily_ui.reward_confirm_state",
+            "live_capture": false,
+            "provenance_kind": "curated_stand_in",
+            "replacement_target": "approved_live_zh_tw_capture"
+          },
+          "requirement_id": "warning.daily_ui.claim_rewards:template:daily_ui.reward_confirm_state.provenance",
+          "satisfied": false,
+          "summary": "Template asset still relies on curated stand-in provenance instead of an approved live capture."
+        }
+      ]
+    },
+    {
+      "builder_readiness_state": "blocked_by_asset",
+      "builder_requirements": [
+        {
+          "blocking": true,
+          "details": "asset_status=placeholder source_path=assets/templates/daily_ui/manifest.json#daily_ui.guild_check_in_button",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.guild_check_in_button",
+          "satisfied": false,
+          "summary": "Guild check-in still requires a curated guild check-in button asset, not just placeholder scaffolding."
+        }
+      ],
+      "implementation_readiness_state": "blocked_by_asset",
+      "implementation_requirements": [
+        {
+          "blocking": true,
+          "details": "asset_status=placeholder source_path=assets/templates/daily_ui/manifest.json#daily_ui.guild_check_in_button",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.guild_check_in_button",
+          "satisfied": false,
+          "summary": "Guild check-in still requires a curated guild check-in button asset, not just placeholder scaffolding."
         }
       ],
       "metadata": {
         "builder_input": {
-          "task_id": "daily_ui.guild_check_in",
-          "pack_id": "daily_ui",
-          "manifest_path": "packs/daily_ui/guild_check_in.task.json",
+          "asset_requirement_ids": [
+            "asset.daily_ui.guild_check_in_button"
+          ],
+          "calibration_requirement_ids": [],
           "fixture_profile_paths": [
             "fixture_profiles/default_tw_guild.fixture.json"
           ],
+          "foundation_requirement_ids": [],
+          "manifest_path": "packs/daily_ui/guild_check_in.task.json",
+          "metadata": {
+            "inventory_source": "curated_inventory",
+            "phase": "pre_gate_3",
+            "source": "task_foundations"
+          },
+          "pack_id": "daily_ui",
           "required_anchors": [
             "common.close_button",
             "daily_ui.guild_check_in_button"
           ],
-          "asset_requirement_ids": [
-            "asset.daily_ui.guild_check_in_button"
-          ],
           "runtime_requirement_ids": [],
-          "calibration_requirement_ids": [],
-          "foundation_requirement_ids": [],
-          "metadata": {
-            "inventory_source": "curated_inventory",
-            "source": "task_foundations"
-          }
+          "task_id": "daily_ui.guild_check_in"
         },
         "implementation_state": "spec_only"
-      }
-    },
-    {
-      "task_id": "odin.preset_entry",
-      "pack_id": "odin",
-      "builder_readiness_state": "ready",
-      "implementation_readiness_state": "blocked_by_calibration",
-      "builder_requirements": [],
-      "implementation_requirements": [
-        {
-          "requirement_id": "calibration.odin.idle_state_profile",
-          "domain": "calibration",
-          "summary": "Odin preset entry requires an idle-state calibration profile before runtime binding is safe.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "Requirement is not yet satisfied by current task foundations.",
-          "metadata": {
-            "domain": "calibration"
-          }
-        }
-      ],
+      },
+      "pack_id": "daily_ui",
+      "task_id": "daily_ui.guild_check_in",
       "warning_requirements": [
         {
-          "requirement_id": "warning.odin.preset_entry:template:odin.start_button",
-          "domain": "asset",
-          "summary": "Template asset is still placeholder scaffolding.",
-          "satisfied": false,
           "blocking": false,
-          "details": "asset_status=placeholder source_path=assets/templates/odin/manifest.json#odin.start_button",
-          "metadata": {}
-        },
+          "details": "asset_status=planned source_path=daily_ui/daily_ui_guild_check_in/guild_hub/daily_ui_guild_check_in__guild_hub__baseline__v1.png",
+          "domain": "asset",
+          "metadata": {},
+          "requirement_id": "warning.daily_ui.guild_check_in:golden:guild_hub",
+          "satisfied": false,
+          "summary": "Golden screenshots are still planned and not curated yet."
+        }
+      ]
+    },
+    {
+      "builder_readiness_state": "ready",
+      "builder_requirements": [],
+      "implementation_readiness_state": "blocked_by_calibration",
+      "implementation_requirements": [
         {
-          "requirement_id": "warning.odin.preset_entry:golden:odin_setup_panel",
-          "domain": "asset",
-          "summary": "Golden screenshots are still planned and not curated yet.",
+          "blocking": true,
+          "details": "Requirement is not yet satisfied by current task foundations.",
+          "domain": "calibration",
+          "metadata": {
+            "domain": "calibration"
+          },
+          "requirement_id": "calibration.odin.idle_state_profile",
           "satisfied": false,
-          "blocking": false,
-          "details": "asset_status=planned source_path=odin/odin_preset_entry/odin_setup_panel/odin_preset_entry__odin_setup_panel__baseline__v1.png",
-          "metadata": {}
-        },
-        {
-          "requirement_id": "warning.odin.preset_entry:golden:odin_idle_state",
-          "domain": "asset",
-          "summary": "Golden screenshots are still planned and not curated yet.",
-          "satisfied": false,
-          "blocking": false,
-          "details": "asset_status=planned source_path=odin/odin_preset_entry/odin_idle_state/odin_preset_entry__odin_idle_state__baseline__v1.png",
-          "metadata": {}
+          "summary": "Odin preset entry requires an idle-state calibration profile before runtime binding is safe."
         }
       ],
       "metadata": {
         "builder_input": {
-          "task_id": "odin.preset_entry",
-          "pack_id": "odin",
-          "manifest_path": "packs/odin/odin_preset_entry.task.json",
+          "asset_requirement_ids": [],
+          "calibration_requirement_ids": [
+            "calibration.odin.idle_state_profile"
+          ],
           "fixture_profile_paths": [
             "fixture_profiles/default_tw_odin.fixture.json"
           ],
+          "foundation_requirement_ids": [],
+          "manifest_path": "packs/odin/odin_preset_entry.task.json",
+          "metadata": {
+            "inventory_source": "curated_inventory",
+            "phase": "pre_gate_3",
+            "source": "task_foundations"
+          },
+          "pack_id": "odin",
           "required_anchors": [
             "common.close_button",
             "odin.start_button"
           ],
-          "asset_requirement_ids": [],
           "runtime_requirement_ids": [],
-          "calibration_requirement_ids": [
-            "calibration.odin.idle_state_profile"
-          ],
-          "foundation_requirement_ids": [],
-          "metadata": {
-            "inventory_source": "curated_inventory",
-            "source": "task_foundations"
-          }
+          "task_id": "odin.preset_entry"
         },
         "implementation_state": "spec_only"
-      }
+      },
+      "pack_id": "odin",
+      "task_id": "odin.preset_entry",
+      "warning_requirements": [
+        {
+          "blocking": false,
+          "details": "asset_status=placeholder source_path=assets/templates/odin/manifest.json#odin.start_button",
+          "domain": "asset",
+          "metadata": {},
+          "requirement_id": "warning.odin.preset_entry:template:odin.start_button",
+          "satisfied": false,
+          "summary": "Template asset is still placeholder scaffolding."
+        },
+        {
+          "blocking": false,
+          "details": "asset_status=planned source_path=odin/odin_preset_entry/odin_setup_panel/odin_preset_entry__odin_setup_panel__baseline__v1.png",
+          "domain": "asset",
+          "metadata": {},
+          "requirement_id": "warning.odin.preset_entry:golden:odin_setup_panel",
+          "satisfied": false,
+          "summary": "Golden screenshots are still planned and not curated yet."
+        },
+        {
+          "blocking": false,
+          "details": "asset_status=planned source_path=odin/odin_preset_entry/odin_idle_state/odin_preset_entry__odin_idle_state__baseline__v1.png",
+          "domain": "asset",
+          "metadata": {},
+          "requirement_id": "warning.odin.preset_entry:golden:odin_idle_state",
+          "satisfied": false,
+          "summary": "Golden screenshots are still planned and not curated yet."
+        }
+      ]
     }
   ],
-  "metadata": {
-    "source": "task_foundations"
-  }
+  "version": "0.1.0"
 }

@@ -51,13 +51,17 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
         curated = self.repository.load_inventory()
         built = self.repository.build_task_inventory()
 
-        self.assertEqual(
-            [record.task_id for record in curated.records],
-            [record.task_id for record in built.records],
-        )
+        self.assertEqual(curated.to_dict(), built.to_dict())
         self.assertEqual(curated.records[0].manifest_path, "packs/daily_ui/daily_claim_rewards.task.json")
         self.assertIn("{screen_slug}", built.records[0].golden_root)
-        self.assertEqual(curated.records[0].metadata["asset_state"], "curated")
+        self.assertEqual(
+            curated.records[0].metadata["asset_state"],
+            "mixed_live_capture_and_curated_stand_in",
+        )
+        self.assertEqual(
+            curated.records[0].metadata["asset_provenance"]["replacement_pending_anchor_ids"],
+            ["daily_ui.claim_reward", "daily_ui.reward_confirm_state"],
+        )
         self.assertEqual(
             curated.records[0].metadata["runtime_seam"]["runtime_seam_builder"],
             "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_seam",
@@ -85,9 +89,16 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
         inventory = self.repository.build_asset_inventory()
         records = {record.asset_id: record for record in inventory.records}
 
+        self.assertTrue(
+            records["daily_ui.claim_rewards:template:daily_ui.reward_panel"].metadata["live_capture"]
+        )
         self.assertEqual(
             records["daily_ui.claim_rewards:template:daily_ui.claim_reward"].status.value,
             "present",
+        )
+        self.assertEqual(
+            records["daily_ui.claim_rewards:template:daily_ui.claim_reward"].metadata["provenance_kind"],
+            "curated_stand_in",
         )
         self.assertEqual(
             records["daily_ui.claim_rewards:template:daily_ui.reward_panel"].status.value,
@@ -105,6 +116,9 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
             records["daily_ui.claim_rewards:golden:claim_button"].status.value,
             "present",
         )
+        self.assertFalse(
+            records["daily_ui.claim_rewards:golden:claim_button"].metadata["live_capture"]
+        )
         self.assertEqual(
             records["daily_ui.claim_rewards:golden:confirm_state"].status.value,
             "present",
@@ -121,6 +135,7 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
             records["odin.preset_entry:golden:odin_idle_state"].status.value,
             "planned",
         )
+        self.assertEqual(self.repository.load_asset_inventory().to_dict(), inventory.to_dict())
 
     def test_builds_runtime_builder_inputs(self) -> None:
         inputs = self.repository.build_runtime_builder_inputs()
@@ -184,7 +199,10 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
             "runtime_seam_builder=roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_seam",
             by_task["daily_ui.claim_rewards"].implementation_requirements[0].details,
         )
-        self.assertEqual(by_task["daily_ui.claim_rewards"].warning_requirements, [])
+        self.assertEqual(
+            [item.metadata["anchor_id"] for item in by_task["daily_ui.claim_rewards"].warning_requirements],
+            ["daily_ui.claim_reward", "daily_ui.reward_confirm_state"],
+        )
         self.assertEqual(by_task["daily_ui.guild_check_in"].builder_readiness_state.value, "blocked_by_asset")
         self.assertEqual(
             by_task["daily_ui.guild_check_in"].implementation_readiness_state.value,
@@ -203,4 +221,8 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
         self.assertEqual(len(readiness.reports), 3)
         claim_rewards = next(report for report in readiness.reports if report.task_id == "daily_ui.claim_rewards")
         self.assertEqual(claim_rewards.implementation_readiness_state.value, "ready")
-        self.assertEqual(claim_rewards.warning_requirements, [])
+        self.assertEqual(self.repository.build_readiness_collection().to_dict(), readiness.to_dict())
+        self.assertEqual(
+            [item.metadata["anchor_id"] for item in claim_rewards.warning_requirements],
+            ["daily_ui.claim_reward", "daily_ui.reward_confirm_state"],
+        )

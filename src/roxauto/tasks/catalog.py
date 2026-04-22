@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from json import loads
 from pathlib import Path, PurePosixPath
-from typing import Self
+from typing import Any, Self
 
 from roxauto.tasks.models import (
     GoldenScreenshotConvention,
@@ -43,6 +43,25 @@ class _DiscoveredTemplateAsset:
     template_path: str = ""
     placeholder: bool = False
     curation_status: str = ""
+    provenance_kind: str = ""
+    source_kind: str = ""
+    live_capture: bool | None = None
+    replacement_target: str = ""
+    inspection_role: str = ""
+    stage: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class _DiscoveredGoldenAsset:
+    source_path: str
+    source_kind: str = ""
+    live_capture: bool | None = None
+    anchor_id: str = ""
+    inspection_role: str = ""
+    stage: str = ""
+    scene_id: str = ""
+    reference_id: str = ""
+    golden_id: str = ""
 
 
 _REQUIREMENT_SPECS: dict[str, _RequirementSpec] = {
@@ -122,6 +141,8 @@ class TaskFoundationRepository:
 
     def build_task_inventory(self) -> TaskInventory:
         convention = self.load_golden_convention()
+        anchor_sources = self._discover_template_anchor_assets()
+        golden_sources = self._discover_golden_catalog_assets()
         records: list[TaskInventoryRecord] = []
         for path in sorted((self.root / "packs").glob("*/*.task.json")):
             blueprint = self.load_blueprint(path)
@@ -143,7 +164,12 @@ class TaskFoundationRepository:
                     runtime_requirement_ids=self._requirement_ids(blueprint, "runtime_requirement_ids"),
                     calibration_requirement_ids=self._requirement_ids(blueprint, "calibration_requirement_ids"),
                     foundation_requirement_ids=self._requirement_ids(blueprint, "foundation_requirement_ids"),
-                    metadata=self._inventory_metadata(blueprint),
+                    metadata=self._inventory_metadata(
+                        blueprint,
+                        anchor_sources=anchor_sources,
+                        golden_sources=golden_sources,
+                        convention=convention,
+                    ),
                 )
             )
         return TaskInventory(
@@ -188,6 +214,8 @@ class TaskFoundationRepository:
 
     def build_asset_inventory(self) -> TaskAssetInventory:
         anchor_sources = self._discover_template_anchor_assets()
+        golden_sources = self._discover_golden_catalog_assets()
+        convention = self.load_golden_convention()
         records: list[TaskAssetRecord] = []
         for blueprint in self.discover_blueprints():
             for fixture_profile_path in blueprint.fixture_profile_paths:
@@ -213,20 +241,16 @@ class TaskFoundationRepository:
                         asset_kind=TaskAssetKind.TEMPLATE,
                         status=anchor_source.status if anchor_source is not None else TaskAssetStatus.MISSING,
                         source_path=anchor_source.source_path if anchor_source is not None else "",
-                        metadata={
-                            "anchor_id": anchor_id,
-                            "source": "template_manifest",
-                            "template_path": anchor_source.template_path if anchor_source is not None else "",
-                            "placeholder": anchor_source.placeholder if anchor_source is not None else False,
-                            "curation_status": (
-                                anchor_source.curation_status if anchor_source is not None else ""
-                            ),
-                        },
+                        metadata=self._template_asset_metadata(anchor_id, anchor_source),
                     )
                 )
-            convention = self.load_golden_convention()
             for case in blueprint.golden_cases:
-                golden_asset = self._resolve_golden_asset(blueprint, case.screen_slug, convention)
+                golden_asset = self._resolve_golden_asset(
+                    blueprint,
+                    case.screen_slug,
+                    convention,
+                    golden_sources=golden_sources,
+                )
                 records.append(
                     TaskAssetRecord(
                         asset_id=f"{blueprint.task_id}:golden:{case.screen_slug}",
@@ -235,11 +259,7 @@ class TaskFoundationRepository:
                         asset_kind=TaskAssetKind.GOLDEN_SCREENSHOT,
                         status=golden_asset["status"],
                         source_path=golden_asset["source_path"],
-                        metadata={
-                            "variants": list(case.variants),
-                            "source": golden_asset["source"],
-                            "variant": golden_asset["variant"],
-                        },
+                        metadata=self._golden_asset_metadata(case, golden_asset),
                     )
                 )
         return TaskAssetInventory(
@@ -347,6 +367,8 @@ class TaskFoundationRepository:
                         if isinstance(curation, dict)
                         else ""
                     )
+                    provenance = dict(curation.get("provenance", {})) if isinstance(curation, dict) else {}
+                    curation_metadata = dict(curation.get("metadata", {})) if isinstance(curation, dict) else {}
                     status = TaskAssetStatus.MISSING
                     if template_exists:
                         status = (
@@ -360,8 +382,37 @@ class TaskFoundationRepository:
                         template_path=template_path,
                         placeholder=bool(metadata.get("placeholder", False)),
                         curation_status=curation_status,
+                        provenance_kind=str(provenance.get("kind", "")).strip().lower(),
+                        source_kind=str(curation_metadata.get("source_kind", "")).strip().lower(),
+                        live_capture=self._optional_bool(curation_metadata.get("live_capture")),
+                        replacement_target=str(curation_metadata.get("replacement_target", "")).strip(),
+                        inspection_role=str(metadata.get("inspection_role", "")).strip(),
+                        stage=str(metadata.get("stage", "")).strip(),
                     )
         return sources
+
+    def _discover_golden_catalog_assets(self) -> dict[str, _DiscoveredGoldenAsset]:
+        assets: dict[str, _DiscoveredGoldenAsset] = {}
+        for catalog_path in sorted((self.repo_root / "assets" / "templates").glob("*/goldens/*/catalog.json")):
+            payload = loads(catalog_path.read_text(encoding="utf-8"))
+            catalog_dir = catalog_path.parent
+            for raw_entry in list(payload.get("goldens", [])) + list(payload.get("supplemental_live_captures", [])):
+                file_name = str(raw_entry.get("file_name", "")).strip()
+                if not file_name:
+                    continue
+                source_path = (catalog_dir / file_name).relative_to(self.repo_root).as_posix()
+                assets[source_path] = _DiscoveredGoldenAsset(
+                    source_path=source_path,
+                    source_kind=str(raw_entry.get("source_kind", "")).strip().lower(),
+                    live_capture=self._optional_bool(raw_entry.get("live_capture")),
+                    anchor_id=str(raw_entry.get("anchor_id", "")).strip(),
+                    inspection_role=str(raw_entry.get("inspection_role", "")).strip(),
+                    stage=str(raw_entry.get("stage", "")).strip(),
+                    scene_id=str(raw_entry.get("scene_id", "")).strip(),
+                    reference_id=str(raw_entry.get("reference_id", "")).strip(),
+                    golden_id=str(raw_entry.get("golden_id", raw_entry.get("capture_id", ""))).strip(),
+                )
+        return assets
 
     def _inventory_record_by_task_id(self) -> dict[str, TaskInventoryRecord]:
         return {record.task_id: record for record in self.load_inventory().records}
@@ -455,14 +506,31 @@ class TaskFoundationRepository:
             )
         return "Requirement is not yet satisfied by current task foundations."
 
-    def _inventory_metadata(self, blueprint: TaskBlueprint) -> dict[str, object]:
+    def _inventory_metadata(
+        self,
+        blueprint: TaskBlueprint,
+        *,
+        anchor_sources: dict[str, _DiscoveredTemplateAsset],
+        golden_sources: dict[str, _DiscoveredGoldenAsset],
+        convention: GoldenScreenshotConvention,
+    ) -> dict[str, object]:
         blueprint_metadata = dict(blueprint.metadata)
         product_display = dict(blueprint_metadata.get("product_display", {}))
-        metadata: dict[str, object] = {"source": "build_task_inventory"}
+        metadata: dict[str, object] = {"source": "curated_inventory"}
         if "phase" in blueprint_metadata:
             metadata["phase"] = str(blueprint_metadata.get("phase", ""))
         if "asset_state" in blueprint_metadata:
             metadata["asset_state"] = str(blueprint_metadata.get("asset_state", ""))
+        asset_provenance = self._asset_provenance_summary(
+            blueprint,
+            anchor_sources=anchor_sources,
+            golden_sources=golden_sources,
+            convention=convention,
+        )
+        if asset_provenance:
+            metadata["asset_provenance"] = asset_provenance
+            if asset_provenance.get("asset_state"):
+                metadata["asset_state"] = str(asset_provenance.get("asset_state", ""))
         if isinstance(blueprint_metadata.get("runtime_seam"), dict):
             metadata["runtime_seam"] = dict(blueprint_metadata.get("runtime_seam", {}))
         signal_contract_version = self._signal_contract_version(blueprint)
@@ -494,6 +562,8 @@ class TaskFoundationRepository:
         blueprint: TaskBlueprint,
         screen_slug: str,
         convention: GoldenScreenshotConvention,
+        *,
+        golden_sources: dict[str, _DiscoveredGoldenAsset] | None = None,
     ) -> dict[str, object]:
         configured_sources = blueprint.metadata.get("golden_asset_sources", {})
         configured_source = (
@@ -501,19 +571,34 @@ class TaskFoundationRepository:
             if isinstance(configured_sources, dict) and isinstance(configured_sources.get(screen_slug), dict)
             else {}
         )
+        discovered_golden_sources = golden_sources or self._discover_golden_catalog_assets()
         if configured_source:
             source_path = str(configured_source.get("source_path", ""))
-            variant = str(configured_source.get("variant", convention.required_variants[0] if convention.required_variants else "baseline"))
+            variant = str(
+                configured_source.get(
+                    "variant",
+                    convention.required_variants[0] if convention.required_variants else "baseline",
+                )
+            )
             status = (
                 TaskAssetStatus.PRESENT
                 if source_path and self._repo_relative_path(source_path).exists()
                 else TaskAssetStatus.MISSING
             )
+            golden_source = discovered_golden_sources.get(source_path)
             return {
                 "source": "golden_asset_sources",
                 "source_path": source_path,
                 "status": status,
                 "variant": variant,
+                "source_kind": golden_source.source_kind if golden_source is not None else "",
+                "live_capture": golden_source.live_capture if golden_source is not None else None,
+                "anchor_id": golden_source.anchor_id if golden_source is not None else "",
+                "inspection_role": golden_source.inspection_role if golden_source is not None else "",
+                "stage": golden_source.stage if golden_source is not None else "",
+                "scene_id": golden_source.scene_id if golden_source is not None else "",
+                "reference_id": golden_source.reference_id if golden_source is not None else "",
+                "golden_id": golden_source.golden_id if golden_source is not None else "",
             }
         variant = convention.required_variants[0] if convention.required_variants else "baseline"
         return {
@@ -554,6 +639,29 @@ class TaskFoundationRepository:
                         details=f"asset_status={record.status.value} source_path={record.source_path}",
                     )
                 )
+            if self._requires_live_capture_followup(record):
+                requirements.append(
+                    TaskReadinessRequirement(
+                        requirement_id=f"{requirement_id}.provenance",
+                        domain=TaskGapDomain.ASSET,
+                        summary="Template asset still relies on curated stand-in provenance instead of an approved live capture.",
+                        satisfied=False,
+                        blocking=False,
+                        details=(
+                            f"asset_status={record.status.value} "
+                            f"provenance_kind={record.metadata.get('provenance_kind', '')} "
+                            f"live_capture={str(record.metadata.get('live_capture', False)).lower()} "
+                            f"replacement_target={record.metadata.get('replacement_target', '')} "
+                            f"source_path={record.source_path}"
+                        ),
+                        metadata={
+                            "anchor_id": str(record.metadata.get("anchor_id", "")),
+                            "provenance_kind": str(record.metadata.get("provenance_kind", "")),
+                            "live_capture": record.metadata.get("live_capture"),
+                            "replacement_target": str(record.metadata.get("replacement_target", "")),
+                        },
+                    )
+                )
             if record.asset_kind is TaskAssetKind.GOLDEN_SCREENSHOT and record.status is TaskAssetStatus.PLANNED:
                 requirements.append(
                     TaskReadinessRequirement(
@@ -580,3 +688,161 @@ class TaskFoundationRepository:
             if any(item.blocking and not item.satisfied and item.domain is domain for item in requirements):
                 return state
         return TaskReadinessState.READY
+
+    def _template_asset_metadata(
+        self,
+        anchor_id: str,
+        anchor_source: _DiscoveredTemplateAsset | None,
+    ) -> dict[str, Any]:
+        metadata: dict[str, Any] = {
+            "anchor_id": anchor_id,
+            "source": "template_manifest",
+            "template_path": anchor_source.template_path if anchor_source is not None else "",
+            "placeholder": anchor_source.placeholder if anchor_source is not None else False,
+            "curation_status": anchor_source.curation_status if anchor_source is not None else "",
+        }
+        if anchor_source is None:
+            return metadata
+        if anchor_source.provenance_kind:
+            metadata["provenance_kind"] = anchor_source.provenance_kind
+        if anchor_source.source_kind:
+            metadata["source_kind"] = anchor_source.source_kind
+        if anchor_source.live_capture is not None:
+            metadata["live_capture"] = anchor_source.live_capture
+        if anchor_source.replacement_target:
+            metadata["replacement_target"] = anchor_source.replacement_target
+        if anchor_source.inspection_role:
+            metadata["inspection_role"] = anchor_source.inspection_role
+        if anchor_source.stage:
+            metadata["stage"] = anchor_source.stage
+        return metadata
+
+    def _golden_asset_metadata(
+        self,
+        case: Any,
+        golden_asset: dict[str, object],
+    ) -> dict[str, Any]:
+        metadata: dict[str, Any] = {
+            "variants": list(case.variants),
+            "source": golden_asset["source"],
+            "variant": golden_asset["variant"],
+        }
+        for key in (
+            "source_kind",
+            "live_capture",
+            "anchor_id",
+            "inspection_role",
+            "stage",
+            "scene_id",
+            "reference_id",
+            "golden_id",
+        ):
+            value = golden_asset.get(key)
+            if value not in ("", None):
+                metadata[key] = value
+        return metadata
+
+    def _asset_provenance_summary(
+        self,
+        blueprint: TaskBlueprint,
+        *,
+        anchor_sources: dict[str, _DiscoveredTemplateAsset],
+        golden_sources: dict[str, _DiscoveredGoldenAsset],
+        convention: GoldenScreenshotConvention,
+    ) -> dict[str, object]:
+        template_provenance: dict[str, list[str]] = {}
+        golden_provenance: dict[str, list[str]] = {}
+        for anchor_id in blueprint.required_anchors:
+            anchor_source = anchor_sources.get(anchor_id)
+            bucket = self._provenance_bucket(
+                provenance_kind=anchor_source.provenance_kind if anchor_source is not None else "",
+                source_kind=anchor_source.source_kind if anchor_source is not None else "",
+                live_capture=anchor_source.live_capture if anchor_source is not None else None,
+            )
+            if bucket:
+                template_provenance.setdefault(bucket, []).append(anchor_id)
+        for case in blueprint.golden_cases:
+            golden_asset = self._resolve_golden_asset(
+                blueprint,
+                case.screen_slug,
+                convention,
+                golden_sources=golden_sources,
+            )
+            bucket = self._provenance_bucket(
+                source_kind=str(golden_asset.get("source_kind", "")),
+                live_capture=self._optional_bool(golden_asset.get("live_capture")),
+            )
+            if bucket:
+                golden_provenance.setdefault(bucket, []).append(case.screen_slug)
+        if not template_provenance and not golden_provenance:
+            return {}
+        summary: dict[str, object] = {}
+        if template_provenance:
+            summary["template_anchor_provenance"] = {
+                key: list(values) for key, values in sorted(template_provenance.items())
+            }
+        if golden_provenance:
+            summary["golden_case_provenance"] = {
+                key: list(values) for key, values in sorted(golden_provenance.items())
+            }
+        replacement_pending_anchor_ids = template_provenance.get("curated_stand_in", [])
+        if replacement_pending_anchor_ids:
+            summary["replacement_pending_anchor_ids"] = list(replacement_pending_anchor_ids)
+        replacement_pending_golden_screen_slugs = golden_provenance.get("curated_stand_in", [])
+        if replacement_pending_golden_screen_slugs:
+            summary["replacement_pending_golden_screen_slugs"] = list(
+                replacement_pending_golden_screen_slugs
+            )
+        asset_state = self._summarize_asset_state(template_provenance, golden_provenance)
+        if asset_state:
+            summary["asset_state"] = asset_state
+        return summary
+
+    def _provenance_bucket(
+        self,
+        *,
+        provenance_kind: str = "",
+        source_kind: str = "",
+        live_capture: bool | None = None,
+    ) -> str:
+        normalized_provenance_kind = provenance_kind.strip().lower()
+        normalized_source_kind = source_kind.strip().lower()
+        if live_capture is True or normalized_provenance_kind == "live_capture" or normalized_source_kind.startswith("live_"):
+            return "live_capture"
+        if normalized_provenance_kind == "curated_stand_in" or normalized_source_kind == "repo_curated_screenshot_style":
+            return "curated_stand_in"
+        return ""
+
+    def _summarize_asset_state(
+        self,
+        template_provenance: dict[str, list[str]],
+        golden_provenance: dict[str, list[str]],
+    ) -> str:
+        has_live_capture = bool(
+            template_provenance.get("live_capture") or golden_provenance.get("live_capture")
+        )
+        has_curated_stand_in = bool(
+            template_provenance.get("curated_stand_in") or golden_provenance.get("curated_stand_in")
+        )
+        if has_live_capture and has_curated_stand_in:
+            return "mixed_live_capture_and_curated_stand_in"
+        if has_live_capture:
+            return "live_capture"
+        if has_curated_stand_in:
+            return "curated_stand_in"
+        return ""
+
+    def _requires_live_capture_followup(self, record: TaskAssetRecord) -> bool:
+        if record.asset_kind is not TaskAssetKind.TEMPLATE:
+            return False
+        return (
+            record.status is TaskAssetStatus.PRESENT
+            and str(record.metadata.get("provenance_kind", "")).strip().lower() == "curated_stand_in"
+            and record.metadata.get("live_capture") is False
+            and bool(str(record.metadata.get("replacement_target", "")).strip())
+        )
+
+    def _optional_bool(self, value: object) -> bool | None:
+        if isinstance(value, bool):
+            return value
+        return None

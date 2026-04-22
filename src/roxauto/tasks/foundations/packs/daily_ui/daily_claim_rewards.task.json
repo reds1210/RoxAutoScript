@@ -262,7 +262,7 @@
         "variant": "baseline"
       }
     },
-    "asset_state": "curated",
+    "asset_state": "mixed_live_capture_and_curated_stand_in",
     "task_pack_owner": "engine_d"
   },
   "notes": "Fixtured fixed-UI reward claim task with a headless runtime bridge and deterministic panel flow.",
