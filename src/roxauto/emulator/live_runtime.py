@@ -757,12 +757,11 @@ class LiveRuntimeSession:
                 instance_id=instance_id,
             ):
                 latest_by_instance[summary.instance_id] = summary
-            if not latest_by_instance:
-                for summary in self._list_context_task_outcome_summaries_locked(
-                    task_id=normalized_task_id,
-                    instance_id=instance_id,
-                ):
-                    latest_by_instance[summary.instance_id] = summary
+            for summary in self._list_context_task_outcome_summaries_locked(
+                task_id=normalized_task_id,
+                instance_id=instance_id,
+            ):
+                latest_by_instance.setdefault(summary.instance_id, summary)
             runs = tuple(
                 sorted(
                     latest_by_instance.values(),

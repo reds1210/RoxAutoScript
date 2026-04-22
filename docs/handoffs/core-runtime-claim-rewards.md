@@ -341,3 +341,26 @@ Verification performed:
 Recommended next step:
 
 - Engine B should consume `build_task_outcome_report("daily_ui.claim_rewards")` or `list_task_run_summaries(task_id="daily_ui.claim_rewards")` for operator-facing multi-device smoke comparison instead of rebuilding the same summary from raw task telemetry or app-local draft records.
+
+## 2026-04-22 per-instance fallback follow-up
+
+What shipped:
+
+- `LiveRuntimeSession.build_task_outcome_report(...)` no longer treats context fallback as all-or-nothing.
+- The report now merges context-owned sticky summaries per missing instance after reading recent `task.finished` events, so one device's surviving event-buffer entry no longer causes other devices to disappear from the report when their latest run still exists under runtime context metadata.
+- Coverage now simulates the review-case shape directly by keeping only one instance's `task.finished` event in the recent-event buffer and proving the report still backfills the missing instance from context.
+
+Files changed:
+
+- `docs/handoffs/core-runtime-claim-rewards.md`
+- `src/roxauto/emulator/live_runtime.py`
+- `tests/emulator/test_live_runtime.py`
+
+Verification performed:
+
+- `python -m unittest tests.emulator.test_live_runtime`
+- `python -m ruff check src tests`
+
+Recommended next step:
+
+- Once this lands, Engine B can rely on `build_task_outcome_report("daily_ui.claim_rewards")` for mixed event-buffer / sticky-context situations without needing its own per-instance fallback merge logic.

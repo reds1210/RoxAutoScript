@@ -563,6 +563,85 @@ class LiveRuntimeSessionTests(unittest.TestCase):
         self.assertEqual(report.runs[1].last_observed_state, "claimed")
         self.assertEqual(report.runs[1].source_image, "captures/mumu-1.png")
 
+    def test_build_task_outcome_report_backfills_missing_instances_from_context_summaries(self) -> None:
+        adapter = FakeAdapter(healthy=True)
+        second = InstanceState(
+            instance_id="mumu-1",
+            label="MuMu 1",
+            adb_serial="127.0.0.1:16448",
+            status=InstanceStatus.READY,
+        )
+        session = LiveRuntimeSession(
+            adapter,
+            discovery=lambda: [self.instance, second],
+        )
+        session.sync_instances()
+
+        failure_spec = TaskSpec(
+            task_id="daily_ui.claim_rewards",
+            name="Daily Reward Claim",
+            version="0.1.0",
+            entry_state="ready",
+            metadata=_claim_rewards_task_metadata(),
+            steps=[
+                TaskStep("open_reward_panel", "Open reward panel", lambda ctx: step_success("open_reward_panel", "opened")),
+                TaskStep(
+                    "claim_reward",
+                    "Claim reward",
+                    lambda ctx: step_failure(
+                        "claim_reward",
+                        "tap had no effect",
+                        data=_claim_rewards_failure_data(),
+                    ),
+                ),
+            ],
+        )
+        success_spec = TaskSpec(
+            task_id="daily_ui.claim_rewards",
+            name="Daily Reward Claim",
+            version="0.1.0",
+            entry_state="ready",
+            metadata=_claim_rewards_task_metadata(),
+            steps=[
+                TaskStep("open_reward_panel", "Open reward panel", lambda ctx: step_success("open_reward_panel", "opened")),
+                TaskStep(
+                    "claim_reward",
+                    "Claim reward",
+                    lambda ctx: step_success(
+                        "claim_reward",
+                        "claimed",
+                        data=_claim_rewards_success_data(),
+                    ),
+                ),
+            ],
+        )
+
+        session.enqueue(QueuedTask(instance_id="mumu-0", spec=failure_spec, priority=100))
+        session.enqueue(QueuedTask(instance_id="mumu-1", spec=success_spec, priority=100))
+        session.start_queue("mumu-0")
+        session.start_queue("mumu-1")
+        with session._operation_lock:
+            session._recent_events = [
+                event
+                for event in session._recent_events
+                if event.name == "task.finished" and event.instance_id == "mumu-1"
+            ]
+            session._touch()
+
+        event_summaries = session.list_task_run_summaries(task_id="daily_ui.claim_rewards")
+        report = session.build_task_outcome_report("daily_ui.claim_rewards")
+
+        self.assertEqual(len(event_summaries), 1)
+        self.assertEqual([item.instance_id for item in event_summaries], ["mumu-1"])
+        self.assertEqual(report.instance_count, 2)
+        self.assertEqual(report.run_count, 2)
+        self.assertEqual([item.instance_id for item in report.runs], ["mumu-0", "mumu-1"])
+        self.assertEqual(report.failed_count, 1)
+        self.assertEqual(report.succeeded_count, 1)
+        self.assertEqual(report.runs[0].failure_reason_id, "claim_tap_no_effect")
+        self.assertEqual(report.runs[0].outcome_code, "claim_tap_no_effect")
+        self.assertEqual(report.runs[1].outcome_code, "claim_success")
+
     def test_reconnect_preserves_runtime_authority_for_last_run_and_failure_snapshot(self) -> None:
         adapter = FakeAdapter(healthy=True)
         discovered: dict[str, list[InstanceState]] = {"states": [self.instance]}
