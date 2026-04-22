@@ -2,7 +2,7 @@
 
 This repo currently uses a fixed 4-engine parallel model plus one optional support engine.
 
-The active wave is `round-9 guild-order material logic`.
+The most recent wave is `round-9 guild-order material logic`, which is currently paused pending a restart brief aligned with operator-provided UI truth.
 
 ## Model Policy
 
@@ -52,7 +52,7 @@ The active wave is `round-9 guild-order material logic`.
 
 ## Active Order
 
-Default round-9 start order:
+Default round-9 start order when this wave is resumed:
 
 1. `Engine E`
 2. `Engine D`
@@ -60,7 +60,7 @@ Default round-9 start order:
 4. `Engine A`
 5. `Engine B`
 
-Default round-9 merge order:
+Default round-9 merge order when this wave is resumed:
 
 1. `Engine E`
 2. `Engine C`
@@ -107,4 +107,5 @@ Rule:
 - optional support engine: `1`
 - maximum active worktrees per engine: `1`
 - each engine keeps its owned paths
-- round 9 stays scoped to the first-cut guild-order flow only
+- do not start new round-9 worker threads until dispatch publishes a restart brief
+- round 9 stays scoped to the first-cut guild-order flow only when resumed
