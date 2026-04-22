@@ -315,6 +315,12 @@ class FailureInspectorState:
     curation_summary: str = ""
     failure_case: str = ""
     failure_explanation: str = ""
+    post_tap_contract_anchor_id: str = ""
+    post_tap_contract_scene_id: str = ""
+    post_tap_contract_recommendation: str = ""
+    post_tap_contract_observed_scene_ids: list[str] = field(default_factory=list)
+    post_tap_contract_observed_capture_ids: list[str] = field(default_factory=list)
+    post_tap_contract_summary: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -425,6 +431,12 @@ class ClaimRewardsInspectorState:
     selected_check_summary: str = ""
     workflow_summary: str = ""
     failure_explanation: str = ""
+    post_tap_contract_anchor_id: str = ""
+    post_tap_contract_scene_id: str = ""
+    post_tap_contract_recommendation: str = ""
+    post_tap_contract_observed_scene_ids: list[str] = field(default_factory=list)
+    post_tap_contract_observed_capture_ids: list[str] = field(default_factory=list)
+    post_tap_contract_summary: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -1020,6 +1032,24 @@ def build_failure_inspector(
         failure_case = selected_claim_check.failure_case
         failure_explanation = selected_claim_check.failure_explanation or failure_explanation
 
+    post_tap_contract_anchor_id = ""
+    post_tap_contract_scene_id = ""
+    post_tap_contract_recommendation = ""
+    post_tap_contract_observed_scene_ids: list[str] = []
+    post_tap_contract_observed_capture_ids: list[str] = []
+    post_tap_contract_summary = ""
+    if claim_rewards is not None:
+        post_tap_contract_anchor_id = claim_rewards.post_tap_contract_anchor_id
+        post_tap_contract_scene_id = claim_rewards.post_tap_contract_scene_id
+        post_tap_contract_recommendation = claim_rewards.post_tap_contract_recommendation
+        post_tap_contract_observed_scene_ids = list(
+            claim_rewards.post_tap_contract_observed_scene_ids
+        )
+        post_tap_contract_observed_capture_ids = list(
+            claim_rewards.post_tap_contract_observed_capture_ids
+        )
+        post_tap_contract_summary = claim_rewards.post_tap_contract_summary
+
     return FailureInspectorState(
         failure_id=failure_record.failure_id,
         instance_id=failure_record.instance_id,
@@ -1072,6 +1102,12 @@ def build_failure_inspector(
         curation_summary=curation_summary,
         failure_case=failure_case,
         failure_explanation=failure_explanation,
+        post_tap_contract_anchor_id=post_tap_contract_anchor_id,
+        post_tap_contract_scene_id=post_tap_contract_scene_id,
+        post_tap_contract_recommendation=post_tap_contract_recommendation,
+        post_tap_contract_observed_scene_ids=post_tap_contract_observed_scene_ids,
+        post_tap_contract_observed_capture_ids=post_tap_contract_observed_capture_ids,
+        post_tap_contract_summary=post_tap_contract_summary,
         metadata=dict(failure_record.metadata),
     )
 
@@ -1859,6 +1895,7 @@ def _build_claim_rewards_inspector(
     current_check_id = str(claim_metadata.get("current_check_id") or "")
     selected_check_id = str(claim_metadata.get("selected_check_id") or current_check_id)
     check_payloads = dict(claim_metadata.get("checks", {})) if isinstance(claim_metadata.get("checks", {}), dict) else {}
+    post_tap_contract = _claim_rewards_post_tap_contract(repository)
     checks: list[ClaimRewardsCheckState] = []
 
     for check_id in [str(item) for item in task_support.get("required_anchor_roles", []) if str(item)]:
@@ -2018,7 +2055,24 @@ def _build_claim_rewards_inspector(
         selected_check_summary=_claim_rewards_check_summary(selected_check),
         workflow_summary=_claim_rewards_workflow_summary(checks, current_check_id=current_check_id),
         failure_explanation=selected_check.failure_explanation if selected_check is not None else "",
-        metadata={key: value for key, value in claim_metadata.items() if key != "checks"},
+        post_tap_contract_anchor_id=str(post_tap_contract.get("anchor_id", "")).strip(),
+        post_tap_contract_scene_id=str(post_tap_contract.get("current_scene_id", "")).strip(),
+        post_tap_contract_recommendation=str(
+            post_tap_contract.get("dispatch_recommendation", "")
+        ).strip(),
+        post_tap_contract_observed_scene_ids=[
+            str(scene_id)
+            for scene_id in post_tap_contract.get("observed_live_outcome_scene_ids", [])
+        ],
+        post_tap_contract_observed_capture_ids=[
+            str(capture_id)
+            for capture_id in post_tap_contract.get("observed_live_outcome_capture_ids", [])
+        ],
+        post_tap_contract_summary=_claim_rewards_post_tap_contract_summary(post_tap_contract),
+        metadata={
+            **{key: value for key, value in claim_metadata.items() if key != "checks"},
+            "post_tap_contract": post_tap_contract,
+        },
     )
 
 
@@ -2028,6 +2082,62 @@ def _claim_rewards_task_support(repository: AnchorRepository) -> dict[str, Any]:
         return {}
     support = task_support.get("daily_ui.claim_rewards", {})
     return dict(support) if isinstance(support, dict) else {}
+
+
+def _claim_rewards_post_tap_contract(repository: AnchorRepository | None) -> dict[str, Any]:
+    if repository is None:
+        return {}
+    raw_contract = repository.get_claim_rewards_post_tap_contract()
+    if not isinstance(raw_contract, dict):
+        return {}
+    return {
+        "anchor_id": str(raw_contract.get("anchor_id", "")).strip(),
+        "current_scene_id": str(raw_contract.get("current_scene_id", "")).strip(),
+        "current_contract_kind": str(raw_contract.get("current_contract_kind", "")).strip(),
+        "dispatch_recommendation": str(raw_contract.get("dispatch_recommendation", "")).strip(),
+        "observed_live_outcome_scene_ids": [
+            str(scene_id).strip()
+            for scene_id in raw_contract.get("observed_live_outcome_scene_ids", [])
+            if str(scene_id).strip()
+        ],
+        "observed_live_outcome_capture_ids": [
+            str(capture_id).strip()
+            for capture_id in raw_contract.get("observed_live_outcome_capture_ids", [])
+            if str(capture_id).strip()
+        ],
+        "summary": str(raw_contract.get("summary", "")).strip(),
+    }
+
+
+def _claim_rewards_post_tap_contract_summary(contract: dict[str, Any]) -> str:
+    if not contract:
+        return ""
+    parts: list[str] = []
+    if str(contract.get("anchor_id", "")).strip():
+        parts.append(f"anchor={str(contract.get('anchor_id', '')).strip()}")
+    if str(contract.get("current_scene_id", "")).strip():
+        parts.append(f"current_scene={str(contract.get('current_scene_id', '')).strip()}")
+    if str(contract.get("dispatch_recommendation", "")).strip():
+        parts.append(
+            f"recommendation={str(contract.get('dispatch_recommendation', '')).strip()}"
+        )
+    observed_scene_ids = [
+        str(scene_id).strip()
+        for scene_id in contract.get("observed_live_outcome_scene_ids", [])
+        if str(scene_id).strip()
+    ]
+    if observed_scene_ids:
+        parts.append(f"observed_scenes={','.join(observed_scene_ids)}")
+    observed_capture_ids = [
+        str(capture_id).strip()
+        for capture_id in contract.get("observed_live_outcome_capture_ids", [])
+        if str(capture_id).strip()
+    ]
+    if observed_capture_ids:
+        parts.append(f"observed_captures={len(observed_capture_ids)}")
+    if str(contract.get("summary", "")).strip():
+        parts.append(str(contract.get("summary", "")).strip())
+    return " | ".join(parts)
 
 
 def _find_task_anchor_by_role(

@@ -6,108 +6,119 @@ Track:
 
 Scope:
 
-- Kept scope on `daily_ui.claim_rewards` only.
-- Promoted approved round-8 live evidence into the claim-rewards vision contract.
-- Kept the three GUI-facing anchor ids stable:
-  - `daily_ui.reward_panel`
-  - `daily_ui.claim_reward`
-  - `daily_ui.reward_confirm_state`
-- Did not edit runtime orchestration, emulator transport, or app GUI code.
+- stayed inside Engine C ownership:
+  - `assets/templates/`
+  - `src/roxauto/vision/`
+  - `docs/vision/`
+  - `tests/vision/`
+  - this handoff
+- kept scope locked to `daily_ui.claim_rewards`
+- did not edit task/runtime/app semantics
+- turned the remaining post-tap truth gap into a machine-readable decision packet instead of leaving it only in raw notes
 
 Files changed in this run:
 
-- `assets/templates/daily_ui/anchors/daily_claim_button.png`
 - `assets/templates/daily_ui/manifest.json`
 - `assets/templates/daily_ui/goldens/claim_rewards/catalog.json`
-- `assets/templates/daily_ui/goldens/claim_rewards/daily_ui_claim_rewards__claim_button__baseline__v1.png`
-- `assets/templates/daily_ui/goldens/claim_rewards/live/daily_ui_claim_rewards__post_tap_reward_overlay__live_capture__emulator_5556__after_day7_claim_tap_2026_04_22.png`
+- `assets/templates/daily_ui/goldens/claim_rewards/live/daily_ui_claim_rewards__post_tap_claimed_result__live_capture__127_0_0_1_5559__after_claim_tap.png`
+- `assets/templates/daily_ui/goldens/claim_rewards/live/daily_ui_claim_rewards__post_tap_claimed_result__live_capture__127_0_0_1_5563__after_claim_tap.png`
+- `assets/templates/daily_ui/goldens/claim_rewards/live/daily_ui_claim_rewards__post_tap_claimed_result__live_capture__emulator_5560__after_claim_tap.png`
+- `src/roxauto/vision/repository.py`
 - `src/roxauto/vision/validation.py`
-- `src/roxauto/tasks/foundations/asset_inventory.json`
+- `src/roxauto/vision/tooling.py`
 - `docs/vision/README.md`
 - `docs/vision/claim_rewards_live/README.md`
 - `docs/handoffs/vision-claim-rewards-live-captures.md`
 - `tests/vision/test_repository.py`
-- `tests/vision/test_tooling.py`
 - `tests/vision/test_validation.py`
+- `tests/vision/test_tooling.py`
+
+Public APIs added or changed:
+
+- `AnchorRepository.get_claim_rewards_post_tap_contract()`
+  - returns the manifest-level decision packet for live post-tap behavior
+- `VisionWorkspaceReadinessReport.metadata["claim_rewards_post_tap_contract"]`
+  - exposes the same decision packet through readiness/report surfaces
+- `ClaimRewardsInspectorState`
+  - now flattens:
+    - `post_tap_contract_anchor_id`
+    - `post_tap_contract_scene_id`
+    - `post_tap_contract_recommendation`
+    - `post_tap_contract_observed_scene_ids`
+    - `post_tap_contract_observed_capture_ids`
+    - `post_tap_contract_summary`
+- `FailureInspectorState`
+  - now mirrors the same flattened `post_tap_contract_*` fields for generic failure-pane consumers
 
 Contract changes in this run:
 
-- `daily_ui.claim_reward` is now truthfully promoted from `curated_stand_in` to `live_capture`.
-  - primary baseline id stays `claim_button_baseline_v1`
-  - canonical file path stays `assets/templates/daily_ui/goldens/claim_rewards/daily_ui_claim_rewards__claim_button__baseline__v1.png`
-  - the underlying image is now the approved live zh-TW ROX day-7 claimable panel from `emulator-5556`
-- `metadata.task_support["daily_ui.claim_rewards"].live_capture_coverage` now reflects:
-  - `live_anchor_ids`:
-    - `daily_ui.reward_panel`
-    - `daily_ui.claim_reward`
-  - `stand_in_anchor_ids`:
-    - `daily_ui.reward_confirm_state`
-  - `live_context_anchor_ids`:
-    - none
-  - `blocked_scene_ids`:
-    - `reward_confirm_modal`
-- `daily_ui.reward_confirm_state` remains a curated stand-in.
-  - it now carries one additional live supporting capture for the post-tap reward-acquired overlay
-  - this is explicitly tracked as an alternate post-tap outcome, not a modal baseline
-- `catalog.json` metadata now also carries machine-readable round-8 capture inventory:
-  - confirmed devices
-  - landed devices
-  - missing devices
-- validation now also rejects claim-rewards catalog hash drift:
-  - `claim_rewards_golden_sha256_mismatch`
-  - `claim_rewards_supporting_capture_sha256_mismatch`
-  - plus missing-`sha256` variants for both surfaces
-- readiness metadata now also carries `claim_rewards_capture_inventory` in addition to `claim_rewards_live_capture_coverage`.
+- `daily_ui.reward_panel`
+  - unchanged: remains a truthful `live_capture`
+- `daily_ui.claim_reward`
+  - unchanged: remains a truthful `live_capture`
+- `daily_ui.reward_confirm_state`
+  - unchanged as an anchor: still a `curated_stand_in`
+  - strengthened as a contract:
+    - `metadata.task_support["daily_ui.claim_rewards"].post_tap_contract` now records:
+      - current anchor: `daily_ui.reward_confirm_state`
+      - current scene: `reward_confirm_modal`
+      - current contract kind: `strict_confirm_modal_only`
+      - dispatch recommendation: `direct_result_overlay_is_valid`
+      - observed live outcome scenes:
+        - `reward_post_tap_overlay`
+        - `reward_claimed_result_state`
+      - observed live outcome capture ids:
+        - `post_tap_reward_overlay_live_capture_emulator_5556_after_day7_claim_tap_2026_04_22`
+        - `post_tap_claimed_result_live_capture_127_0_0_1_5559_after_claim_tap`
+        - `post_tap_claimed_result_live_capture_127_0_0_1_5563_after_claim_tap`
+        - `post_tap_claimed_result_live_capture_emulator_5560_after_claim_tap`
+- `catalog.json`
+  - now mirrors the same `post_tap_contract` packet in catalog metadata
+  - now lands reviewed post-tap supporting captures from all four confirmed devices
+  - `capture_inventory.landed_device_serials` is now:
+    - `emulator-5556`
+    - `emulator-5560`
+    - `127.0.0.1:5559`
+    - `127.0.0.1:5563`
+  - `capture_inventory.missing_device_serials` is now empty
 
-Current truthful live vs stand-in status:
+New supporting evidence landed:
 
-- Live capture:
-  - `daily_ui.reward_panel`
-    - canonical baseline:
-      - `assets/templates/daily_ui/goldens/claim_rewards/daily_ui_claim_rewards__reward_panel__baseline__v1.png`
-    - supplemental live evidence:
-      - `assets/templates/daily_ui/goldens/claim_rewards/live/daily_ui_claim_rewards__reward_panel__live_capture__emulator_5560__daily_signin.png`
-      - `assets/templates/daily_ui/goldens/claim_rewards/live/daily_ui_claim_rewards__entry_context__live_capture__emulator_5556__after_fuli_tap.png`
-  - `daily_ui.claim_reward`
-    - canonical baseline:
-      - `assets/templates/daily_ui/goldens/claim_rewards/daily_ui_claim_rewards__claim_button__baseline__v1.png`
-    - source raw capture:
-      - `docs/vision/claim_rewards_live/raw/emulator-5556-after-fuli-tap-2026-04-22.png`
-    - negative supporting evidence:
-      - `assets/templates/daily_ui/goldens/claim_rewards/live/daily_ui_claim_rewards__non_claimable_daily_signin__live_capture__emulator_5556__after_daily_tab_attempt_2.png`
-- Curated stand-in:
-  - `daily_ui.reward_confirm_state`
-    - canonical baseline:
-      - `assets/templates/daily_ui/goldens/claim_rewards/daily_ui_claim_rewards__confirm_state__baseline__v1.png`
-    - supporting live evidence:
-      - `assets/templates/daily_ui/goldens/claim_rewards/live/daily_ui_claim_rewards__non_reward_confirm_modal__live_capture__emulator_5560__exit_game_prompt.png`
-      - `assets/templates/daily_ui/goldens/claim_rewards/live/daily_ui_claim_rewards__post_tap_reward_overlay__live_capture__emulator_5556__after_day7_claim_tap_2026_04_22.png`
+- `post_tap_reward_overlay_live_capture_emulator_5556_after_day7_claim_tap_2026_04_22`
+  - existing overlay evidence kept as the live post-tap result-overlay example from `emulator-5556`
+- `post_tap_claimed_result_live_capture_127_0_0_1_5559_after_claim_tap`
+  - new direct claimed/result state from `127.0.0.1:5559`
+- `post_tap_claimed_result_live_capture_127_0_0_1_5563_after_claim_tap`
+  - new direct claimed/result state from `127.0.0.1:5563`
+- `post_tap_claimed_result_live_capture_emulator_5560_after_claim_tap`
+  - new direct claimed/result state from `emulator-5560`
 
-Four-device capture status:
+Why `reward_confirm_state` still is not promoted:
 
-- confirmed inventory on `2026-04-22`:
-  - `emulator-5556`
-  - `emulator-5560`
-  - `127.0.0.1:5559`
-  - `127.0.0.1:5563`
-- landed evidence in this worktree:
-  - `emulator-5556`
-  - `emulator-5560`
-- no approved raw assets from `127.0.0.1:5559` or `127.0.0.1:5563` landed here, so the branch records that gap explicitly instead of overstating coverage
+- no reviewed raw/live capture in this branch shows a true like-for-like reward confirmation modal
+- every reviewed live post-tap surface now lands in one of two alternate outcomes:
+  - reward-result overlay
+  - direct claimed/result state
+- that is enough to recommend broadening the product/task contract, but not enough to pretend the current strict modal anchor is already live
 
-Why `reward_confirm_state` is still blocked:
+Dispatch recommendation:
 
-- `docs/vision/claim_rewards_live/raw/emulator-5556-after-day7-claim-tap-2026-04-22.png` is useful live provenance, but it shows a reward-acquired overlay rather than the explicit confirm-modal action surface
-- no reviewed raw capture in this worktree proves the real post-claim reward confirmation modal
+- recommended answer for Route A:
+  - `direct_result_overlay_is_valid`
+- reasoning:
+  - four-device reviewed evidence no longer supports `strict_confirm_modal_only` as the truthful live product contract
+  - keeping the anchor curated while recommending the broader live contract preserves truth without forcing a task/runtime change inside Engine C
 
-Flattened GUI-facing surface:
+Assumptions:
 
-- No existing flattened key was removed or renamed.
-- Expected value changes:
-  - `selected_reference_kind` for `daily_ui.claim_reward` now resolves to `live_capture`
-  - `reference_ids` for `daily_ui.claim_reward` now collapse to the single canonical live baseline
-  - `supporting_capture_*` for `daily_ui.reward_confirm_state` now include the post-tap overlay capture
-  - readiness metadata now also exposes `claim_rewards_capture_inventory`
+- the reviewed raw captures from `127.0.0.1:5559`, `127.0.0.1:5563`, and `emulator-5560` are valid zh-TW ROX post-claim evidence for the same task flow
+- the direct claimed/result state is product-relevant post-tap evidence even though it is not a like-for-like modal replacement
+- Engine D will decide whether to convert this recommendation into task success/failure semantics after dispatch confirms the contract direction
+
+Blockers:
+
+- a true live `reward_confirm_modal` capture is still missing
+- this branch intentionally does not change task/runtime behavior, so the recommendation still needs Engine D follow-through before the runtime can treat direct result overlays as valid success states
 
 Verification performed:
 
@@ -115,13 +126,9 @@ Verification performed:
 - `python -m json.tool assets/templates/daily_ui/goldens/claim_rewards/catalog.json`
 - `python -m unittest tests.vision.test_repository tests.vision.test_validation tests.vision.test_tooling`
 
-Known limitations:
-
-- `daily_ui.reward_confirm_state` still does not have an approved live zh-TW ROX confirmation-modal capture
-- the round-8 program confirmed four devices, but only two currently contribute landed evidence in this branch
-- `selected_region` remains the currently selected inspection overlay region; for matched checks that can still be the runtime bbox rather than the repository match window
-
 Recommended next step:
 
-- keep collecting approved live zh-TW ROX evidence for `reward_confirm_modal`
-- if `127.0.0.1:5559` or `127.0.0.1:5563` later yield approved captures, land them as additional supporting evidence or secondary live baselines without changing the current truth contract until the images are actually reviewed
+- dispatch should treat Engine C's answer as:
+  - `direct_result_overlay_is_valid`
+- then open Engine D to align `daily_ui.claim_rewards` task semantics with the broadened post-tap truth contract
+- Engine B only needs follow-up if operator UI should surface the new `post_tap_contract_*` fields directly

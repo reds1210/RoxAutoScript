@@ -87,6 +87,13 @@ class TemplateValidationTests(unittest.TestCase):
         self.assertNotIn("claim_rewards_live_context_anchor_missing_from_coverage", issue_codes)
         self.assertNotIn("claim_rewards_live_context_anchor_missing_live_reference", issue_codes)
         self.assertNotIn("claim_rewards_blocked_scene_missing_from_coverage", issue_codes)
+        self.assertNotIn("missing_claim_rewards_post_tap_contract", issue_codes)
+        self.assertNotIn("invalid_claim_rewards_post_tap_contract_kind", issue_codes)
+        self.assertNotIn("invalid_claim_rewards_post_tap_contract_recommendation", issue_codes)
+        self.assertNotIn("missing_claim_rewards_catalog_post_tap_contract", issue_codes)
+        self.assertNotIn("claim_rewards_post_tap_contract_catalog_mismatch", issue_codes)
+        self.assertNotIn("unknown_claim_rewards_post_tap_contract_capture", issue_codes)
+        self.assertNotIn("claim_rewards_post_tap_contract_capture_anchor_mismatch", issue_codes)
 
     def test_validate_template_repository_rejects_claim_rewards_catalog_hash_drift(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -472,11 +479,24 @@ class TemplateValidationTests(unittest.TestCase):
         )
         self.assertEqual(
             report.metadata["claim_rewards_capture_inventory"]["landed_device_serials"],
-            ["emulator-5556", "emulator-5560"],
+            ["emulator-5556", "emulator-5560", "127.0.0.1:5559", "127.0.0.1:5563"],
         )
         self.assertEqual(
             report.metadata["claim_rewards_capture_inventory"]["missing_device_serials"],
-            ["127.0.0.1:5559", "127.0.0.1:5563"],
+            [],
+        )
+        self.assertEqual(
+            report.metadata["claim_rewards_post_tap_contract"]["dispatch_recommendation"],
+            "direct_result_overlay_is_valid",
+        )
+        self.assertEqual(
+            report.metadata["claim_rewards_post_tap_contract"]["observed_live_outcome_capture_ids"],
+            [
+                "post_tap_reward_overlay_live_capture_emulator_5556_after_day7_claim_tap_2026_04_22",
+                "post_tap_claimed_result_live_capture_127_0_0_1_5559_after_claim_tap",
+                "post_tap_claimed_result_live_capture_127_0_0_1_5563_after_claim_tap",
+                "post_tap_claimed_result_live_capture_emulator_5560_after_claim_tap",
+            ],
         )
 
         restored = VisionWorkspaceReadinessReport.from_dict(report.to_dict())

@@ -92,6 +92,7 @@ Vision-side tooling can now validate template packs before GUI or task code cons
 - claim-rewards anchors now also validate their curation contract: they must declare `metadata.curation`, `metadata.curation.provenance`, and a `curated` anchor must carry at least one reference plus a raster template asset.
 - claim-rewards task support must also point at a valid `metadata.task_support.daily_ui.claim_rewards.golden_catalog_path`, and every curated anchor must map its `golden_id`, primary reference, and `live_capture` flag back to the matching catalog entry.
 - round-8 claim-rewards support now also validates `metadata.task_support.daily_ui.claim_rewards.live_capture_coverage`, per-anchor `metadata.curation.metadata.failure_case`, and the catalog `sha256` values for both canonical goldens and supporting captures so live-promotion drift stays machine-readable instead of silently diverging from the files on disk.
+- round-8 claim-rewards support now also validates a machine-readable `metadata.task_support.daily_ui.claim_rewards.post_tap_contract` packet, mirrored in `catalog.json`, so the confirm-modal truth gap stays explicit and reviewable instead of hiding in free-form handoff notes.
 
 Validation only enforces rules that are already part of the documented contracts:
 
@@ -124,6 +125,7 @@ The readiness report is intentionally stricter than raw filesystem validation:
 - `get_anchor_curation()` exposes the parsed `AnchorCurationProfile` for one anchor.
 - `get_primary_curation_reference()` and `resolve_curation_reference_path()` expose the first GUI-facing baseline image for one curated anchor.
 - `resolve_claim_rewards_catalog_path()`, `get_claim_rewards_golden_catalog()`, `get_claim_rewards_anchor_golden()`, and `list_claim_rewards_supporting_captures()` expose the claim-rewards golden catalog and its supporting live evidence without forcing callers to parse raw JSON.
+- `get_claim_rewards_post_tap_contract()` exposes the manifest-level Route-A decision packet for post-tap behavior.
 - `get_task_support()` returns manifest-level `metadata.task_support` without forcing callers to read the raw manifest dict.
 
 ## GUI Panels
@@ -153,7 +155,7 @@ The vision package now exposes service-layer builders so the GUI can stop invent
 - `resolve_calibration_override()` centralizes per-anchor threshold/region/crop resolution so GUI and tooling do not each re-implement override logic.
 - `build_image_inspection_state()` turns match/crop/calibration context into a shared `ImageInspectionState` that preview, capture, and failure panes can all consume directly.
 - `FailureInspectorState.claim_rewards` now exposes a claim-specific checklist for `daily_ui.claim_rewards`, including per-check match summaries and one `ImageInspectionState` per check so GUI can focus directly on panel/button/confirm failures.
-- `MatchInspectorState`, `ClaimRewardsCheckState`, `ClaimRewardsInspectorState`, and `FailureInspectorState` now flatten GUI-facing render fields such as `selected_image_path`, `selected_overlay`, `selected_overlay_summary`, `selected_region`, `selected_region_summary`, `selected_threshold`, `failure_case`, `failure_explanation`, selected curation summaries, `selected_anchor_label`, `golden_catalog_path`, `selected_golden_id`, `selected_golden_image_path`, `selected_template_path`, `selected_reference_id`, `selected_reference_kind`, `selected_reference_image_path`, the full `reference_ids` / `live_reference_ids` surfaces, and claim-rewards `supporting_capture_*` surfaces for negative/context evidence.
+- `MatchInspectorState`, `ClaimRewardsCheckState`, `ClaimRewardsInspectorState`, and `FailureInspectorState` now flatten GUI-facing render fields such as `selected_image_path`, `selected_overlay`, `selected_overlay_summary`, `selected_region`, `selected_region_summary`, `selected_threshold`, `failure_case`, `failure_explanation`, selected curation summaries, `selected_anchor_label`, `golden_catalog_path`, `selected_golden_id`, `selected_golden_image_path`, `selected_template_path`, `selected_reference_id`, `selected_reference_kind`, `selected_reference_image_path`, the full `reference_ids` / `live_reference_ids` surfaces, claim-rewards `supporting_capture_*` surfaces for negative/context evidence, and the Route-A `post_tap_contract_*` recommendation fields needed for dispatch-ready failure review.
 
 These builders stay inside the vision layer and do not depend on `app`, `core` runtime orchestration details, or emulator transport implementations.
 
@@ -193,6 +195,7 @@ Each anchor participating in that contract carries:
 - `metadata.curation.metadata.source_kind`
 - `metadata.curation.metadata.proof_summary`
 - `metadata.curation.metadata.failure_case`
+- `metadata.task_support["daily_ui.claim_rewards"].post_tap_contract`
 - `metadata.task_support["daily_ui.claim_rewards"].live_capture_coverage`
 
 This gives the vision layer enough information to:
@@ -211,8 +214,11 @@ The branch now also ships a minimal golden organization for this task only:
 - `assets/templates/daily_ui/goldens/claim_rewards/live/daily_ui_claim_rewards__reward_panel__live_capture__emulator_5560__daily_signin.png`
 - `assets/templates/daily_ui/goldens/claim_rewards/live/daily_ui_claim_rewards__entry_context__live_capture__emulator_5556__after_fuli_tap.png`
 - `assets/templates/daily_ui/goldens/claim_rewards/live/daily_ui_claim_rewards__post_tap_reward_overlay__live_capture__emulator_5556__after_day7_claim_tap_2026_04_22.png`
+- `assets/templates/daily_ui/goldens/claim_rewards/live/daily_ui_claim_rewards__post_tap_claimed_result__live_capture__127_0_0_1_5559__after_claim_tap.png`
+- `assets/templates/daily_ui/goldens/claim_rewards/live/daily_ui_claim_rewards__post_tap_claimed_result__live_capture__127_0_0_1_5563__after_claim_tap.png`
+- `assets/templates/daily_ui/goldens/claim_rewards/live/daily_ui_claim_rewards__post_tap_claimed_result__live_capture__emulator_5560__after_claim_tap.png`
 
-The reward-panel baseline and claim-button baseline are now both promoted to live zh-TW ROX captures. The confirm-state baseline remains a curated stand-in with no approved live modal proof yet, but it now also carries a live post-tap overlay capture as alternate supporting evidence.
+The reward-panel baseline and claim-button baseline are now both promoted to live zh-TW ROX captures. The confirm-state baseline remains a curated stand-in with no approved live modal proof yet, but it now carries four-device live post-tap supporting evidence plus a machine-readable recommendation to broaden the live contract toward direct result overlays instead of the strict modal.
 
 `catalog.json` is the machine-readable index for the three shipped claim-rewards baselines. It records:
 
@@ -234,8 +240,11 @@ Current claim-rewards golden coverage:
 - `live/daily_ui_claim_rewards__wrong_reward_surface__live_capture__emulator_5560__kingdom_pass_rewards.png`: live negative-case evidence for landing on Kingdom Pass rewards instead of the daily sign-in panel
 - `live/daily_ui_claim_rewards__non_reward_confirm_modal__live_capture__emulator_5560__exit_game_prompt.png`: live negative-case evidence for a generic confirmation dialog that must not be mistaken for the reward confirmation modal
 - `live/daily_ui_claim_rewards__post_tap_reward_overlay__live_capture__emulator_5556__after_day7_claim_tap_2026_04_22.png`: live alternate post-tap evidence showing a reward-acquired overlay instead of the explicit confirmation modal
+- `live/daily_ui_claim_rewards__post_tap_claimed_result__live_capture__127_0_0_1_5559__after_claim_tap.png`: live alternate post-tap evidence showing a direct claimed/result state on `127.0.0.1:5559`
+- `live/daily_ui_claim_rewards__post_tap_claimed_result__live_capture__127_0_0_1_5563__after_claim_tap.png`: live alternate post-tap evidence showing a direct claimed/result state on `127.0.0.1:5563`
+- `live/daily_ui_claim_rewards__post_tap_claimed_result__live_capture__emulator_5560__after_claim_tap.png`: live alternate post-tap evidence showing a direct claimed/result state on `emulator-5560`
 
-`daily_ui.reward_panel` and `daily_ui.claim_reward` are now backed by live captures. `daily_ui.reward_confirm_state` remains a curated stand-in because no approved live confirmation-modal capture is available in this worktree. Supporting raw screenshots used during this curation pass are tracked under `docs/vision/claim_rewards_live/raw/` so future replacements can verify which files were true live captures versus upstream context only, and the catalog/readiness metadata now explicitly record that round-8 confirmed four devices but only landed approved evidence from two of them.
+`daily_ui.reward_panel` and `daily_ui.claim_reward` are now backed by live captures. `daily_ui.reward_confirm_state` remains a curated stand-in because no approved live confirmation-modal capture is available in this worktree. Supporting raw screenshots used during this curation pass are tracked under `docs/vision/claim_rewards_live/raw/` so future replacements can verify which files were true live captures versus upstream context only, and the catalog/readiness metadata now explicitly record both four-device landed evidence and the Route-A recommendation to treat direct-result overlays as the truthful live post-tap contract.
 
 ## GUI Consumption
 
@@ -270,6 +279,12 @@ When the failure metadata includes a nested `claim_rewards` payload, Engine B sh
 - `FailureInspectorState.claim_rewards.supporting_capture_failure_cases`
 - `FailureInspectorState.claim_rewards.live_supporting_capture_count`
 - `FailureInspectorState.claim_rewards.live_supporting_capture_ids`
+- `FailureInspectorState.claim_rewards.post_tap_contract_anchor_id`
+- `FailureInspectorState.claim_rewards.post_tap_contract_scene_id`
+- `FailureInspectorState.claim_rewards.post_tap_contract_recommendation`
+- `FailureInspectorState.claim_rewards.post_tap_contract_observed_scene_ids`
+- `FailureInspectorState.claim_rewards.post_tap_contract_observed_capture_ids`
+- `FailureInspectorState.claim_rewards.post_tap_contract_summary`
 - `FailureInspectorState.claim_rewards.selected_provenance_kind`
 - `FailureInspectorState.claim_rewards.selected_provenance_summary`
 - `FailureInspectorState.claim_rewards.selected_curation_summary`
@@ -301,6 +316,12 @@ When the failure metadata includes a nested `claim_rewards` payload, Engine B sh
 - `FailureInspectorState.supporting_capture_failure_cases`
 - `FailureInspectorState.live_supporting_capture_count`
 - `FailureInspectorState.live_supporting_capture_ids`
+- `FailureInspectorState.post_tap_contract_anchor_id`
+- `FailureInspectorState.post_tap_contract_scene_id`
+- `FailureInspectorState.post_tap_contract_recommendation`
+- `FailureInspectorState.post_tap_contract_observed_scene_ids`
+- `FailureInspectorState.post_tap_contract_observed_capture_ids`
+- `FailureInspectorState.post_tap_contract_summary`
 - `FailureInspectorState.provenance_kind`
 - `FailureInspectorState.provenance_summary`
 - `FailureInspectorState.failure_case`

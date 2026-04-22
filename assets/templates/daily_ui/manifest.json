@@ -26,6 +26,32 @@
           "blocked_scene_ids": [
             "reward_confirm_modal"
           ]
+        },
+        "post_tap_contract": {
+          "anchor_id": "daily_ui.reward_confirm_state",
+          "current_scene_id": "reward_confirm_modal",
+          "current_contract_kind": "strict_confirm_modal_only",
+          "dispatch_recommendation": "direct_result_overlay_is_valid",
+          "observed_live_outcome_scene_ids": [
+            "reward_post_tap_overlay",
+            "reward_claimed_result_state"
+          ],
+          "observed_live_outcome_capture_ids": [
+            "post_tap_reward_overlay_live_capture_emulator_5556_after_day7_claim_tap_2026_04_22",
+            "post_tap_claimed_result_live_capture_127_0_0_1_5559_after_claim_tap",
+            "post_tap_claimed_result_live_capture_127_0_0_1_5563_after_claim_tap",
+            "post_tap_claimed_result_live_capture_emulator_5560_after_claim_tap"
+          ],
+          "missing_live_scene_ids": [
+            "reward_confirm_modal"
+          ],
+          "observed_live_device_serials": [
+            "emulator-5556",
+            "emulator-5560",
+            "127.0.0.1:5559",
+            "127.0.0.1:5563"
+          ],
+          "summary": "Four-device live evidence shows the claim tap resolving into a reward-acquired overlay or a direct claimed/result state, not the strict confirm-modal contract."
         }
       }
     }
@@ -196,7 +222,19 @@
             "live_capture": false,
             "replacement_target": "approved_live_zh_tw_capture",
             "proof_summary": "Shows the confirmation modal state used to verify the post-claim confirm step.",
-            "failure_case": "confirm_modal_missing_after_claim_tap"
+            "failure_case": "confirm_modal_missing_after_claim_tap",
+            "dispatch_recommendation": "direct_result_overlay_is_valid",
+            "observed_live_outcome_scene_ids": [
+              "reward_post_tap_overlay",
+              "reward_claimed_result_state"
+            ],
+            "observed_live_outcome_capture_ids": [
+              "post_tap_reward_overlay_live_capture_emulator_5556_after_day7_claim_tap_2026_04_22",
+              "post_tap_claimed_result_live_capture_127_0_0_1_5559_after_claim_tap",
+              "post_tap_claimed_result_live_capture_127_0_0_1_5563_after_claim_tap",
+              "post_tap_claimed_result_live_capture_emulator_5560_after_claim_tap"
+            ],
+            "contract_summary": "Keep the strict confirm-modal anchor as a curated stand-in for now, but recommend broadening the live post-tap contract to accept reward-result surfaces because no reviewed device produced the modal."
           }
         }
       }
