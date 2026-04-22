@@ -39,6 +39,17 @@ These artifacts give Codex and reviewers a stable handoff packet without using t
 4. Let repository-level Codex automatic review run, or comment `@codex review`.
 5. Apply feedback and rerun the loop until the gate is green and the PR review is clear.
 
+## Automatic Merge
+
+Eligible same-repository `codex/*` pull requests targeting `main` now merge automatically after the autonomy quality gate passes.
+
+Notes:
+
+- no manual label or repository variable is required
+- draft pull requests are excluded
+- the workflow uses the first merge method allowed by the repository in this order: squash, rebase, merge
+- if review must remain mandatory, keep that requirement in GitHub branch protection because the workflow does not parse Codex issue-comment text
+
 ## Pull Request Template
 
 This repo now includes:

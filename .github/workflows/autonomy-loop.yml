@@ -3,7 +3,7 @@ name: autonomy-loop
 on:
   workflow_dispatch:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, labeled, unlabeled, ready_for_review, converted_to_draft]
   push:
     branches:
       - main
@@ -12,6 +12,10 @@ on:
 jobs:
   autonomy:
     runs-on: windows-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
 
     steps:
       - name: Check out repository
@@ -92,3 +96,90 @@ jobs:
         if: ${{ steps.quality_gate.outputs.exit_code != '0' }}
         shell: pwsh
         run: exit 1
+
+  merge_pr:
+    if: ${{ github.event_name == 'pull_request' }}
+    needs: autonomy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Merge eligible Codex pull request
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pullRequest = context.payload.pull_request;
+            const sameRepository = pullRequest.head.repo.full_name === `${context.repo.owner}/${context.repo.repo}`;
+            const baseIsMain = pullRequest.base.ref === "main";
+            const headIsCodexBranch = pullRequest.head.ref.startsWith("codex/");
+
+            if (!sameRepository || !baseIsMain || !headIsCodexBranch || pullRequest.draft) {
+              core.notice(
+                `Skip merge for PR #${pullRequest.number}: ` +
+                `sameRepository=${sameRepository}, base=${pullRequest.base.ref}, head=${pullRequest.head.ref}, draft=${pullRequest.draft}.`
+              );
+              return;
+            }
+
+            const response = await github.graphql(
+              `
+                query($owner: String!, $repo: String!, $number: Int!) {
+                  repository(owner: $owner, name: $repo) {
+                    squashMergeAllowed
+                    rebaseMergeAllowed
+                    mergeCommitAllowed
+                    pullRequest(number: $number) {
+                      number
+                      merged
+                      mergeable
+                      mergeStateStatus
+                    }
+                  }
+                }
+              `,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                number: pullRequest.number,
+              }
+            );
+
+            const repository = response.repository;
+            const livePullRequest = repository.pullRequest;
+            if (livePullRequest.merged) {
+              core.notice(`PR #${pullRequest.number} is already merged.`);
+              return;
+            }
+
+            const mergeMethod =
+              (repository.squashMergeAllowed && "squash") ||
+              (repository.rebaseMergeAllowed && "rebase") ||
+              (repository.mergeCommitAllowed && "merge") ||
+              null;
+
+            if (!mergeMethod) {
+              core.setFailed(`PR #${pullRequest.number} cannot be auto-merged because the repository allows no merge method.`);
+              return;
+            }
+
+            if (livePullRequest.mergeable !== "MERGEABLE") {
+              core.setFailed(
+                `PR #${pullRequest.number} is not mergeable after the autonomy gate. mergeable=${livePullRequest.mergeable}, ` +
+                `mergeStateStatus=${livePullRequest.mergeStateStatus}.`
+              );
+              return;
+            }
+
+            try {
+              await github.rest.pulls.merge({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: pullRequest.number,
+                merge_method: mergeMethod,
+              });
+              core.notice(`Merged PR #${pullRequest.number} with ${mergeMethod}.`);
+            } catch (error) {
+              core.setFailed(`GitHub rejected auto-merge for PR #${pullRequest.number}: ${error.message}`);
+            }
