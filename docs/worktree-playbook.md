@@ -20,7 +20,7 @@ Every worker must read these files before editing:
 3. `docs/engine-roster.md`
 4. `docs/worktree-playbook.md`
 5. `docs/architecture-contracts.md`
-6. the active round brief, currently `docs/round-8-claim-rewards-four-device-capture.md`
+6. the active round brief, currently `docs/round-9-guild-order-material-logic.md`
 7. the relevant handoff under `docs/handoffs/`
 
 ## 3. Thread and Worktree Rules
@@ -54,7 +54,7 @@ Model policy:
 
 ## 5. Active Round Branches
 
-Use these existing branches and worktrees for round 8:
+Use these existing branches and worktrees for round 9:
 
 - `codex/core-runtime-step-telemetry`
 - `codex/gui-claim-rewards-production-telemetry`
@@ -133,7 +133,7 @@ Forbidden dependencies:
 
 ## 9. Merge Order
 
-For round 8, merge in this order unless there is a strong reason not to:
+For round 9, merge in this order unless there is a strong reason not to:
 
 1. `Engine E`
 2. `Engine C`
@@ -143,23 +143,18 @@ For round 8, merge in this order unless there is a strong reason not to:
 
 Reason:
 
-- four-device raw/live evidence should settle before vision promotion
-- promoted asset provenance should settle before task foundations refresh
-- runtime and GUI should harden around the final promoted truth, not around provisional capture notes
+- raw/live evidence should settle before vision promotion
+- promoted truth should settle before task/runtime hardening
+- GUI should harden around the final downstream contract, not around provisional notes
 
 ## 9a. Device Capture Rule
 
-Round 8 assumes four ADB-visible devices:
-
-- `emulator-5556`
-- `emulator-5560`
-- `127.0.0.1:5559`
-- `127.0.0.1:5563`
+Round 9 may still use multiple ADB-visible devices when evidence capture is required.
 
 When a worker captures evidence:
 
 - record the exact serial in the handoff
-- prefer fixed device roles instead of random screenshot collection
+- prefer fixed device roles instead of random screenshot collection when more than one device is involved
 - do not promote a raw capture to canonical status unless provenance is explicit and the target scene contract is satisfied
 
 ## 10. How To Start A Thread
@@ -225,4 +220,4 @@ A track is ready to merge when:
 - do not hide contract changes inside unrelated commits
 - do not edit another track's owned area unless explicitly taking over that track
 - always leave a readable handoff
-- round 8 stays scoped to `daily_ui.claim_rewards`
+- round 9 stays scoped to the first-cut guild-order flow only

@@ -2,14 +2,14 @@
 
 This repo currently uses a fixed 4-engine parallel model plus one optional support engine.
 
-The active wave is `round-8 claim_rewards four-device capture promotion`.
+The active wave is `round-9 guild-order material logic`.
 
 ## Model Policy
 
 - default delegated model: `gpt-5.4`
 - do not use mini variants for engine work unless the user explicitly asks for them
 - each engine keeps a stable specialization
-- for round 8, reuse the existing worktree and branch for the same engine instead of creating a new one
+- for round 9, reuse the existing worktree and branch for the same engine instead of creating a new one
 
 ## Standard Engine Lineup
 
@@ -52,7 +52,15 @@ The active wave is `round-8 claim_rewards four-device capture promotion`.
 
 ## Active Order
 
-Default round-8 start order:
+Default round-9 start order:
+
+1. `Engine E`
+2. `Engine D`
+3. `Engine C`
+4. `Engine A`
+5. `Engine B`
+
+Default round-9 merge order:
 
 1. `Engine E`
 2. `Engine C`
@@ -60,29 +68,16 @@ Default round-8 start order:
 4. `Engine A`
 5. `Engine B`
 
-Default round-8 merge order:
+## Current Capture Rule
 
-1. `Engine E`
-2. `Engine C`
-3. `Engine D`
-4. `Engine A`
-5. `Engine B`
-
-## Current Device Inventory
-
-Round 8 assumes four ADB-visible devices are available:
-
-- `emulator-5556`
-- `emulator-5560`
-- `127.0.0.1:5559`
-- `127.0.0.1:5563`
+Round 9 may still use multiple ADB-visible devices for evidence work.
 
 When a worker captures live evidence, the handoff should record the exact ADB serial used.
 
 ## Reuse Policy
 
 - do not create a new worktree just because a new round started
-- each engine should continue on its existing round-6/round-7/round-8 branch and worktree until the user explicitly asks for a branch rollover
+- each engine should continue on its existing round-6/round-7/round-8/round-9 branch and worktree until the user explicitly asks for a branch rollover
 - before starting a new thread on one of these engines, sync that worktree with `main`
 
 ## Non-Negotiable Rules
@@ -91,4 +86,4 @@ When a worker captures live evidence, the handoff should record the exact ADB se
 - optional support engine: `1`
 - maximum active worktrees per engine: `1`
 - each engine keeps its owned paths
-- `daily_ui.claim_rewards` remains the only task in scope for this wave
+- round 9 stays scoped to the first-cut guild-order flow only
