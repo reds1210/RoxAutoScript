@@ -72,6 +72,10 @@ class TemplateValidationTests(unittest.TestCase):
         self.assertNotIn("missing_claim_rewards_live_capture_coverage", issue_codes)
         self.assertNotIn("claim_rewards_live_anchor_missing_from_coverage", issue_codes)
         self.assertNotIn("claim_rewards_stand_in_anchor_missing_from_coverage", issue_codes)
+        self.assertNotIn("claim_rewards_live_context_coverage_overlap", issue_codes)
+        self.assertNotIn("claim_rewards_live_context_anchor_not_stand_in", issue_codes)
+        self.assertNotIn("claim_rewards_live_context_anchor_missing_from_coverage", issue_codes)
+        self.assertNotIn("claim_rewards_live_context_anchor_missing_live_reference", issue_codes)
         self.assertNotIn("claim_rewards_blocked_scene_missing_from_coverage", issue_codes)
 
     def test_validate_template_repository_reports_invalid_anchor_configuration(self) -> None:
@@ -379,13 +383,34 @@ class TemplateValidationTests(unittest.TestCase):
         self.assertFalse(claim_dependency.inventory_mismatch)
         self.assertEqual(claim_dependency.curation_status.value, "curated")
         self.assertEqual(claim_dependency.provenance_kind, AnchorAssetProvenanceKind.CURATED_STAND_IN)
-        self.assertEqual(claim_dependency.curation_reference_count, 1)
+        self.assertEqual(claim_dependency.curation_reference_count, 2)
+        self.assertEqual(claim_dependency.selected_reference_id, "claim_button_baseline_v1")
+        self.assertEqual(claim_dependency.selected_reference_kind, "curated_stand_in")
+        self.assertEqual(
+            claim_dependency.reference_ids,
+            ["claim_button_baseline_v1", "claim_button_live_context_reward_panel_open_v1"],
+        )
+        self.assertEqual(claim_dependency.live_reference_count, 1)
+        self.assertEqual(
+            claim_dependency.live_reference_ids,
+            ["claim_button_live_context_reward_panel_open_v1"],
+        )
         self.assertEqual(claim_dependency.failure_case, "claim_button_missing_or_not_tappable")
+        self.assertTrue(
+            claim_dependency.live_reference_image_paths[0].endswith(
+                "daily_ui_claim_rewards__reward_panel__baseline__v1.png"
+            )
+        )
         self.assertIn("locale=zh-TW", claim_dependency.provenance_summary)
         self.assertIn("scene=reward_panel_claimable", claim_dependency.curation_summary)
+        self.assertIn("live_refs=1", claim_dependency.curation_summary)
         self.assertEqual(
             report.metadata["claim_rewards_live_capture_coverage"]["stand_in_anchor_ids"],
             ["daily_ui.claim_reward", "daily_ui.reward_confirm_state"],
+        )
+        self.assertEqual(
+            report.metadata["claim_rewards_live_capture_coverage"]["live_context_anchor_ids"],
+            ["daily_ui.claim_reward"],
         )
 
         restored = VisionWorkspaceReadinessReport.from_dict(report.to_dict())

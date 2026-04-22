@@ -11,7 +11,7 @@
       "reward_panel_claimable": "curated_stand_in",
       "reward_confirm_modal": "curated_stand_in"
     },
-    "notes": "The canonical reward-panel-open golden is now a live zh-TW ROX screenshot. Claimable and confirm-modal scenes remain curated stand-ins because the available accounts did not expose approved live claimable or confirmation-modal states during this round. Negative-case live captures are cataloged separately for an already-signed daily sign-in panel, the Kingdom Pass rewards surface, and a generic exit-game confirmation modal."
+    "notes": "The canonical reward-panel-open golden is a live zh-TW ROX screenshot. The claim-button baseline remains a curated stand-in but now carries live reward-panel context evidence, and the confirm-modal baseline remains a curated stand-in until an approved live modal capture is available. Negative-case live captures are cataloged separately so visually similar but incorrect scenes are not promoted into positive baselines."
   },
   "goldens": [
     {
@@ -60,8 +60,10 @@
         "non_claimable_daily_signin_live_capture_emulator_5556_after_daily_tab_attempt_2"
       ],
       "limitations": [
+        "not a live device capture",
+        "primary proof is still screenshot-style",
         "no approved live zh-TW claimable panel was available on the reachable accounts during this round",
-        "live negative-case evidence exists for an already-signed daily sign-in panel, but not for an enabled claim button",
+        "depends on a separate live context capture for the surrounding real ROX panel",
         "does not document the post-tap confirmation modal"
       ]
     },
@@ -93,7 +95,19 @@
   ],
   "supporting_captures": [
     {
-      "capture_id": "reward_panel_live_capture_emulator_5560_daily_signin",
+      "capture_id": "claim_button_context_reward_panel_open_v1",
+      "file_name": "daily_ui_claim_rewards__reward_panel__baseline__v1.png",
+      "anchor_id": "daily_ui.claim_reward",
+      "scene_id": "reward_panel_open",
+      "resolution": [1280, 720],
+      "sha256": "3eb1a7256eb88bb6ad5038cf17ac093de8e0f51ce49263229a8e75facfda7a62",
+      "source_kind": "live_zh_tw_rox_capture",
+      "live_capture": true,
+      "evidence_role": "scene_context_only",
+      "notes": "Reuses the approved live reward-panel baseline as scene-context evidence for the claim button. The button lane is visible in real zh-TW ROX UI, but the enabled claimable state is still not directly proven by a live capture."
+    },
+    {
+      "capture_id": "reward_panel_open_emulator_5560_daily_signin_v1",
       "file_name": "live/daily_ui_claim_rewards__reward_panel__live_capture__emulator_5560__daily_signin.png",
       "anchor_id": "daily_ui.reward_panel",
       "inspection_role": "reward_panel",

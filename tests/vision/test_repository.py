@@ -58,8 +58,24 @@ class AnchorRepositoryTests(unittest.TestCase):
             ["daily_ui.reward_panel"],
         )
         self.assertEqual(
+            repository.get_task_support("daily_ui.claim_rewards")["live_capture_coverage"]["live_context_anchor_ids"],
+            ["daily_ui.claim_reward"],
+        )
+        self.assertEqual(
             reward_panel_curation.metadata["failure_case"],
             "reward_panel_not_open_or_wrong_surface",
+        )
+        claim_button_curation = repository.get_anchor_curation("daily_ui.claim_reward")
+        self.assertIsNotNone(claim_button_curation)
+        self.assertEqual(claim_button_curation.reference_count, 2)
+        self.assertEqual(
+            repository.list_curation_references("daily_ui.claim_reward")[1].reference_id,
+            "claim_button_live_context_reward_panel_open_v1",
+        )
+        self.assertTrue(
+            str(repository.resolve_curation_reference_paths("daily_ui.claim_reward")[1]).endswith(
+                "daily_ui_claim_rewards__reward_panel__baseline__v1.png"
+            )
         )
 
     def test_repository_exposes_manifest_and_search_helpers(self) -> None:

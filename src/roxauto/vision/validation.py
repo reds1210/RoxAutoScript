@@ -160,6 +160,13 @@ class TemplateDependencyReadiness:
     inventory_mismatch: bool = False
     curation_status: AnchorCurationStatus | None = None
     curation_reference_count: int = 0
+    selected_reference_id: str = ""
+    selected_reference_kind: str = ""
+    reference_ids: list[str] = field(default_factory=list)
+    reference_image_paths: list[str] = field(default_factory=list)
+    live_reference_count: int = 0
+    live_reference_ids: list[str] = field(default_factory=list)
+    live_reference_image_paths: list[str] = field(default_factory=list)
     provenance_kind: AnchorAssetProvenanceKind | None = None
     provenance_summary: str = ""
     curation_summary: str = ""
@@ -207,6 +214,19 @@ class TemplateDependencyReadiness:
             inventory_mismatch=bool(data.get("inventory_mismatch", False)),
             curation_status=curation_status,
             curation_reference_count=int(data.get("curation_reference_count", 0)),
+            selected_reference_id=str(data.get("selected_reference_id", "")),
+            selected_reference_kind=str(data.get("selected_reference_kind", "")),
+            reference_ids=[str(reference_id) for reference_id in data.get("reference_ids", [])],
+            reference_image_paths=[
+                str(image_path) for image_path in data.get("reference_image_paths", [])
+            ],
+            live_reference_count=int(data.get("live_reference_count", 0)),
+            live_reference_ids=[
+                str(reference_id) for reference_id in data.get("live_reference_ids", [])
+            ],
+            live_reference_image_paths=[
+                str(image_path) for image_path in data.get("live_reference_image_paths", [])
+            ],
             provenance_kind=provenance_kind,
             provenance_summary=str(data.get("provenance_summary", "")),
             curation_summary=str(data.get("curation_summary", "")),
@@ -585,6 +605,10 @@ def build_vision_workspace_readiness_report(
             asset_exists = Path(resolved_template_path).exists()
             metadata.setdefault("placeholder", bool(anchor.metadata.get("placeholder", False)))
             curation = repository.get_anchor_curation(anchor_id)
+        reference_ids = _reference_ids(curation)
+        reference_image_paths = _reference_image_paths(repository, anchor_id)
+        live_reference_ids = _live_reference_ids(curation)
+        live_reference_image_paths = _live_reference_image_paths(repository, anchor_id)
 
         readiness_status, message = _resolve_template_readiness_status(
             repository_present=repository_present,
@@ -626,6 +650,13 @@ def build_vision_workspace_readiness_report(
                 inventory_mismatch=inventory_mismatch,
                 curation_status=curation.status if curation is not None else None,
                 curation_reference_count=curation.reference_count if curation is not None else 0,
+                selected_reference_id=_selected_reference_id(curation),
+                selected_reference_kind=_selected_reference_kind(curation),
+                reference_ids=reference_ids,
+                reference_image_paths=reference_image_paths,
+                live_reference_count=len(live_reference_ids),
+                live_reference_ids=live_reference_ids,
+                live_reference_image_paths=live_reference_image_paths,
                 provenance_kind=curation.provenance_kind if curation is not None else None,
                 provenance_summary=_provenance_summary(curation),
                 curation_summary=_curation_summary(curation),
@@ -1401,6 +1432,7 @@ def _curation_summary(curation: AnchorCurationProfile | None) -> str:
     if curation.variant_id:
         parts.append(f"variant={curation.variant_id}")
     parts.append(f"refs={curation.reference_count}")
+    parts.append(f"live_refs={len(_live_reference_ids(curation))}")
     if curation.intent_id:
         parts.append(f"intent={curation.intent_id}")
     return " | ".join(parts)
@@ -1416,6 +1448,64 @@ def _failure_case(curation: AnchorCurationProfile | None) -> str:
     if curation is None:
         return ""
     return str(curation.metadata.get("failure_case", "")).strip()
+
+
+def _selected_reference_id(curation: AnchorCurationProfile | None) -> str:
+    if curation is None or not curation.references:
+        return ""
+    return str(curation.references[0].reference_id)
+
+
+def _selected_reference_kind(curation: AnchorCurationProfile | None) -> str:
+    if curation is None or not curation.references:
+        return ""
+    return str(curation.references[0].kind)
+
+
+def _reference_ids(curation: AnchorCurationProfile | None) -> list[str]:
+    if curation is None:
+        return []
+    return [str(reference.reference_id) for reference in curation.references if str(reference.reference_id)]
+
+
+def _reference_image_paths(repository: AnchorRepository | None, anchor_id: str) -> list[str]:
+    if repository is None or not anchor_id or not repository.has_anchor(anchor_id):
+        return []
+    return [str(path) for path in repository.resolve_curation_reference_paths(anchor_id)]
+
+
+def _is_live_reference(reference: Any) -> bool:
+    if reference is None:
+        return False
+    kind = str(getattr(reference, "kind", "") or "").strip().lower()
+    metadata = getattr(reference, "metadata", {})
+    if "live" in kind:
+        return True
+    return bool(metadata.get("live_capture", False)) if isinstance(metadata, dict) else False
+
+
+def _live_reference_ids(curation: AnchorCurationProfile | None) -> list[str]:
+    if curation is None:
+        return []
+    return [
+        str(reference.reference_id)
+        for reference in curation.references
+        if str(reference.reference_id) and _is_live_reference(reference)
+    ]
+
+
+def _live_reference_image_paths(repository: AnchorRepository | None, anchor_id: str) -> list[str]:
+    if repository is None or not anchor_id or not repository.has_anchor(anchor_id):
+        return []
+    curation = repository.get_anchor_curation(anchor_id)
+    if curation is None:
+        return []
+    live_reference_paths: list[str] = []
+    for reference in curation.references:
+        if not reference.image_path or not _is_live_reference(reference):
+            continue
+        live_reference_paths.append(str(repository.resolve_repository_path(reference.image_path)))
+    return live_reference_paths
 
 
 def _claim_rewards_live_capture_coverage(repository: AnchorRepository | None) -> dict[str, Any]:
@@ -1454,6 +1544,11 @@ def _validate_claim_rewards_live_capture_coverage(
         for anchor_id in coverage.get("stand_in_anchor_ids", [])
         if str(anchor_id).strip()
     }
+    live_context_anchor_ids = {
+        str(anchor_id).strip()
+        for anchor_id in coverage.get("live_context_anchor_ids", [])
+        if str(anchor_id).strip()
+    }
     blocked_scene_ids = {
         str(scene_id).strip()
         for scene_id in coverage.get("blocked_scene_ids", [])
@@ -1477,13 +1572,45 @@ def _validate_claim_rewards_live_capture_coverage(
                 },
             )
         )
+    if live_anchor_ids & live_context_anchor_ids:
+        issues.append(
+            TemplateValidationIssue(
+                code="claim_rewards_live_context_coverage_overlap",
+                severity=TemplateValidationSeverity.ERROR,
+                message=(
+                    "Claim-rewards live_capture_coverage cannot list the same anchor "
+                    "in both live_anchor_ids and live_context_anchor_ids."
+                ),
+                path=str(repository.manifest_path),
+                metadata={
+                    "task_id": "daily_ui.claim_rewards",
+                    "anchor_ids": sorted(live_anchor_ids & live_context_anchor_ids),
+                },
+            )
+        )
+    if live_context_anchor_ids - stand_in_anchor_ids:
+        issues.append(
+            TemplateValidationIssue(
+                code="claim_rewards_live_context_anchor_not_stand_in",
+                severity=TemplateValidationSeverity.ERROR,
+                message=(
+                    "Claim-rewards live_context_anchor_ids must stay limited to anchors "
+                    "that are still tracked as curated stand-ins."
+                ),
+                path=str(repository.manifest_path),
+                metadata={
+                    "task_id": "daily_ui.claim_rewards",
+                    "anchor_ids": sorted(live_context_anchor_ids - stand_in_anchor_ids),
+                },
+            )
+        )
 
     claim_rewards_anchor_ids = {
         anchor.anchor_id
         for anchor in repository.list_anchors()
         if "daily_ui.claim_rewards" in _anchor_task_ids(dict(anchor.metadata))
     }
-    unknown_anchor_ids = (live_anchor_ids | stand_in_anchor_ids) - claim_rewards_anchor_ids
+    unknown_anchor_ids = (live_anchor_ids | stand_in_anchor_ids | live_context_anchor_ids) - claim_rewards_anchor_ids
     if unknown_anchor_ids:
         issues.append(
             TemplateValidationIssue(
@@ -1524,6 +1651,38 @@ def _validate_claim_rewards_live_capture_coverage(
                     message=(
                         f"Anchor '{anchor_id}' is marked as curated_stand_in but is missing from "
                         "live_capture_coverage.stand_in_anchor_ids."
+                    ),
+                    anchor_id=anchor_id,
+                    path=str(repository.manifest_path),
+                    metadata={"task_id": "daily_ui.claim_rewards"},
+                )
+            )
+        if (
+            curation.provenance_kind == AnchorAssetProvenanceKind.CURATED_STAND_IN
+            and _live_reference_ids(curation)
+            and anchor_id not in live_context_anchor_ids
+        ):
+            issues.append(
+                TemplateValidationIssue(
+                    code="claim_rewards_live_context_anchor_missing_from_coverage",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=(
+                        f"Anchor '{anchor_id}' includes live-context references but is missing from "
+                        "live_capture_coverage.live_context_anchor_ids."
+                    ),
+                    anchor_id=anchor_id,
+                    path=str(repository.manifest_path),
+                    metadata={"task_id": "daily_ui.claim_rewards"},
+                )
+            )
+        if anchor_id in live_context_anchor_ids and not _live_reference_ids(curation):
+            issues.append(
+                TemplateValidationIssue(
+                    code="claim_rewards_live_context_anchor_missing_live_reference",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=(
+                        f"Anchor '{anchor_id}' is listed in live_context_anchor_ids but does not "
+                        "declare any live-context curation reference."
                     ),
                     anchor_id=anchor_id,
                     path=str(repository.manifest_path),
