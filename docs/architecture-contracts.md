@@ -274,6 +274,30 @@ Rules:
 - runtime should project the active and last completed task state through `TaskRunTelemetry` instead of forcing GUI layers to reconstruct step progress from raw events
 - retries should increment `attempt` for the same task id on the same instance runtime context
 
+### `TaskRunOutcomeSummary`
+
+Minimum fields:
+
+- `task_id`
+- `instance_id`
+- `adb_serial`
+- `run_id`
+- `status`
+- `outcome_code`
+- `failure_reason_id`
+- `last_observed_state`
+- `workflow_mode`
+- `anchor_id`
+- `expected_anchor_id`
+- `signal_anchor_ids`
+- `matched_anchor_ids`
+- `source_image`
+
+Rules:
+
+- runtime-owned finished-run summaries should prefer structured step telemetry or failure snapshot metadata over parsing free-form `message` text
+- task-specific fields may remain empty when a run does not expose them, but the summary shape should stay stable for GUI, PR handoff, and smoke-report consumers
+
 ### `TaskExecutionContext`
 
 Minimum fields:
@@ -549,6 +573,8 @@ Additional runtime/task integration methods:
 - `has_task_factory(task_id)`
 - `build_registered_task_spec(instance_id, task_id, metadata=None)`
 - `enqueue_registered_task(instance_id, task_id, priority=100, ...)`
+- `list_task_run_summaries(task_id=None, instance_id=None)`
+- `build_task_outcome_report(task_id, instance_id=None)`
 
 Rules:
 
@@ -557,6 +583,7 @@ Rules:
 - sync `poll()` / `refresh_runtime_contexts()` remain valid for tests and CLI-style tooling, but GUI integrations should not loop over them on the UI thread
 - production GUI wiring should start from `build_adb_live_runtime_session(...)` instead of hand-building adapter/execution services
 - runtime/task integration should prefer registered task factories over hard-coding task-pack imports inside `core` or `emulator`
+- runtime-owned task outcome reporting should expose per-run `TaskRunOutcomeSummary` data so later GUI work or PR handoff consumers can compare real runs across devices without rehydrating task-local draft state
 
 ### `RuntimeTaskFactoryRequest`
 

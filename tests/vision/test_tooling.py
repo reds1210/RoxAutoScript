@@ -96,7 +96,27 @@ class VisionToolingTests(unittest.TestCase):
         self.assertIn("live_refs=1", claim_dependency.curation_summary)
         self.assertEqual(
             workspace.readiness.metadata["claim_rewards_capture_inventory"]["landed_device_serials"],
-            ["emulator-5556", "emulator-5560"],
+            ["emulator-5556", "emulator-5560", "127.0.0.1:5559", "127.0.0.1:5563"],
+        )
+        self.assertEqual(
+            workspace.readiness.metadata["claim_rewards_post_tap_contract"]["dispatch_recommendation"],
+            "direct_result_overlay_is_valid",
+        )
+        self.assertEqual(
+            workspace.readiness.metadata["guild_order_scene_contract"]["evidence_state"],
+            "placeholder_only",
+        )
+        self.assertEqual(
+            workspace.readiness.metadata["guild_order_scene_contract"]["decision_surface_state"],
+            "blocked_by_missing_material_evidence",
+        )
+        self.assertEqual(
+            workspace.readiness.metadata["guild_order_scene_contract"]["blocked_scene_ids"],
+            [
+                "guild_order_requirement_material",
+                "guild_order_required_quantity",
+                "guild_order_available_material_count",
+            ],
         )
 
     def test_build_anchor_inspector_applies_calibration_override_and_validation_issues(self) -> None:
@@ -433,17 +453,26 @@ class VisionToolingTests(unittest.TestCase):
             )
         )
         self.assertEqual(failure.claim_rewards.selected_check.live_reference_count, 0)
-        self.assertEqual(failure.claim_rewards.selected_check.supporting_capture_count, 2)
+        self.assertEqual(failure.claim_rewards.selected_check.supporting_capture_count, 5)
         self.assertEqual(
             failure.claim_rewards.selected_check.supporting_capture_ids,
             [
                 "non_reward_confirm_modal_live_capture_emulator_5560_exit_game_prompt",
                 "post_tap_reward_overlay_live_capture_emulator_5556_after_day7_claim_tap_2026_04_22",
+                "post_tap_claimed_result_live_capture_127_0_0_1_5559_after_claim_tap",
+                "post_tap_claimed_result_live_capture_127_0_0_1_5563_after_claim_tap",
+                "post_tap_claimed_result_live_capture_emulator_5560_after_claim_tap",
             ],
         )
         self.assertEqual(
             failure.claim_rewards.selected_check.supporting_capture_evidence_roles,
-            ["negative_case", "alternate_post_tap_outcome"],
+            [
+                "negative_case",
+                "alternate_post_tap_outcome",
+                "alternate_post_tap_outcome",
+                "alternate_post_tap_outcome",
+                "alternate_post_tap_outcome",
+            ],
         )
         self.assertEqual(failure.claim_rewards.selected_check.curation_status.value, "curated")
         self.assertEqual(
@@ -477,6 +506,24 @@ class VisionToolingTests(unittest.TestCase):
         self.assertIn("Reward Confirm State (daily_ui.reward_confirm_state)", failure.claim_rewards.failure_explanation)
         self.assertIn("template=", failure.claim_rewards.failure_explanation)
         self.assertIn("reference=", failure.claim_rewards.failure_explanation)
+        self.assertEqual(
+            failure.claim_rewards.post_tap_contract_recommendation,
+            "direct_result_overlay_is_valid",
+        )
+        self.assertEqual(
+            failure.claim_rewards.post_tap_contract_observed_scene_ids,
+            ["reward_post_tap_overlay", "reward_claimed_result_state"],
+        )
+        self.assertEqual(
+            failure.claim_rewards.post_tap_contract_observed_capture_ids,
+            [
+                "post_tap_reward_overlay_live_capture_emulator_5556_after_day7_claim_tap_2026_04_22",
+                "post_tap_claimed_result_live_capture_127_0_0_1_5559_after_claim_tap",
+                "post_tap_claimed_result_live_capture_127_0_0_1_5563_after_claim_tap",
+                "post_tap_claimed_result_live_capture_emulator_5560_after_claim_tap",
+            ],
+        )
+        self.assertIn("recommendation=direct_result_overlay_is_valid", failure.claim_rewards.post_tap_contract_summary)
         reward_panel_check = next(
             check for check in failure.claim_rewards.checks if check.check_id == "reward_panel"
         )
@@ -569,12 +616,15 @@ class VisionToolingTests(unittest.TestCase):
             )
         )
         self.assertEqual(failure.live_reference_count, 0)
-        self.assertEqual(failure.supporting_capture_count, 2)
+        self.assertEqual(failure.supporting_capture_count, 5)
         self.assertEqual(
             failure.supporting_capture_ids,
             [
                 "non_reward_confirm_modal_live_capture_emulator_5560_exit_game_prompt",
                 "post_tap_reward_overlay_live_capture_emulator_5556_after_day7_claim_tap_2026_04_22",
+                "post_tap_claimed_result_live_capture_127_0_0_1_5559_after_claim_tap",
+                "post_tap_claimed_result_live_capture_127_0_0_1_5563_after_claim_tap",
+                "post_tap_claimed_result_live_capture_emulator_5560_after_claim_tap",
             ],
         )
         self.assertEqual(failure.curation_status.value, "curated")
@@ -586,5 +636,16 @@ class VisionToolingTests(unittest.TestCase):
         self.assertIn("curated stand-in", failure.failure_explanation)
         self.assertIn("template=", failure.failure_explanation)
         self.assertIn("reference=", failure.failure_explanation)
+        self.assertEqual(failure.post_tap_contract_recommendation, "direct_result_overlay_is_valid")
+        self.assertEqual(
+            failure.post_tap_contract_observed_capture_ids,
+            [
+                "post_tap_reward_overlay_live_capture_emulator_5556_after_day7_claim_tap_2026_04_22",
+                "post_tap_claimed_result_live_capture_127_0_0_1_5559_after_claim_tap",
+                "post_tap_claimed_result_live_capture_127_0_0_1_5563_after_claim_tap",
+                "post_tap_claimed_result_live_capture_emulator_5560_after_claim_tap",
+            ],
+        )
+        self.assertIn("recommendation=direct_result_overlay_is_valid", failure.post_tap_contract_summary)
         self.assertEqual(failure.inspection.selected_overlay.kind, InspectionOverlayKind.EXPECTED_ANCHOR)
         self.assertEqual(failure.inspection.selected_overlay.metadata["anchor_id"], "daily_ui.reward_confirm_state")

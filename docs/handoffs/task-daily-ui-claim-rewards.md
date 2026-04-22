@@ -16,13 +16,12 @@ Scope:
 Files changed:
 
 - `src/roxauto/tasks/catalog.py`
-- `src/roxauto/tasks/daily_ui/__init__.py`
 - `src/roxauto/tasks/daily_ui/claim_rewards.py`
-- `src/roxauto/tasks/foundations/asset_inventory.json`
 - `src/roxauto/tasks/foundations/inventory.json`
+- `src/roxauto/tasks/foundations/asset_inventory.json`
+- `src/roxauto/tasks/foundations/readiness_report.json`
 - `src/roxauto/tasks/foundations/packs/daily_ui/catalog.json`
 - `src/roxauto/tasks/foundations/packs/daily_ui/daily_claim_rewards.task.json`
-- `src/roxauto/tasks/foundations/readiness_report.json`
 - `tests/tasks/daily_ui/test_claim_rewards.py`
 - `tests/tasks/daily_ui/test_foundations.py`
 - `tests/tasks/test_catalog.py`
@@ -31,97 +30,86 @@ Files changed:
 
 Public APIs added or changed:
 
-- Added task-owned runtime seam packaging for `daily_ui.claim_rewards`:
-  - `ClaimRewardsRuntimeSeam`
-  - `build_claim_rewards_runtime_seam(...)`
-- `build_claim_rewards_task_spec(...)`, `build_claim_rewards_task_preset(...)`, and `build_claim_rewards_task_display_model(...)` accept `runtime_seam=` so runtime registration / enqueue code can resolve the seam once and reuse it directly.
-- `build_claim_rewards_runtime_input(...)` carries stable runtime seam metadata in:
-  - `runtime_input.metadata["runtime_seam"]`
-  - `runtime_input.metadata["result_signal_keys"]`
-- `build_claim_rewards_step_telemetry(...)` preserves machine-readable step fields and keeps `expected_panel_states` plus `observed_panel_state` in display metadata.
-- Task foundations now expose provenance-aware metadata for claim-rewards asset inventory and readiness:
-  - `TaskInventoryRecord.metadata["asset_provenance"]`
-  - `TaskInventoryRecord.metadata["asset_state"]`
-  - `TaskAssetRecord.metadata["provenance_kind"]`
-  - `TaskAssetRecord.metadata["source_kind"]`
-  - `TaskAssetRecord.metadata["live_capture"]`
-  - `TaskAssetRecord.metadata["replacement_target"]`
+- `ClaimRewardsRuntimeInput` now exposes task-owned `supporting_anchor_ids` in addition to `required_anchor_ids`.
+- `build_claim_rewards_runtime_input(...)` now carries the Route A task contract directly in machine-readable metadata:
+  - `metadata["supporting_anchor_ids"]`
+  - `metadata["supporting_golden_screen_slugs"]`
+  - `metadata["post_claim_resolution"]`
+  - `metadata["claim_rewards_live_capture_coverage"]`
+  - `metadata["claim_rewards_capture_inventory"]`
+  - `metadata["claim_rewards_alternate_post_tap_capture_ids"]`
+- `build_claim_rewards_runtime_seam(...)` and `build_claim_rewards_task_spec(...)` now surface `supporting_anchor_ids` alongside the existing runtime seam metadata so downstream runtime / GUI consumers do not need to infer optional-vs-required anchor roles from behavior.
+- `TaskFoundationRepository` task-owned inventories now preserve requirement level for tracked support assets:
+  - template metadata includes `requirement_level`
+  - golden metadata includes `requirement_level`
+  - readiness warnings include `metadata["requirement_level"]`
+- Task inventory/readiness now import machine-readable claim-rewards evidence context from the vision-owned manifest/catalog instead of flattening the task contract to anchor presence only:
+  - `claim_rewards_live_capture_coverage`
+  - `claim_rewards_capture_inventory`
+  - `claim_rewards_alternate_post_tap_capture_ids`
 
 Contract changes:
 
-- Task foundations still declare the claim-rewards runtime seam explicitly in task-owned metadata:
-  - `inventory.json`
-  - `packs/daily_ui/catalog.json`
-  - `daily_claim_rewards.task.json`
-- Runtime-facing seam metadata remains stable and machine-readable:
-  - `runtime_input_builder`
-  - `runtime_seam_builder`
-  - `task_spec_builder`
-  - `task_preset_builder`
-  - `task_display_builder`
-  - `signal_contract_version`
-  - `result_signal_keys`
-- Claim-rewards asset provenance is now aligned with the current round-7 live-capture state instead of flattening everything to generic `present`:
-  - `daily_ui.reward_panel` is tracked as `live_capture`
-  - `daily_ui.claim_reward` is tracked as `curated_stand_in`
-  - `daily_ui.reward_confirm_state` is tracked as `curated_stand_in`
-  - golden `reward_panel` is live-backed
-  - golden `claim_button` and `confirm_state` remain curated stand-ins
-- `daily_ui.claim_rewards` task inventory now reports asset state as `mixed_live_capture_and_curated_stand_in`.
-- Readiness for `daily_ui.claim_rewards` stays `ready`, but now emits non-blocking provenance warnings for the two remaining stand-in templates:
-  - `daily_ui.claim_reward`
-  - `daily_ui.reward_confirm_state`
-- Snapshot tests now require generated foundations output to stay byte-for-byte aligned with the committed JSON snapshots:
-  - `inventory.json`
-  - `asset_inventory.json`
-  - `readiness_report.json`
+- This run aligns Engine D with Route A decision:
+  - `direct_result_overlay_is_valid`
+- `daily_ui.claim_rewards` task contract now treats post-tap `claimed` as the primary valid success path while keeping `confirm_required` as an optional follow-up path when the client still presents an explicit confirmation modal.
+- `daily_ui.reward_confirm_state` is no longer modeled as a required task anchor in task-owned foundations:
+  - required anchors now:
+    - `daily_ui.reward_panel`
+    - `daily_ui.claim_reward`
+    - `common.confirm_button`
+    - `common.close_button`
+  - supporting anchor now:
+    - `daily_ui.reward_confirm_state`
+- The supporting golden stays explicit and machine-readable:
+  - supporting golden screen slug:
+    - `confirm_state`
+- Task readiness remains `ready`, but the remaining stand-in is now reported as a supporting-provenance warning instead of being implied by the required-anchor contract.
+- Task behavior was kept consistent with the already-shipped runtime semantics:
+  - direct post-tap `claimed` path stays valid
+  - explicit confirm modal path still works when present
+  - outcome codes and runtime seam builder names stay stable
+- After merging `main`, task-owned inventory/readiness snapshots were refreshed to match the widened round-8 evidence set:
+  - `claim_rewards_alternate_post_tap_capture_ids` now includes the additional landed live captures from `127.0.0.1:5559`, `127.0.0.1:5563`, and `emulator-5560`
+  - `claim_rewards_capture_inventory["missing_device_serials"]` is now empty
+  - task-side tests were updated to assert the merged evidence inventory instead of the older single-overlay expectation
 
 Assumptions:
 
-- Runtime registration code will start from the task-owned seam metadata instead of hard-coding claim-rewards builder names in core.
-- `daily_ui.reward_confirm_state` remains the task-specific signal for the confirm modal, while `common.confirm_button` stays shared and non-authoritative on its own.
-- Engine D treats `assets/templates/daily_ui/manifest.json` and `assets/templates/daily_ui/goldens/claim_rewards/catalog.json` as the provenance source of truth for task-owned readiness snapshots.
-- Round 7 continues to treat remaining curated stand-ins as non-blocking warnings rather than implementation blockers until Engine C / optional Engine E supply approved replacements.
+- Dispatch chose `direct_result_overlay_is_valid` after Engine C kept `reward_confirm_modal` blocked but preserved the live post-tap reward overlay as truthful supporting evidence.
+- Engine D should align task-owned readiness and metadata with the chosen truth contract instead of forcing runtime or GUI layers to reverse-engineer that choice from step outcomes.
+- `daily_ui.reward_confirm_state` is still useful for optional recovery / confirmation flows, so it remains tracked as supporting task evidence rather than being deleted outright.
 
 Verification performed:
 
-- `python -m unittest tests.tasks.daily_ui.test_claim_rewards`
-- `python -m unittest tests.tasks.test_catalog tests.tasks.test_inventory_fixtures tests.tasks.daily_ui.test_foundations`
+- `python -m unittest tests.tasks.daily_ui.test_claim_rewards tests.tasks.daily_ui.test_foundations tests.tasks.test_catalog tests.tasks.test_inventory_fixtures`
 - `python -m unittest discover -s tests/tasks -t .`
+- `powershell -ExecutionPolicy Bypass -File scripts/run-autonomy-loop.ps1`
+  - `quality-gate.json`: `passed`
+  - `pytest`: `177 passed`
+  - `ruff check src tests`: `passed`
 
 Known limitations:
 
-- Engine D still does not own runtime failure snapshot persistence; task-side signals are ready, but Engine A decides what enters `failure_snapshot.metadata`.
-- The claim-rewards runtime seam still requires runtime-owned dependencies at build time:
-  - adapter
-  - navigation plan
-  - matcher or vision gateway
-- The pre-Gate-3 golden convention is still generic and does not match the actual vision-owned directory layout; claim-rewards uses task-owned `golden_asset_sources` metadata to bridge that mismatch.
-- Two required claim-rewards templates still depend on curated stand-ins rather than approved live captures:
-  - `daily_ui.claim_reward`
-  - `daily_ui.reward_confirm_state`
+- `daily_ui.reward_confirm_state` still does not have an approved live zh-TW confirm-modal baseline.
+- The supporting warning for `daily_ui.reward_confirm_state` remains expected until Engine C lands a truthful live confirm-modal replacement.
+- This branch intentionally does not change runtime-owned smoke reporting, failure snapshot persistence, or GUI rendering. Downstream engines must consume the new task-owned metadata rather than expecting Engine D to update their owned surfaces directly.
 
 Blockers:
 
 - None inside Engine D ownership.
-- External follow-up only: the two remaining curated stand-ins above need approved live captures before the new provenance warnings can clear.
+- External evidence gap only:
+  - a real live `reward_confirm_modal` capture is still missing
 
 Recommended next step:
 
-- Engine C or optional Engine E should replace the remaining stand-ins with approved live zh-TW captures for:
-  - `daily_ui.claim_reward`
-  - `daily_ui.reward_confirm_state`
-- After those assets land, rerun the task foundation builders so these task-owned snapshots update cleanly:
-  - `inventory.json`
-  - `asset_inventory.json`
-  - `readiness_report.json`
-- Engine A should continue wiring runtime-owned enqueue / telemetry flows from the existing task-owned seam and signal surfaces instead of hard-coding claim-rewards knowledge:
-  - `TaskRuntimeBuilderInput.metadata["runtime_seam"]`
-  - `ClaimRewardsRuntimeInput.metadata["runtime_seam"]`
-  - `TaskSpec.metadata["runtime_seam"]`
-  - `TaskSpec.metadata["runtime_input"]`
-  - `TaskStepResult.data["failure_reason_id"]`
-  - `TaskStepResult.data["outcome_code"]`
-  - `TaskStepResult.data["inspection_attempts"]`
-  - `TaskStepResult.data["signals"]`
-  - `TaskStepResult.data["telemetry"]`
+- Engine A should read the new task-owned metadata instead of inferring the contract from current step order alone:
+  - `TaskRuntimeBuilderInput.metadata["post_claim_resolution"]`
+  - `TaskRuntimeBuilderInput.metadata["supporting_anchor_ids"]`
+  - `TaskRuntimeBuilderInput.metadata["claim_rewards_live_capture_coverage"]`
+  - `TaskRuntimeBuilderInput.metadata["claim_rewards_capture_inventory"]`
+  - `TaskRuntimeBuilderInput.metadata["claim_rewards_alternate_post_tap_capture_ids"]`
+- Engine B should surface the same task-owned distinction to operators:
+  - required live anchors vs supporting stand-in anchors
+  - direct-result accepted path vs optional confirm-modal path
+- If Engine C later lands a truthful live `reward_confirm_modal`, rerun the task foundation builders so the supporting warning and provenance metadata update cleanly without another contract rewrite.

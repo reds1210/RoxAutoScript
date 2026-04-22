@@ -595,6 +595,10 @@ def build_vision_workspace_readiness_report(
             metadata={
                 "asset_inventory_exists": inventory_path.exists(),
                 "asset_inventory_is_file": inventory_path.is_file(),
+                "claim_rewards_live_capture_coverage": _claim_rewards_live_capture_coverage(repositories_by_id.get("daily_ui")),
+                "claim_rewards_capture_inventory": _claim_rewards_capture_inventory(repositories_by_id.get("daily_ui")),
+                "claim_rewards_post_tap_contract": _claim_rewards_post_tap_contract(repositories_by_id.get("daily_ui")),
+                "guild_order_scene_contract": _guild_order_scene_contract(repositories_by_id.get("daily_ui")),
             },
         )
 
@@ -733,6 +737,8 @@ def build_vision_workspace_readiness_report(
             "inventory_version": str(document.get("version", "")),
             "claim_rewards_live_capture_coverage": _claim_rewards_live_capture_coverage(repositories_by_id.get("daily_ui")),
             "claim_rewards_capture_inventory": _claim_rewards_capture_inventory(repositories_by_id.get("daily_ui")),
+            "claim_rewards_post_tap_contract": _claim_rewards_post_tap_contract(repositories_by_id.get("daily_ui")),
+            "guild_order_scene_contract": _guild_order_scene_contract(repositories_by_id.get("daily_ui")),
         },
     )
 
@@ -1731,6 +1737,9 @@ def _validate_task_support_contract(
                 )
         if normalized_task_id == "daily_ui.claim_rewards":
             issues.extend(_validate_claim_rewards_live_capture_coverage(repository, support))
+            issues.extend(_validate_claim_rewards_post_tap_contract(repository, support))
+        if normalized_task_id == "daily_ui.guild_order_submit":
+            issues.extend(_validate_guild_order_scene_contract(repository, support))
     return issues
 
 
@@ -1915,6 +1924,100 @@ def _claim_rewards_capture_inventory(repository: AnchorRepository | None) -> dic
         return {}
     capture_inventory = catalog.metadata.get("capture_inventory", {})
     return dict(capture_inventory) if isinstance(capture_inventory, dict) else {}
+
+
+def _claim_rewards_post_tap_contract(repository: AnchorRepository | None) -> dict[str, Any]:
+    if repository is None:
+        return {}
+    return _normalize_claim_rewards_post_tap_contract(repository.get_claim_rewards_post_tap_contract())
+
+
+def _claim_rewards_catalog_post_tap_contract(repository: AnchorRepository | None) -> dict[str, Any]:
+    if repository is None:
+        return {}
+    catalog = repository.get_claim_rewards_golden_catalog()
+    if catalog is None:
+        return {}
+    contract = catalog.metadata.get("post_tap_contract", {})
+    return _normalize_claim_rewards_post_tap_contract(contract)
+
+
+def _normalize_claim_rewards_post_tap_contract(contract: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(contract, dict):
+        return {}
+    return {
+        "anchor_id": str(contract.get("anchor_id", "")).strip(),
+        "current_scene_id": str(contract.get("current_scene_id", "")).strip(),
+        "current_contract_kind": str(contract.get("current_contract_kind", "")).strip(),
+        "dispatch_recommendation": str(contract.get("dispatch_recommendation", "")).strip(),
+        "observed_live_outcome_scene_ids": [
+            str(scene_id).strip()
+            for scene_id in contract.get("observed_live_outcome_scene_ids", [])
+            if str(scene_id).strip()
+        ],
+        "observed_live_outcome_capture_ids": [
+            str(capture_id).strip()
+            for capture_id in contract.get("observed_live_outcome_capture_ids", [])
+            if str(capture_id).strip()
+        ],
+        "missing_live_scene_ids": [
+            str(scene_id).strip()
+            for scene_id in contract.get("missing_live_scene_ids", [])
+            if str(scene_id).strip()
+        ],
+        "observed_live_device_serials": [
+            str(serial).strip()
+            for serial in contract.get("observed_live_device_serials", [])
+            if str(serial).strip()
+        ],
+        "summary": str(contract.get("summary", "")).strip(),
+    }
+
+
+def _guild_order_scene_contract(repository: AnchorRepository | None) -> dict[str, Any]:
+    if repository is None:
+        return {}
+    return _normalize_guild_order_scene_contract(repository.get_guild_order_scene_contract())
+
+
+def _normalize_guild_order_scene_contract(contract: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(contract, dict):
+        return {}
+    return {
+        "ready_anchor_ids": [
+            str(anchor_id).strip()
+            for anchor_id in contract.get("ready_anchor_ids", [])
+            if str(anchor_id).strip()
+        ],
+        "placeholder_anchor_ids": [
+            str(anchor_id).strip()
+            for anchor_id in contract.get("placeholder_anchor_ids", [])
+            if str(anchor_id).strip()
+        ],
+        "blocked_anchor_ids": [
+            str(anchor_id).strip()
+            for anchor_id in contract.get("blocked_anchor_ids", [])
+            if str(anchor_id).strip()
+        ],
+        "required_scene_ids": [
+            str(scene_id).strip()
+            for scene_id in contract.get("required_scene_ids", [])
+            if str(scene_id).strip()
+        ],
+        "blocked_scene_ids": [
+            str(scene_id).strip()
+            for scene_id in contract.get("blocked_scene_ids", [])
+            if str(scene_id).strip()
+        ],
+        "ambiguous_scene_ids": [
+            str(scene_id).strip()
+            for scene_id in contract.get("ambiguous_scene_ids", [])
+            if str(scene_id).strip()
+        ],
+        "evidence_state": str(contract.get("evidence_state", "")).strip(),
+        "decision_surface_state": str(contract.get("decision_surface_state", "")).strip(),
+        "summary": str(contract.get("summary", "")).strip(),
+    }
 
 
 def _file_sha256(path: Path) -> str:
@@ -2133,6 +2236,367 @@ def _validate_claim_rewards_live_capture_coverage(
                     anchor_id=anchor_id,
                     path=str(repository.manifest_path),
                     metadata={"task_id": "daily_ui.claim_rewards", "scene_id": curation.scene_id},
+                )
+            )
+
+    return issues
+
+
+def _validate_claim_rewards_post_tap_contract(
+    repository: AnchorRepository,
+    support: dict[str, Any],
+) -> list[TemplateValidationIssue]:
+    raw_contract = support.get("post_tap_contract")
+    if not isinstance(raw_contract, dict):
+        return [
+            TemplateValidationIssue(
+                code="missing_claim_rewards_post_tap_contract",
+                severity=TemplateValidationSeverity.ERROR,
+                message=(
+                    "Task support for 'daily_ui.claim_rewards' must define "
+                    "metadata.task_support[task_id].post_tap_contract."
+                ),
+                path=str(repository.manifest_path),
+                metadata={"task_id": "daily_ui.claim_rewards"},
+            )
+        ]
+
+    contract = _normalize_claim_rewards_post_tap_contract(raw_contract)
+    catalog_contract = _claim_rewards_catalog_post_tap_contract(repository)
+    issues: list[TemplateValidationIssue] = []
+
+    anchor_id = contract.get("anchor_id", "")
+    recommendation = contract.get("dispatch_recommendation", "")
+    current_contract_kind = contract.get("current_contract_kind", "")
+    current_scene_id = contract.get("current_scene_id", "")
+    observed_capture_ids = [
+        str(capture_id)
+        for capture_id in contract.get("observed_live_outcome_capture_ids", [])
+    ]
+
+    claim_rewards_anchor_ids = {
+        anchor.anchor_id
+        for anchor in repository.list_anchors()
+        if "daily_ui.claim_rewards" in _anchor_task_ids(dict(anchor.metadata))
+    }
+    if not anchor_id or anchor_id not in claim_rewards_anchor_ids:
+        issues.append(
+            TemplateValidationIssue(
+                code="claim_rewards_post_tap_contract_unknown_anchor",
+                severity=TemplateValidationSeverity.ERROR,
+                message=(
+                    "Claim-rewards post_tap_contract.anchor_id must point at an anchor "
+                    "assigned to daily_ui.claim_rewards."
+                ),
+                path=str(repository.manifest_path),
+                metadata={"task_id": "daily_ui.claim_rewards", "anchor_id": anchor_id},
+            )
+        )
+    allowed_contract_values = {
+        "strict_confirm_modal_only",
+        "direct_result_overlay_is_valid",
+    }
+    if current_contract_kind not in allowed_contract_values:
+        issues.append(
+            TemplateValidationIssue(
+                code="invalid_claim_rewards_post_tap_contract_kind",
+                severity=TemplateValidationSeverity.ERROR,
+                message=(
+                    "Claim-rewards post_tap_contract.current_contract_kind must be one of "
+                    "'strict_confirm_modal_only' or 'direct_result_overlay_is_valid'."
+                ),
+                path=str(repository.manifest_path),
+                metadata={
+                    "task_id": "daily_ui.claim_rewards",
+                    "current_contract_kind": current_contract_kind,
+                },
+            )
+        )
+    if recommendation not in allowed_contract_values:
+        issues.append(
+            TemplateValidationIssue(
+                code="invalid_claim_rewards_post_tap_contract_recommendation",
+                severity=TemplateValidationSeverity.ERROR,
+                message=(
+                    "Claim-rewards post_tap_contract.dispatch_recommendation must be one of "
+                    "'strict_confirm_modal_only' or 'direct_result_overlay_is_valid'."
+                ),
+                path=str(repository.manifest_path),
+                metadata={
+                    "task_id": "daily_ui.claim_rewards",
+                    "dispatch_recommendation": recommendation,
+                },
+            )
+        )
+    if recommendation == "direct_result_overlay_is_valid" and not observed_capture_ids:
+        issues.append(
+            TemplateValidationIssue(
+                code="missing_claim_rewards_post_tap_contract_capture_ids",
+                severity=TemplateValidationSeverity.ERROR,
+                message=(
+                    "Claim-rewards post_tap_contract must record observed_live_outcome_capture_ids "
+                    "when it recommends broadening the contract to direct-result overlays."
+                ),
+                path=str(repository.manifest_path),
+                metadata={"task_id": "daily_ui.claim_rewards"},
+            )
+        )
+
+    if anchor_id and repository.has_anchor(anchor_id):
+        curation = repository.get_anchor_curation(anchor_id)
+        if curation is not None and current_scene_id and curation.scene_id != current_scene_id:
+            issues.append(
+                TemplateValidationIssue(
+                    code="claim_rewards_post_tap_contract_scene_mismatch",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=(
+                        f"Claim-rewards post_tap_contract.current_scene_id does not match the "
+                        f"curation scene for anchor '{anchor_id}'."
+                    ),
+                    anchor_id=anchor_id,
+                    path=str(repository.manifest_path),
+                    metadata={
+                        "task_id": "daily_ui.claim_rewards",
+                        "expected_scene_id": curation.scene_id,
+                        "current_scene_id": current_scene_id,
+                    },
+                )
+            )
+
+    catalog = repository.get_claim_rewards_golden_catalog()
+    if catalog is None or not catalog_contract:
+        issues.append(
+            TemplateValidationIssue(
+                code="missing_claim_rewards_catalog_post_tap_contract",
+                severity=TemplateValidationSeverity.ERROR,
+                message=(
+                    "Claim-rewards golden catalog metadata must mirror the post_tap_contract "
+                    "decision packet."
+                ),
+                path=str(repository.resolve_claim_rewards_catalog_path() or repository.manifest_path),
+                metadata={"task_id": "daily_ui.claim_rewards"},
+            )
+        )
+        return issues
+
+    if catalog_contract != contract:
+        issues.append(
+            TemplateValidationIssue(
+                code="claim_rewards_post_tap_contract_catalog_mismatch",
+                severity=TemplateValidationSeverity.ERROR,
+                message=(
+                    "Claim-rewards catalog metadata.post_tap_contract must stay in sync with "
+                    "manifest task-support post_tap_contract."
+                ),
+                path=str(repository.resolve_claim_rewards_catalog_path()),
+                metadata={
+                    "task_id": "daily_ui.claim_rewards",
+                    "manifest_contract": contract,
+                    "catalog_contract": catalog_contract,
+                },
+            )
+        )
+
+    for capture_id in observed_capture_ids:
+        capture = catalog.get_supporting_capture(capture_id)
+        if capture is None:
+            issues.append(
+                TemplateValidationIssue(
+                    code="unknown_claim_rewards_post_tap_contract_capture",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=(
+                        f"Claim-rewards post_tap_contract references capture '{capture_id}', "
+                        "but that supporting-capture entry is missing from the catalog."
+                    ),
+                    path=str(repository.resolve_claim_rewards_catalog_path()),
+                    metadata={"task_id": "daily_ui.claim_rewards", "capture_id": capture_id},
+                )
+            )
+            continue
+        if anchor_id and capture.anchor_id and capture.anchor_id != anchor_id:
+            issues.append(
+                TemplateValidationIssue(
+                    code="claim_rewards_post_tap_contract_capture_anchor_mismatch",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=(
+                        f"Claim-rewards post_tap_contract capture '{capture_id}' points at "
+                        f"anchor '{capture.anchor_id}', not '{anchor_id}'."
+                    ),
+                    path=str(repository.resolve_claim_rewards_catalog_path()),
+                    metadata={
+                        "task_id": "daily_ui.claim_rewards",
+                        "capture_id": capture_id,
+                        "anchor_id": capture.anchor_id,
+                        "expected_anchor_id": anchor_id,
+                    },
+                )
+            )
+
+    return issues
+
+
+def _validate_guild_order_scene_contract(
+    repository: AnchorRepository,
+    support: dict[str, Any],
+) -> list[TemplateValidationIssue]:
+    raw_contract = support.get("scene_contract")
+    if not isinstance(raw_contract, dict):
+        return [
+            TemplateValidationIssue(
+                code="missing_guild_order_scene_contract",
+                severity=TemplateValidationSeverity.ERROR,
+                message=(
+                    "Task support for 'daily_ui.guild_order_submit' must define "
+                    "metadata.task_support[task_id].scene_contract."
+                ),
+                path=str(repository.manifest_path),
+                metadata={"task_id": "daily_ui.guild_order_submit"},
+            )
+        ]
+
+    contract = _normalize_guild_order_scene_contract(raw_contract)
+    ready_anchor_ids = set(contract.get("ready_anchor_ids", []))
+    placeholder_anchor_ids = set(contract.get("placeholder_anchor_ids", []))
+    blocked_anchor_ids = set(contract.get("blocked_anchor_ids", []))
+    issues: list[TemplateValidationIssue] = []
+
+    for code, left, right, message in [
+        (
+            "guild_order_scene_contract_ready_placeholder_overlap",
+            ready_anchor_ids,
+            placeholder_anchor_ids,
+            "Guild-order scene_contract cannot list the same anchor in both ready_anchor_ids and placeholder_anchor_ids.",
+        ),
+        (
+            "guild_order_scene_contract_ready_blocked_overlap",
+            ready_anchor_ids,
+            blocked_anchor_ids,
+            "Guild-order scene_contract cannot list the same anchor in both ready_anchor_ids and blocked_anchor_ids.",
+        ),
+        (
+            "guild_order_scene_contract_placeholder_blocked_overlap",
+            placeholder_anchor_ids,
+            blocked_anchor_ids,
+            "Guild-order scene_contract cannot list the same anchor in both placeholder_anchor_ids and blocked_anchor_ids.",
+        ),
+    ]:
+        overlap = sorted(left & right)
+        if overlap:
+            issues.append(
+                TemplateValidationIssue(
+                    code=code,
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=message,
+                    path=str(repository.manifest_path),
+                    metadata={"task_id": "daily_ui.guild_order_submit", "anchor_ids": overlap},
+                )
+            )
+
+    task_anchor_ids = {
+        anchor.anchor_id
+        for anchor in repository.list_anchors()
+        if "daily_ui.guild_order_submit" in _anchor_task_ids(dict(anchor.metadata))
+    }
+    contract_anchor_ids = ready_anchor_ids | placeholder_anchor_ids | blocked_anchor_ids
+    unknown_anchor_ids = sorted(contract_anchor_ids - task_anchor_ids)
+    if unknown_anchor_ids:
+        issues.append(
+            TemplateValidationIssue(
+                code="unknown_guild_order_scene_contract_anchor",
+                severity=TemplateValidationSeverity.ERROR,
+                message=(
+                    "Guild-order scene_contract must only reference anchors assigned to "
+                    "daily_ui.guild_order_submit."
+                ),
+                path=str(repository.manifest_path),
+                metadata={
+                    "task_id": "daily_ui.guild_order_submit",
+                    "anchor_ids": unknown_anchor_ids,
+                },
+            )
+        )
+
+    for field_name, code in [
+        ("required_scene_ids", "missing_guild_order_scene_contract_required_scenes"),
+        ("evidence_state", "missing_guild_order_scene_contract_evidence_state"),
+        ("decision_surface_state", "missing_guild_order_scene_contract_decision_surface_state"),
+        ("summary", "missing_guild_order_scene_contract_summary"),
+    ]:
+        value = contract.get(field_name)
+        is_missing = not value
+        if isinstance(value, list):
+            is_missing = len(value) == 0
+        if is_missing:
+            issues.append(
+                TemplateValidationIssue(
+                    code=code,
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=(
+                        f"Guild-order scene_contract must define '{field_name}' so the "
+                        "placeholder/blocked state stays machine-readable."
+                    ),
+                    path=str(repository.manifest_path),
+                    metadata={"task_id": "daily_ui.guild_order_submit"},
+                )
+            )
+
+    for anchor_id in sorted(task_anchor_ids):
+        anchor = repository.get_anchor(anchor_id)
+        is_placeholder = bool(anchor.metadata.get("placeholder", False))
+        if is_placeholder and anchor_id not in placeholder_anchor_ids:
+            issues.append(
+                TemplateValidationIssue(
+                    code="guild_order_placeholder_anchor_missing_from_scene_contract",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=(
+                        f"Anchor '{anchor_id}' is still placeholder scaffolding and must appear "
+                        "in scene_contract.placeholder_anchor_ids."
+                    ),
+                    anchor_id=anchor_id,
+                    path=str(repository.manifest_path),
+                    metadata={"task_id": "daily_ui.guild_order_submit"},
+                )
+            )
+        if anchor_id in ready_anchor_ids and is_placeholder:
+            issues.append(
+                TemplateValidationIssue(
+                    code="guild_order_ready_anchor_marked_placeholder",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=(
+                        f"Anchor '{anchor_id}' cannot appear in scene_contract.ready_anchor_ids "
+                        "while metadata.placeholder is still true."
+                    ),
+                    anchor_id=anchor_id,
+                    path=str(repository.manifest_path),
+                    metadata={"task_id": "daily_ui.guild_order_submit"},
+                )
+            )
+        if anchor_id in placeholder_anchor_ids and not is_placeholder:
+            issues.append(
+                TemplateValidationIssue(
+                    code="guild_order_placeholder_anchor_not_placeholder",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=(
+                        f"Anchor '{anchor_id}' appears in scene_contract.placeholder_anchor_ids "
+                        "but metadata.placeholder is false."
+                    ),
+                    anchor_id=anchor_id,
+                    path=str(repository.manifest_path),
+                    metadata={"task_id": "daily_ui.guild_order_submit"},
+                )
+            )
+        if not is_placeholder and anchor_id not in ready_anchor_ids and anchor_id not in blocked_anchor_ids:
+            issues.append(
+                TemplateValidationIssue(
+                    code="guild_order_ready_anchor_missing_from_scene_contract",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=(
+                        f"Anchor '{anchor_id}' is no longer placeholder scaffolding and must appear "
+                        "in scene_contract.ready_anchor_ids or blocked_anchor_ids."
+                    ),
+                    anchor_id=anchor_id,
+                    path=str(repository.manifest_path),
+                    metadata={"task_id": "daily_ui.guild_order_submit"},
                 )
             )
 

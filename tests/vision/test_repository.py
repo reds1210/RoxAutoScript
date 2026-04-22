@@ -62,6 +62,14 @@ class AnchorRepositoryTests(unittest.TestCase):
             [],
         )
         self.assertEqual(
+            repository.get_claim_rewards_post_tap_contract()["dispatch_recommendation"],
+            "direct_result_overlay_is_valid",
+        )
+        self.assertEqual(
+            repository.get_claim_rewards_post_tap_contract()["observed_live_outcome_scene_ids"],
+            ["reward_post_tap_overlay", "reward_claimed_result_state"],
+        )
+        self.assertEqual(
             reward_panel_curation.metadata["failure_case"],
             "reward_panel_not_open_or_wrong_surface",
         )
@@ -69,7 +77,7 @@ class AnchorRepositoryTests(unittest.TestCase):
         self.assertIsNotNone(claim_rewards_catalog)
         self.assertEqual(claim_rewards_catalog.task_id, "daily_ui.claim_rewards")
         self.assertEqual(len(claim_rewards_catalog.goldens), 3)
-        self.assertEqual(len(claim_rewards_catalog.supporting_captures), 6)
+        self.assertEqual(len(claim_rewards_catalog.supporting_captures), 9)
         reward_panel_golden = repository.get_claim_rewards_anchor_golden("daily_ui.reward_panel")
         self.assertIsNotNone(reward_panel_golden)
         self.assertEqual(reward_panel_golden.golden_id, "reward_panel_open_baseline_v1")
@@ -106,6 +114,64 @@ class AnchorRepositoryTests(unittest.TestCase):
             [path.name for path in repository.resolve_claim_rewards_supporting_capture_paths("daily_ui.claim_reward")],
             [
                 "daily_ui_claim_rewards__non_claimable_daily_signin__live_capture__emulator_5556__after_daily_tab_attempt_2.png",
+            ],
+        )
+
+    def test_daily_ui_repository_exposes_guild_order_scene_contract(self) -> None:
+        repository = AnchorRepository.load(self.templates_root / "daily_ui")
+
+        guild_order_anchor_ids = {
+            "daily_ui.guild_order_hub_entry",
+            "daily_ui.guild_order_list_panel",
+            "daily_ui.guild_order_detail_panel",
+            "daily_ui.guild_order_submit_button",
+            "daily_ui.guild_order_refresh_button",
+            "daily_ui.guild_order_unavailable_state",
+            "daily_ui.guild_order_insufficient_material_feedback",
+            "daily_ui.guild_order_submit_result_state",
+        }
+        self.assertTrue(guild_order_anchor_ids.issubset(set(repository.list_anchor_ids())))
+        self.assertTrue(repository.resolve_asset_path("daily_ui.guild_order_hub_entry").exists())
+        self.assertEqual(
+            repository.get_task_support("daily_ui.guild_order_submit")["required_anchor_roles"],
+            [
+                "guild_hub_entry",
+                "guild_order_list",
+                "guild_order_detail",
+                "submit_affordance",
+                "refresh_affordance",
+                "unavailable_state",
+                "insufficient_material_feedback",
+                "submit_result_state",
+            ],
+        )
+        self.assertEqual(
+            repository.get_guild_order_scene_contract()["evidence_state"],
+            "placeholder_only",
+        )
+        self.assertEqual(
+            repository.get_guild_order_scene_contract()["decision_surface_state"],
+            "blocked_by_missing_material_evidence",
+        )
+        self.assertEqual(
+            repository.get_guild_order_scene_contract()["blocked_scene_ids"],
+            [
+                "guild_order_requirement_material",
+                "guild_order_required_quantity",
+                "guild_order_available_material_count",
+            ],
+        )
+        self.assertEqual(
+            repository.get_guild_order_scene_contract()["placeholder_anchor_ids"],
+            [
+                "daily_ui.guild_order_hub_entry",
+                "daily_ui.guild_order_list_panel",
+                "daily_ui.guild_order_detail_panel",
+                "daily_ui.guild_order_submit_button",
+                "daily_ui.guild_order_refresh_button",
+                "daily_ui.guild_order_unavailable_state",
+                "daily_ui.guild_order_insufficient_material_feedback",
+                "daily_ui.guild_order_submit_result_state",
             ],
         )
 
