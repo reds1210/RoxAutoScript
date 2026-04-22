@@ -1,9 +1,17 @@
 {
   "task_id": "daily_ui.claim_rewards",
   "workflow": "daily-ui-claim-rewards",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "metadata": {
-    "notes": "Claim-rewards golden inventory for Engine C. Reward-panel baseline is now backed by a live zh-TW ROX capture; claim-button and confirm-state remain curated stand-ins until equivalent live captures are approved."
+    "locale": "zh-TW",
+    "game": "ROX",
+    "source_kind": "mixed_live_and_curated",
+    "coverage": {
+      "reward_panel_open": "live_capture",
+      "reward_panel_claimable": "curated_stand_in",
+      "reward_confirm_modal": "curated_stand_in"
+    },
+    "notes": "The canonical reward-panel-open golden is now a live zh-TW ROX screenshot. Claimable and confirm-modal scenes remain curated stand-ins because the available accounts did not expose approved live claimable or confirmation-modal states during this round. Negative-case live captures are cataloged separately for an already-signed daily sign-in panel, the Kingdom Pass rewards surface, and a generic exit-game confirmation modal."
   },
   "goldens": [
     {
@@ -14,17 +22,22 @@
       "inspection_role": "reward_panel",
       "stage": "open_reward_panel",
       "scene_id": "reward_panel_open",
-      "variant_id": "tw_baseline",
+      "variant_id": "zh_tw_live_emulator_5560",
       "source_image_role": "reward_panel_open",
       "resolution": [1280, 720],
-      "sha256": "3eb1a7256eb88bb6ad5038cf17ac093de8e0f51ce49263229a8e75facfda7a62",
+      "sha256": "82a48f798b8d3cae294f0ffdf8eced1e1cd53031a8918672f64fc02099c3103a",
       "source_kind": "live_zh_tw_rox_capture",
       "live_capture": true,
-      "proves": "Shows the opened daily-sign-in reward panel on live zh-TW ROX UI and serves as the baseline used to crop the stable reward-panel anchor.",
+      "proves": "Shows the real daily-sign-in reward panel already open in live zh-TW ROX and is the canonical panel-open golden for anchor verification.",
+      "failure_case": "Use when the flow fails to detect the opened reward panel or lands on the wrong reward surface before the claim-state checks start.",
+      "supporting_capture_ids": [
+        "reward_panel_live_capture_emulator_5560_daily_signin",
+        "entry_context_live_capture_emulator_5556_after_fuli_tap",
+        "wrong_reward_surface_live_capture_emulator_5560_kingdom_pass_rewards"
+      ],
       "limitations": [
-        "captures the panel-open scene only",
-        "does not include a live claimable button state",
-        "does not include the post-claim confirm modal"
+        "captures the panel-open state only",
+        "does not prove that the claim button is currently tappable"
       ]
     },
     {
@@ -41,10 +54,15 @@
       "sha256": "3d69da22c38d59b291e40dbf1ea2d35664f84a20d178c10eb53e15718e66dc51",
       "source_kind": "repo_curated_screenshot_style",
       "live_capture": false,
-      "proves": "Shows the claimable reward panel state with an enabled claim button for pre-tap verification.",
+      "proves": "Shows the expected claimable reward-panel layout with an enabled claim button for the pre-tap affordance check.",
+      "failure_case": "Use when the flow reaches the reward panel but cannot verify an enabled claim button before tapping.",
+      "supporting_capture_ids": [
+        "non_claimable_daily_signin_live_capture_emulator_5556_after_daily_tab_attempt_2"
+      ],
       "limitations": [
-        "not a live device capture",
-        "tracks one curated baseline variant only"
+        "no approved live zh-TW claimable panel was available on the reachable accounts during this round",
+        "live negative-case evidence exists for an already-signed daily sign-in panel, but not for an enabled claim button",
+        "does not document the post-tap confirmation modal"
       ]
     },
     {
@@ -61,35 +79,88 @@
       "sha256": "86a6aa741dc9b22ab2e9b7779a077909b007637ca852fc9ebc1379b5f384b143",
       "source_kind": "repo_curated_screenshot_style",
       "live_capture": false,
-      "proves": "Shows the confirmation modal state that appears after tapping the claim button and anchors the confirm-state crop.",
+      "proves": "Shows the expected confirmation modal layout that should appear after the claim tap and anchors the confirm-state crop.",
+      "failure_case": "Use when the flow taps claim but cannot verify the reward confirmation modal.",
+      "supporting_capture_ids": [
+        "non_reward_confirm_modal_live_capture_emulator_5560_exit_game_prompt"
+      ],
       "limitations": [
-        "not a live device capture",
-        "only one baseline modal state is tracked"
+        "no approved live zh-TW confirmation modal was available on the reachable accounts during this round",
+        "live negative-case evidence exists for a generic confirmation dialog, but not for the reward confirmation modal",
+        "tracks one curated modal layout only"
       ]
     }
   ],
-  "supplemental_live_captures": [
+  "supporting_captures": [
     {
-      "capture_id": "reward_panel_open_emulator_5560_daily_signin_v1",
+      "capture_id": "reward_panel_live_capture_emulator_5560_daily_signin",
       "file_name": "live/daily_ui_claim_rewards__reward_panel__live_capture__emulator_5560__daily_signin.png",
       "anchor_id": "daily_ui.reward_panel",
+      "inspection_role": "reward_panel",
+      "stage": "open_reward_panel",
       "scene_id": "reward_panel_open",
       "resolution": [1280, 720],
       "sha256": "82a48f798b8d3cae294f0ffdf8eced1e1cd53031a8918672f64fc02099c3103a",
       "source_kind": "live_zh_tw_rox_capture",
       "live_capture": true,
-      "notes": "Secondary live daily-signin panel capture from emulator-5560 for cross-instance visual confirmation."
+      "proves": "Keeps a descriptive live-capture filename for the canonical panel-open screenshot so downstream tooling and manual review can refer to the raw evidence directly.",
+      "failure_case": "Use when inspecting why the reward panel did not open or why the wrong reward page was captured."
     },
     {
-      "capture_id": "reward_panel_entry_context_emulator_5556_after_fuli_tap_v1",
+      "capture_id": "entry_context_live_capture_emulator_5556_after_fuli_tap",
       "file_name": "live/daily_ui_claim_rewards__entry_context__live_capture__emulator_5556__after_fuli_tap.png",
       "anchor_id": "daily_ui.reward_panel",
-      "scene_id": "reward_panel_entry_context",
+      "inspection_role": "reward_panel_precondition",
+      "stage": "navigate_to_claim_rewards",
+      "scene_id": "reward_entry_context",
       "resolution": [1280, 720],
       "sha256": "a7831d4abab2d7b82bb6cf4d2b0560b3d10fd8dd0e3711a6c1bc7688259da57a",
       "source_kind": "live_zh_tw_rox_capture",
       "live_capture": true,
-      "notes": "Upstream welfare entry context immediately before the daily-signin panel was selected."
+      "proves": "Shows the live zh-TW ROX entry context immediately after tapping the Fu Li menu and before the daily sign-in reward panel opens.",
+      "failure_case": "Use when navigation reaches Fu Li but never advances to the reward-panel-open anchor."
+    },
+    {
+      "capture_id": "non_claimable_daily_signin_live_capture_emulator_5556_after_daily_tab_attempt_2",
+      "file_name": "live/daily_ui_claim_rewards__non_claimable_daily_signin__live_capture__emulator_5556__after_daily_tab_attempt_2.png",
+      "anchor_id": "daily_ui.claim_reward",
+      "inspection_role": "claim_reward_negative_case",
+      "stage": "verify_claim_affordance",
+      "scene_id": "reward_panel_non_claimable",
+      "resolution": [1280, 720],
+      "sha256": "3eb1a7256eb88bb6ad5038cf17ac093de8e0f51ce49263229a8e75facfda7a62",
+      "source_kind": "live_zh_tw_rox_capture",
+      "live_capture": true,
+      "proves": "Shows the live zh-TW daily-sign-in panel with greyed controls and no enabled claim affordance, so panel-open success is not mistaken for a claimable state.",
+      "failure_case": "Use when the flow opens daily sign-in but the claim button is missing, disabled, or already consumed."
+    },
+    {
+      "capture_id": "wrong_reward_surface_live_capture_emulator_5560_kingdom_pass_rewards",
+      "file_name": "live/daily_ui_claim_rewards__wrong_reward_surface__live_capture__emulator_5560__kingdom_pass_rewards.png",
+      "anchor_id": "daily_ui.reward_panel",
+      "inspection_role": "reward_panel_negative_case",
+      "stage": "open_reward_panel",
+      "scene_id": "wrong_reward_surface",
+      "resolution": [1280, 720],
+      "sha256": "5f99da0cac1eac9a15a26fd6f257b3148e7554f0a6d2128e5691b4e7e3574c46",
+      "source_kind": "live_zh_tw_rox_capture",
+      "live_capture": true,
+      "proves": "Shows the Kingdom Pass rewards page, a reward-like surface that should not satisfy the daily sign-in reward panel success check.",
+      "failure_case": "Use when Fu Li navigation lands on a reward surface that looks plausible but is not the daily sign-in panel."
+    },
+    {
+      "capture_id": "non_reward_confirm_modal_live_capture_emulator_5560_exit_game_prompt",
+      "file_name": "live/daily_ui_claim_rewards__non_reward_confirm_modal__live_capture__emulator_5560__exit_game_prompt.png",
+      "anchor_id": "daily_ui.reward_confirm_state",
+      "inspection_role": "confirm_state_negative_case",
+      "stage": "verify_claim_affordance",
+      "scene_id": "non_reward_confirm_modal",
+      "resolution": [1280, 720],
+      "sha256": "184dbbcb9d362315718888619726fcdb5923fecc06b35c6797e0f46c50101d76",
+      "source_kind": "live_zh_tw_rox_capture",
+      "live_capture": true,
+      "proves": "Shows a generic exit-game confirmation dialog captured during reward exploration; this modal must not be treated as the reward claim confirmation state.",
+      "failure_case": "Use when a generic confirmation dialog interrupts reward navigation or claim attempts and the expected reward confirmation modal never appears."
     }
   ]
 }
