@@ -44,33 +44,33 @@ def _parse_optional_float(value: str) -> float | None:
 
 def _zh_status(value: str) -> str:
     labels = {
-        "idle": "\u5f85\u547d",
-        "queued": "\u5df2\u6392\u5165",
-        "running": "\u57f7\u884c\u4e2d",
-        "succeeded": "\u5b8c\u6210",
-        "failed": "\u5931\u6557",
-        "aborted": "\u4e2d\u6b62",
-        "ready": "\u5c31\u7dd2",
-        "busy": "\u5de5\u4f5c\u4e2d",
-        "paused": "\u5df2\u66ab\u505c",
-        "error": "\u7570\u5e38",
-        "disconnected": "\u96e2\u7dda",
-        "connecting": "\u9023\u7dda\u4e2d",
+        "idle": "Idle",
+        "queued": "Queued",
+        "running": "Running",
+        "succeeded": "Succeeded",
+        "failed": "Failed",
+        "aborted": "Aborted",
+        "ready": "Ready",
+        "busy": "Busy",
+        "paused": "Paused",
+        "error": "Error",
+        "disconnected": "Disconnected",
+        "connecting": "Connecting",
     }
     return labels.get(value.lower(), value)
 
 
 def _zh_task(task_id: str) -> str:
-    return "\u6bcf\u65e5\u9818\u734e" if task_id == "daily_ui.claim_rewards" else task_id
+    return "Daily Claim" if task_id == "daily_ui.claim_rewards" else task_id
 
 
 def _zh_health(value: str) -> str:
     replacements = {
-        "healthy": "\u5065\u5eb7",
-        "health unknown": "\u5c1a\u672a\u6aa2\u67e5",
-        "health check failed": "\u5065\u5eb7\u6aa2\u67e5\u5931\u6557",
-        "runtime error": "\u57f7\u884c\u968e\u6bb5\u7570\u5e38",
-        "stop requested": "\u5df2\u8981\u6c42\u505c\u6b62",
+        "healthy": "Healthy",
+        "health unknown": "Health unknown",
+        "health check failed": "Health check failed",
+        "runtime error": "Runtime error",
+        "stop requested": "Stop requested",
     }
     translated = value
     for source, target in replacements.items():
@@ -80,9 +80,9 @@ def _zh_health(value: str) -> str:
 
 def _zh_match_status(value: str) -> str:
     labels = {
-        "matched": "\u5df2\u547d\u4e2d",
-        "missed": "\u672a\u547d\u4e2d",
-        "ambiguous": "\u7d50\u679c\u4e0d\u660e",
+        "matched": "Matched",
+        "missed": "Missed",
+        "ambiguous": "Ambiguous",
     }
     return labels.get(value.lower(), value)
 
@@ -134,7 +134,7 @@ def launch_placeholder_gui() -> int:
     class MainWindow(QMainWindow):
         def __init__(self, runtime_bridge: OperatorConsoleRuntimeBridge) -> None:
             super().__init__()
-            self.setWindowTitle("ROX \u6bcf\u65e5\u9818\u734e\u63a7\u5236\u53f0")
+            self.setWindowTitle("ROX Command Deck")
             self.resize(1480, 960)
             self._bridge = runtime_bridge
             self._list_syncing = False
@@ -153,19 +153,24 @@ def launch_placeholder_gui() -> int:
 
         def _build_ui(self) -> None:
             central = QWidget()
+            central.setObjectName("centralCanvas")
             root = QVBoxLayout()
-            root.setContentsMargins(18, 18, 18, 18)
-            root.setSpacing(16)
+            root.setContentsMargins(24, 24, 24, 24)
+            root.setSpacing(18)
             central.setLayout(root)
             self.setCentralWidget(central)
 
-            hero = QGroupBox("MVP Console")
+            hero = QGroupBox("Command Deck")
             hero.setObjectName("heroPanel")
             hero_layout = QVBoxLayout()
+            hero_layout.setSpacing(12)
             hero.setLayout(hero_layout)
-            title = QLabel("ROX \u6bcf\u65e5\u9818\u734e\u63a7\u5236\u53f0")
+            title = QLabel("ROX Daily Claim Command Deck")
             title.setObjectName("heroTitle")
-            subtitle = QLabel("\u4ee5\u300c\u6bcf\u65e5\u9818\u734e\u300d\u70ba\u4e3b\u7684\u55ae\u4efb\u52d9\u63a7\u5236\u53f0\uff0c\u512a\u5148\u986f\u793a\u76ee\u524d\u6b65\u9a5f\u3001\u5931\u6557\u539f\u56e0\u8207\u4e0b\u4e00\u6b65\u3002")
+            subtitle = QLabel(
+                "Single-task operator cockpit for daily claim runs across the fleet. "
+                "The first screen stays focused on live queue state, current step, failure cause, and the next move."
+            )
             subtitle.setObjectName("heroSubtitle")
             hero_layout.addWidget(title)
             hero_layout.addWidget(subtitle)
@@ -174,10 +179,12 @@ def launch_placeholder_gui() -> int:
             self.banner_label.setWordWrap(True)
             hero_layout.addWidget(self.banner_label)
             metrics = QGridLayout()
-            self.metric_total = self._metric_card(metrics, 0, 0, "\u6a21\u64ec\u5668")
-            self.metric_ready = self._metric_card(metrics, 0, 1, "\u5df2\u9023\u7dda")
-            self.metric_queue = self._metric_card(metrics, 0, 2, "\u4f47\u5217")
-            self.metric_failure = self._metric_card(metrics, 0, 3, "\u5931\u6557")
+            metrics.setHorizontalSpacing(12)
+            metrics.setVerticalSpacing(12)
+            self.metric_total = self._metric_card(metrics, 0, 0, "Fleet")
+            self.metric_ready = self._metric_card(metrics, 0, 1, "Ready")
+            self.metric_queue = self._metric_card(metrics, 0, 2, "Queued")
+            self.metric_failure = self._metric_card(metrics, 0, 3, "Failures")
             hero_layout.addLayout(metrics)
             self.hero_meta = QLabel("")
             self.hero_meta.setObjectName("secondaryText")
@@ -187,9 +194,10 @@ def launch_placeholder_gui() -> int:
 
             body = QSplitter()
             body.setChildrenCollapsible(False)
+            body.setHandleWidth(10)
             root.addWidget(body)
 
-            left = QGroupBox("\u6a21\u64ec\u5668")
+            left = QGroupBox("Fleet")
             left.setObjectName("panelCard")
             left_layout = QVBoxLayout()
             left.setLayout(left_layout)
@@ -210,11 +218,11 @@ def launch_placeholder_gui() -> int:
             body.addWidget(right)
             body.setSizes([360, 1120])
 
-            device_box = QGroupBox("\u57f7\u884c\u5c0d\u8c61")
+            device_box = QGroupBox("Selected Instance")
             device_box.setObjectName("panelCard")
             device_layout = QVBoxLayout()
             device_box.setLayout(device_layout)
-            self.instance_title = QLabel("\u5c1a\u672a\u9078\u53d6\u6a21\u64ec\u5668")
+            self.instance_title = QLabel("No instance selected")
             self.instance_title.setObjectName("sectionTitle")
             device_layout.addWidget(self.instance_title)
             self.connection_label = QLabel("")
@@ -231,16 +239,16 @@ def launch_placeholder_gui() -> int:
             device_layout.addWidget(self.runtime_label)
             device_layout.addWidget(self.warning_label)
             action_row = QHBoxLayout()
-            self.refresh_button = QPushButton("\u91cd\u65b0\u540c\u6b65")
+            self.refresh_button = QPushButton("Sync Now")
             self.refresh_button.setObjectName("secondaryButton")
             self.refresh_button.clicked.connect(self._schedule_refresh)
-            self.start_button = QPushButton("\u555f\u52d5\u4f47\u5217")
+            self.start_button = QPushButton("Start Queue")
             self.start_button.setObjectName("primaryButton")
             self.start_button.clicked.connect(lambda: self._schedule_command("start_queue"))
-            self.stop_button = QPushButton("\u505c\u6b62\u4efb\u52d9")
+            self.stop_button = QPushButton("Stop Task")
             self.stop_button.setObjectName("secondaryButton")
             self.stop_button.clicked.connect(lambda: self._schedule_command("stop"))
-            self.emergency_button = QPushButton("\u5168\u57df\u505c\u6b62")
+            self.emergency_button = QPushButton("Emergency Stop")
             self.emergency_button.setObjectName("dangerButton")
             self.emergency_button.clicked.connect(self._schedule_emergency_stop)
             for button in (self.refresh_button, self.start_button, self.stop_button, self.emergency_button):
@@ -249,7 +257,7 @@ def launch_placeholder_gui() -> int:
             device_layout.addLayout(action_row)
             right_layout.addWidget(device_box)
 
-            claim_box = QGroupBox("\u6bcf\u65e5\u9818\u734e")
+            claim_box = QGroupBox("Daily Claim Flow")
             claim_box.setObjectName("panelCard")
             claim_layout = QVBoxLayout()
             claim_box.setLayout(claim_layout)
@@ -262,21 +270,22 @@ def launch_placeholder_gui() -> int:
             claim_focus = QGridLayout()
             claim_focus.setHorizontalSpacing(10)
             claim_focus.setVerticalSpacing(10)
-            self.claim_focus_step = self._detail_card(claim_focus, 0, 0, "卡點步驟")
-            self.claim_focus_anchor = self._detail_card(claim_focus, 0, 1, "失敗 Anchor")
-            self.claim_focus_region = self._detail_card(claim_focus, 1, 0, "比對區域")
-            self.claim_focus_threshold = self._detail_card(claim_focus, 1, 1, "信心門檻")
+            self.claim_focus_step = self._detail_card(claim_focus, 0, 0, "Current Step")
+            self.claim_focus_anchor = self._detail_card(claim_focus, 0, 1, "Primary Anchor")
+            self.claim_focus_region = self._detail_card(claim_focus, 1, 0, "Match Region")
+            self.claim_focus_threshold = self._detail_card(claim_focus, 1, 1, "Threshold")
             self.claim_progress = QProgressBar()
             self.claim_progress.setMinimumHeight(28)
             self.claim_progress.setTextVisible(True)
             self.claim_status = QPlainTextEdit()
+            self.claim_status.setObjectName("workflowConsole")
             self.claim_status.setReadOnly(True)
-            self.claim_status.setMaximumHeight(140)
+            self.claim_status.setMaximumHeight(150)
             claim_actions = QHBoxLayout()
-            self.claim_queue_button = QPushButton("\u52a0\u5165\u4f47\u5217")
+            self.claim_queue_button = QPushButton("Queue Claim")
             self.claim_queue_button.setObjectName("secondaryButton")
             self.claim_queue_button.clicked.connect(self._schedule_claim_queue)
-            self.claim_run_button = QPushButton("\u7acb\u5373\u57f7\u884c")
+            self.claim_run_button = QPushButton("Run Claim Now")
             self.claim_run_button.setObjectName("primaryButton")
             self.claim_run_button.clicked.connect(self._schedule_claim_run)
             claim_actions.addWidget(self.claim_queue_button)
@@ -294,6 +303,8 @@ def launch_placeholder_gui() -> int:
             right_layout.addWidget(claim_box, 1)
 
             tabs = QTabWidget()
+            tabs.setObjectName("insightTabs")
+            tabs.setDocumentMode(True)
             right_layout.addWidget(tabs, 1)
 
             preview_tab = QWidget()
@@ -302,17 +313,18 @@ def launch_placeholder_gui() -> int:
             self.preview_summary = QLabel("")
             self.preview_summary.setObjectName("secondaryText")
             self.preview_summary.setWordWrap(True)
-            self.preview_image = QLabel("\u5c1a\u7121\u9810\u89bd")
+            self.preview_image = QLabel("No preview frame captured.")
             self.preview_image.setObjectName("previewFrame")
             self.preview_image.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self.preview_image.setMinimumHeight(260)
             self.preview_image.setWordWrap(True)
             self.preview_box = QPlainTextEdit()
+            self.preview_box.setObjectName("insightConsole")
             self.preview_box.setReadOnly(True)
             preview_layout.addWidget(self.preview_summary)
             preview_layout.addWidget(self.preview_image)
             preview_layout.addWidget(self.preview_box)
-            tabs.addTab(preview_tab, "\u76ee\u524d\u756b\u9762")
+            tabs.addTab(preview_tab, "Preview Feed")
 
             failure_tab = QWidget()
             failure_layout = QVBoxLayout()
@@ -321,10 +333,11 @@ def launch_placeholder_gui() -> int:
             self.failure_summary.setObjectName("secondaryText")
             self.failure_summary.setWordWrap(True)
             self.failure_box = QPlainTextEdit()
+            self.failure_box.setObjectName("insightConsole")
             self.failure_box.setReadOnly(True)
             failure_layout.addWidget(self.failure_summary)
             failure_layout.addWidget(self.failure_box)
-            tabs.addTab(failure_tab, "\u5361\u95dc\u8a3a\u65b7")
+            tabs.addTab(failure_tab, "Failure Story")
 
             readiness_tab = QWidget()
             readiness_layout = QVBoxLayout()
@@ -333,35 +346,39 @@ def launch_placeholder_gui() -> int:
             self.readiness_summary.setObjectName("secondaryText")
             self.readiness_summary.setWordWrap(True)
             self.readiness_box = QPlainTextEdit()
+            self.readiness_box.setObjectName("insightConsole")
             self.readiness_box.setReadOnly(True)
             readiness_layout.addWidget(self.readiness_summary)
             readiness_layout.addWidget(self.readiness_box)
-            tabs.addTab(readiness_tab, "\u57f7\u884c\u689d\u4ef6")
+            tabs.addTab(readiness_tab, "Readiness")
 
             calibration_tab = QWidget()
             calibration_layout = QVBoxLayout()
             calibration_tab.setLayout(calibration_layout)
-            self.editor_summary = QLabel("\u9019\u88e1\u53ea\u7528\u4f86\u91cd\u65b0\u64f7\u53d6\u6a23\u672c\u6216\u8abf\u6574\u6821\u6e96\uff0c\u4e0d\u6703\u6539\u8b8a runtime \u5df2\u5b9a\u7fa9\u7684\u6bcf\u65e5\u9818\u734e\u6d41\u7a0b\u3002")
+            self.editor_summary = QLabel(
+                "Use this lab to capture fresh evidence or tune calibration. "
+                "It does not rewrite the runtime-owned daily-claim workflow."
+            )
             self.editor_summary.setObjectName("secondaryText")
             self.editor_summary.setWordWrap(True)
             calibration_layout.addWidget(self.editor_summary)
             form = QFormLayout()
             self.mode_combo = QComboBox()
-            self.mode_combo.addItem("\u53ef\u76f4\u63a5\u9818\u53d6", "claimable")
-            self.mode_combo.addItem("\u5df2\u9818\u53d6", "already_claimed")
-            self.mode_combo.addItem("\u72c0\u614b\u6a21\u7cca", "ambiguous")
-            self.mode_combo.addItem("\u9762\u677f\u672a\u958b\u555f", "panel_missing")
+            self.mode_combo.addItem("Claimable", "claimable")
+            self.mode_combo.addItem("Already claimed", "already_claimed")
+            self.mode_combo.addItem("Ambiguous", "ambiguous")
+            self.mode_combo.addItem("Panel missing", "panel_missing")
             self.crop_input = QLineEdit()
             self.match_input = QLineEdit()
             self.threshold_input = QLineEdit()
             self.scale_input = QLineEdit()
             self.offset_input = QLineEdit()
-            form.addRow("\u6aa2\u8996\u6a21\u5f0f\uff08\u50c5\u8a3a\u65b7\uff09", self.mode_combo)
-            form.addRow("\u88c1\u5207\u5340\u57df", self.crop_input)
-            form.addRow("\u6bd4\u5c0d\u5340\u57df", self.match_input)
-            form.addRow("\u4fe1\u5fc3\u9580\u6abb", self.threshold_input)
-            form.addRow("\u64f7\u53d6\u7e2e\u653e", self.scale_input)
-            form.addRow("\u64f7\u53d6\u504f\u79fb", self.offset_input)
+            form.addRow("Workflow mode (diagnostic only)", self.mode_combo)
+            form.addRow("Crop region", self.crop_input)
+            form.addRow("Match region", self.match_input)
+            form.addRow("Confidence threshold", self.threshold_input)
+            form.addRow("Capture scale", self.scale_input)
+            form.addRow("Capture offset", self.offset_input)
             calibration_layout.addLayout(form)
             self._editor_widgets = [
                 self.mode_combo,
@@ -372,19 +389,19 @@ def launch_placeholder_gui() -> int:
                 self.offset_input,
             ]
             editor_actions = QHBoxLayout()
-            self.capture_preview_button = QPushButton("\u64f7\u53d6\u76ee\u524d\u756b\u9762")
+            self.capture_preview_button = QPushButton("Capture Preview")
             self.capture_preview_button.setObjectName("secondaryButton")
             self.capture_preview_button.clicked.connect(lambda: self._schedule_claim_capture("preview"))
-            self.capture_failure_button = QPushButton("\u64f7\u53d6\u5931\u6557\u756b\u9762")
+            self.capture_failure_button = QPushButton("Capture Failure")
             self.capture_failure_button.setObjectName("secondaryButton")
             self.capture_failure_button.clicked.connect(lambda: self._schedule_claim_capture("failure"))
-            self.apply_button = QPushButton("\u5957\u7528\u6821\u6e96\u8349\u7a3f")
+            self.apply_button = QPushButton("Apply Draft")
             self.apply_button.setObjectName("primaryButton")
             self.apply_button.clicked.connect(self._apply_editor)
-            self.save_button = QPushButton("\u5132\u5b58\u5230\u8a2d\u5b9a\u6a94")
+            self.save_button = QPushButton("Save Draft")
             self.save_button.setObjectName("secondaryButton")
             self.save_button.clicked.connect(self._save_editor)
-            self.reset_button = QPushButton("\u6e05\u9664\u672c\u6b21\u8349\u7a3f")
+            self.reset_button = QPushButton("Reset Draft")
             self.reset_button.setObjectName("secondaryButton")
             self.reset_button.clicked.connect(self._reset_editor)
             for button in (
@@ -398,9 +415,10 @@ def launch_placeholder_gui() -> int:
             editor_actions.addStretch(1)
             calibration_layout.addLayout(editor_actions)
             self.calibration_box = QPlainTextEdit()
+            self.calibration_box.setObjectName("insightConsole")
             self.calibration_box.setReadOnly(True)
             calibration_layout.addWidget(self.calibration_box)
-            tabs.addTab(calibration_tab, "\u6821\u6e96\u5de5\u5177")
+            tabs.addTab(calibration_tab, "Calibration Lab")
 
         def _metric_card(self, layout: QGridLayout, row: int, column: int, title: str) -> QLabel:
             card = QGroupBox(title)
@@ -441,8 +459,8 @@ def launch_placeholder_gui() -> int:
             self.metric_failure.setText(str(state.summary.failure_count))
             self.hero_meta.setText(
                 f"ADB: {state.snapshot.adb_path} | "
-                f"last_sync: {'ok' if state.runtime_snapshot.last_sync_ok else 'failed'} | "
-                f"queue_result: {state.queue.last_queue_status or 'idle'}"
+                f"Last sync: {'healthy' if state.runtime_snapshot.last_sync_ok else 'failed'} | "
+                f"Last queue result: {state.queue.last_queue_status or 'idle'}"
             )
             self._render_instance_list(state)
             self._render_selected_instance(state)
@@ -454,8 +472,8 @@ def launch_placeholder_gui() -> int:
 
         def _render_instance_list(self, state: OperatorConsoleState) -> None:
             self.instance_summary.setText(
-                f"{len(state.instance_rows)} \u53f0\u6a21\u64ec\u5668\u3002 "
-                "\u5361\u7247\u986f\u793a\u9023\u7dda\u3001\u4efb\u52d9\u8207\u5065\u5eb7\u72c0\u614b\u3002"
+                f"{len(state.instance_rows)} instances in the fleet. "
+                "Each card shows connection state, queue depth, active task, and health."
             )
             wanted_ids = [row.instance_id for row in state.instance_rows]
             current_ids = [self.instance_list.item(index).data(Qt.ItemDataRole.UserRole) for index in range(self.instance_list.count())]
@@ -463,12 +481,12 @@ def launch_placeholder_gui() -> int:
                 self._list_syncing = True
                 self.instance_list.clear()
                 for row in state.instance_rows:
-                    warning = f"\nwarning: {_zh_health(row.warning)}" if row.warning else ""
+                    warning = f"\nWarning: {_zh_health(row.warning)}" if row.warning else ""
                     active_task = _zh_task(row.active_task_id) if row.active_task_id else "-"
                     item = QListWidgetItem(
                         f"{row.label}\n"
                         f"{_zh_status(row.status)} | {_zh_health(row.health_summary)}\n"
-                        f"queue {row.queue_depth} | {active_task}\n"
+                        f"Queue {row.queue_depth} | {active_task}\n"
                         f"{row.profile_summary or row.subtitle}{warning}"
                     )
                     item.setData(Qt.ItemDataRole.UserRole, row.instance_id)
@@ -485,8 +503,8 @@ def launch_placeholder_gui() -> int:
         def _render_selected_instance(self, state: OperatorConsoleState) -> None:
             snapshot = state.selected_instance_snapshot
             if snapshot is None:
-                self.instance_title.setText("\u5c1a\u672a\u9078\u53d6\u6a21\u64ec\u5668")
-                self.connection_label.setText("\u8acb\u5148\u5f9e\u5de6\u5074\u9078\u53d6\u4e00\u53f0\u6a21\u64ec\u5668\u3002")
+                self.instance_title.setText("No instance selected")
+                self.connection_label.setText("Pick an emulator from the fleet list to unlock the control surface.")
                 self.profile_label.setText("")
                 self.runtime_label.setText("")
                 self.warning_label.setText("")
@@ -496,10 +514,10 @@ def launch_placeholder_gui() -> int:
             active_task = snapshot.context.active_task_id if snapshot.context is not None else ""
             profile = snapshot.profile_binding.display_name if snapshot.profile_binding is not None else "-"
             self.instance_title.setText(snapshot.instance.label)
-            self.connection_label.setText(f"\u9023\u7dda\u72c0\u614b: {_zh_status(state.detail.status)} | {state.detail.adb_serial}")
-            self.profile_label.setText(f"\u8a2d\u5b9a\u6a94: {profile}")
+            self.connection_label.setText(f"Connection: {_zh_status(state.detail.status)} | {state.detail.adb_serial}")
+            self.profile_label.setText(f"Profile: {profile}")
             self.runtime_label.setText(
-                f"\u57f7\u884c\u72c0\u614b: {_zh_task(active_task) if active_task else '-'} | "
+                f"Runtime: {_zh_task(active_task) if active_task else '-'} | "
                 f"queue={state.detail.queue_depth} | {_zh_health(state.detail.inspection_summary)}"
             )
             self.warning_label.setText(state.detail.warning)
@@ -509,8 +527,14 @@ def launch_placeholder_gui() -> int:
 
         def _render_claim_rewards(self, state: OperatorConsoleState) -> None:
             claim = state.claim_rewards
-            self.claim_header.setText(f"{claim.task_label} | {_zh_status(claim.workflow_status)}")
-            overview_lines = [claim.active_step_summary or "-", f"\u4e0b\u4e00\u6b65\uff1a{claim.next_action_summary or '-'}", claim.workflow_banner or "-"]
+            claim_task_id = str(getattr(claim, "task_id", "") or "")
+            task_label = _zh_task(claim_task_id) if claim_task_id else (claim.task_label or "-")
+            self.claim_header.setText(f"{task_label} | {_zh_status(claim.workflow_status)}")
+            overview_lines = [
+                claim.active_step_summary or "-",
+                f"Next action: {claim.next_action_summary or '-'}",
+                claim.workflow_banner or "-",
+            ]
             self.claim_overview.setText("\n".join(overview_lines))
             self.claim_focus_step.setText(claim.focus_step_summary or "-")
             self.claim_focus_anchor.setText(claim.focus_anchor_summary or "-")
@@ -523,31 +547,31 @@ def launch_placeholder_gui() -> int:
             self.claim_status.setPlainText(
                 "\n".join(
                     [
-                        f"視覺檢查：{claim.failure_check_summary or '目前沒有需要人工確認的視覺檢查。'}",
-                        f"素材來源：{claim.selected_provenance_summary or '-'}",
-                        f"校對摘要：{claim.selected_curation_summary or '-'}",
-                        f"視覺說明：{claim.failure_explanation or '-'}",
-                        f"下一步建議：{claim.next_action_summary or '-'}",
-                        f"執行條件：{claim.runtime_gate_summary or '-'}",
-                        f"佇列狀態：{claim.queue_summary or '-'}",
-                        f"最近執行：{claim.last_run_summary or '-'}",
-                        f"失敗原因：{claim.failure_reason or claim.failure_summary or '-'}",
-                        f"套用範圍：{claim.selected_scope_summary or '-'}",
-                        f"預設配置：{claim.preset_summary or '-'}",
+                        f"Failure check: {claim.failure_check_summary or 'No failing visual check selected.'}",
+                        f"Provenance: {claim.selected_provenance_summary or '-'}",
+                        f"Curation: {claim.selected_curation_summary or '-'}",
+                        f"Failure explanation: {claim.failure_explanation or '-'}",
+                        f"Next action: {claim.next_action_summary or '-'}",
+                        f"Runtime gate: {claim.runtime_gate_summary or '-'}",
+                        f"Queue state: {claim.queue_summary or '-'}",
+                        f"Last run: {claim.last_run_summary or '-'}",
+                        f"Failure reason: {claim.failure_reason or claim.failure_summary or '-'}",
+                        f"Scope: {claim.selected_scope_summary or '-'}",
+                        f"Preset: {claim.preset_summary or '-'}",
                     ]
                 )
             )
             self.claim_steps.clear()
             status_labels = {
-                "pending": "\u5f85\u57f7\u884c",
-                "running": "\u57f7\u884c\u4e2d",
-                "succeeded": "\u5b8c\u6210",
-                "failed": "\u5931\u6557",
-                "skipped": "\u7565\u904e",
+                "pending": "Pending",
+                "running": "Running",
+                "succeeded": "Succeeded",
+                "failed": "Failed",
+                "skipped": "Skipped",
             }
             for row in claim.step_rows:
                 prefix = row.status_text or status_labels.get(row.status, row.status)
-                summary = row.summary or row.success_condition or row.failure_condition
+                summary = row.summary or row.success_condition or row.failure_condition or "-"
                 self.claim_steps.addItem(QListWidgetItem(f"{prefix} | {row.title}\n{summary}"))
             self.claim_queue_button.setEnabled(claim.can_queue)
             self.claim_run_button.setEnabled(claim.can_run_now)
@@ -556,8 +580,11 @@ def launch_placeholder_gui() -> int:
             preview = state.vision.preview
             image_path = preview.image_path if preview is not None else ""
             overlay = preview.selected_overlay_summary if preview is not None else ""
-            self.preview_summary.setText(f"畫面來源：{image_path or '-'} | 疊圖焦點：{overlay or '-'}")
-            lines = [f"目前畫面：{state.claim_rewards.preview_summary or '-'}", f"套用範圍：{state.claim_rewards.selected_scope_summary or '-'}"]
+            self.preview_summary.setText(f"Source frame: {image_path or '-'} | Overlay focus: {overlay or '-'}")
+            lines = [
+                f"Preview summary: {state.claim_rewards.preview_summary or '-'}",
+                f"Scope: {state.claim_rewards.selected_scope_summary or '-'}",
+            ]
             if preview is not None:
                 for key, value in sorted(preview.metadata.items()):
                     lines.append(f"{key}: {value}")
@@ -565,33 +592,42 @@ def launch_placeholder_gui() -> int:
             if image_path and Path(image_path).exists():
                 pixmap = QPixmap(image_path)
                 if not pixmap.isNull():
-                    self.preview_image.setPixmap(pixmap.scaled(self.preview_image.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+                    self.preview_image.setPixmap(
+                        pixmap.scaled(
+                            self.preview_image.size(),
+                            Qt.AspectRatioMode.KeepAspectRatio,
+                            Qt.TransformationMode.SmoothTransformation,
+                        )
+                    )
                     self.preview_image.setText("")
                     return
             self.preview_image.setPixmap(QPixmap())
-            self.preview_image.setText("\u5c1a\u7121\u9810\u89bd")
+            self.preview_image.setText("No preview frame captured.")
 
         def _render_failure(self, state: OperatorConsoleState) -> None:
             claim_failure = state.vision.failure.claim_rewards
-            self.failure_summary.setText(f"摘要：{state.claim_rewards.failure_summary or '-'} | 卡住步驟：{state.claim_rewards.current_step_title or state.claim_rewards.failure_step_id or '-'}")
+            self.failure_summary.setText(
+                f"Failure state: {state.claim_rewards.failure_summary or '-'} | "
+                f"Step: {state.claim_rewards.current_step_title or state.claim_rewards.failure_step_id or '-'}"
+            )
             if claim_failure is None:
-                self.failure_box.setPlainText("目前沒有失敗快照。")
+                self.failure_box.setPlainText("No claim-rewards failure snapshot is available.")
                 return
             selected = claim_failure.selected_check
             lines = [
-                f"卡點步驟：{state.claim_rewards.focus_step_summary or '-'}",
-                f"失敗 Anchor：{state.claim_rewards.focus_anchor_summary or '-'}",
-                f"比對區域：{state.claim_rewards.focus_region_summary or '-'}",
-                f"信心門檻：{state.claim_rewards.focus_threshold_summary or '-'}",
-                f"視覺檢查：{state.claim_rewards.failure_check_summary or '-'}",
-                f"診斷焦點：{state.claim_rewards.selected_anchor_summary or '-'}",
-                f"素材來源：{state.claim_rewards.selected_provenance_summary or '-'}",
-                f"校對摘要：{state.claim_rewards.selected_curation_summary or '-'}",
-                f"視覺說明：{state.claim_rewards.failure_explanation or '-'}",
-                f"下一步：{state.claim_rewards.next_action_summary or '-'}",
-                f"診斷摘要：{state.claim_rewards.failure_check_summary or state.claim_rewards.failure_summary or '-'}",
-                f"檢查進度：已命中 {claim_failure.matched_check_count} / 缺失 {claim_failure.missing_check_count}",
-                "說明：下列模板、參考圖、門檻與區域是 viewer-first 診斷資訊，不代表 app 另外發明了 runtime signal。",
+                f"Current step: {state.claim_rewards.focus_step_summary or '-'}",
+                f"Primary anchor: {state.claim_rewards.focus_anchor_summary or '-'}",
+                f"Match region: {state.claim_rewards.focus_region_summary or '-'}",
+                f"Threshold: {state.claim_rewards.focus_threshold_summary or '-'}",
+                f"Failure check: {state.claim_rewards.failure_check_summary or '-'}",
+                f"Selected check: {state.claim_rewards.selected_anchor_summary or '-'}",
+                f"Provenance: {state.claim_rewards.selected_provenance_summary or '-'}",
+                f"Curation: {state.claim_rewards.selected_curation_summary or '-'}",
+                f"Failure explanation: {state.claim_rewards.failure_explanation or '-'}",
+                f"Next action: {state.claim_rewards.next_action_summary or '-'}",
+                f"Failure detail: {state.claim_rewards.failure_check_summary or state.claim_rewards.failure_summary or '-'}",
+                f"Check coverage: matched {claim_failure.matched_check_count} / missing {claim_failure.missing_check_count}",
+                "Inspector note: template paths, reference images, and tuning values below are viewer-first diagnostics for calibration and review.",
             ]
             if selected is not None:
                 resolution = selected.calibration_resolution
@@ -607,16 +643,16 @@ def launch_placeholder_gui() -> int:
                 )
                 lines.extend(
                     [
-                        f"錨點：{selected.anchor_label or selected.label or '-'} | {selected.anchor_id}",
-                        f"階段：{state.claim_rewards.current_step_title or selected.stage or '-'}",
-                        f"狀態：{_zh_match_status(selected.status.value)}",
-                        f"門檻：{threshold:.2f}",
-                        f"比對區域：{region}",
-                        f"模板：{selected.selected_template_path or '-'}",
-                        f"參考圖：{selected.selected_reference_image_path or '-'}",
-                        f"最佳候選：{selected.best_candidate_summary or '-'}",
-                        f"命中候選：{selected.matched_candidate_summary or '-'}",
-                        f"疊圖：{selected.inspection.selected_overlay_summary if selected.inspection is not None else '-'}",
+                        f"Anchor label: {selected.anchor_label or selected.label or '-'} | {selected.anchor_id}",
+                        f"Stage: {state.claim_rewards.current_step_title or selected.stage or '-'}",
+                        f"Match status: {_zh_match_status(selected.status.value)}",
+                        f"Effective threshold: {threshold:.2f}",
+                        f"Effective match region: {region}",
+                        f"Template path: {selected.selected_template_path or '-'}",
+                        f"Reference image: {selected.selected_reference_image_path or '-'}",
+                        f"Best candidate: {selected.best_candidate_summary or '-'}",
+                        f"Matched candidate: {selected.matched_candidate_summary or '-'}",
+                        f"Overlay summary: {selected.inspection.selected_overlay_summary if selected.inspection is not None else '-'}",
                     ]
                 )
             self.failure_box.setPlainText("\n".join(lines))
@@ -624,25 +660,25 @@ def launch_placeholder_gui() -> int:
         def _render_readiness(self, state: OperatorConsoleState) -> None:
             row = _claim_readiness_row(state)
             self.readiness_summary.setText(
-                f"建構就緒：{state.task_readiness.builder_ready_count}/{state.task_readiness.total_tasks} | "
-                f"執行就緒：{state.task_readiness.implementation_ready_count}/{state.task_readiness.total_tasks}"
+                f"Builder ready: {state.task_readiness.builder_ready_count}/{state.task_readiness.total_tasks} | "
+                f"Implementation ready: {state.task_readiness.implementation_ready_count}/{state.task_readiness.total_tasks}"
             )
             if row is None:
-                self.readiness_box.setPlainText("缺少每日領獎的就緒資料。")
+                self.readiness_box.setPlainText("No readiness report is available for daily claim.")
                 return
             self.readiness_box.setPlainText(
                 "\n".join(
                     [
-                        f"任務定義：{row.manifest_path}",
-                        f"建構狀態：{row.builder_state}",
-                        f"執行狀態：{row.implementation_state}",
-                        f"目前可直接執行：{'是' if row.implementation_state == 'ready' else '否'}",
-                        f"範圍原因：{', '.join(row.scope_reasons) or '-'}",
-                        f"必要錨點：{', '.join(row.required_anchors) or '-'}",
-                        f"樣板設定：{', '.join(row.fixture_profile_paths) or '-'}",
-                        f"Runtime 需求：{', '.join(row.runtime_requirement_ids) or '-'}",
-                        f"警告：{'; '.join(row.warnings) or '-'}",
-                        f"阻擋項：{'; '.join(row.implementation_blockers) or '-'}",
+                        f"Manifest: {row.manifest_path}",
+                        f"Builder state: {row.builder_state}",
+                        f"Implementation state: {row.implementation_state}",
+                        f"Runnable now: {'yes' if row.implementation_state == 'ready' else 'no'}",
+                        f"Scope reasons: {', '.join(row.scope_reasons) or '-'}",
+                        f"Required anchors: {', '.join(row.required_anchors) or '-'}",
+                        f"Fixture profiles: {', '.join(row.fixture_profile_paths) or '-'}",
+                        f"Runtime requirements: {', '.join(row.runtime_requirement_ids) or '-'}",
+                        f"Warnings: {'; '.join(row.warnings) or '-'}",
+                        f"Implementation blockers: {'; '.join(row.implementation_blockers) or '-'}",
                     ]
                 )
             )
@@ -661,23 +697,23 @@ def launch_placeholder_gui() -> int:
             calibration = state.vision.calibration
             capture = state.vision.capture
             lines = [
-                f"選取來源：{state.claim_rewards.editor.selected_source_kind}",
-                f"選取圖片：{state.claim_rewards.editor.selected_source_image or '-'}",
-                f"擷取數量：{state.claim_rewards.editor.artifact_count}",
-                f"已套用：{state.claim_rewards.editor.last_applied_summary or '-'}",
-                f"已保存：{state.claim_rewards.editor.persistence_summary or '-'}",
-                f"目前診斷用錨點：{state.claim_rewards.selected_anchor_summary or '-'}",
-                f"目前擷取：{capture.selected_artifact_summary or '-'}",
-                f"校正縮放：{calibration.scale_summary or '-'}",
-                f"校正偏移：{calibration.offset_summary or '-'}",
-                f"校正裁切：{calibration.crop_summary or '-'}",
+                f"Selected source: {state.claim_rewards.editor.selected_source_kind}",
+                f"Source image: {state.claim_rewards.editor.selected_source_image or '-'}",
+                f"Artifact count: {state.claim_rewards.editor.artifact_count}",
+                f"Last applied draft: {state.claim_rewards.editor.last_applied_summary or '-'}",
+                f"Persistence: {state.claim_rewards.editor.persistence_summary or '-'}",
+                f"Focused anchor: {state.claim_rewards.selected_anchor_summary or '-'}",
+                f"Selected artifact: {capture.selected_artifact_summary or '-'}",
+                f"Scale summary: {calibration.scale_summary or '-'}",
+                f"Offset summary: {calibration.offset_summary or '-'}",
+                f"Crop summary: {calibration.crop_summary or '-'}",
             ]
             if calibration.selected_resolution is not None:
                 lines.extend(
                     [
-                        f"選取錨點：{calibration.selected_resolution.anchor_id}",
-                        f"實際門檻：{calibration.selected_resolution.effective_confidence_threshold:.2f}",
-                        f"實際比對區域：{calibration.selected_resolution.effective_match_region}",
+                        f"Selected anchor id: {calibration.selected_resolution.anchor_id}",
+                        f"Effective threshold: {calibration.selected_resolution.effective_confidence_threshold:.2f}",
+                        f"Effective match region: {calibration.selected_resolution.effective_match_region}",
                     ]
                 )
             self.calibration_box.setPlainText("\n".join(lines))
@@ -691,7 +727,7 @@ def launch_placeholder_gui() -> int:
 
         def _require_instance(self) -> str | None:
             if not self._selected_instance_id:
-                QMessageBox.warning(self, "\u9700\u8981\u6a21\u64ec\u5668", "\u8acb\u5148\u5f9e\u5de6\u5074\u9078\u53d6\u4e00\u53f0\u6a21\u64ec\u5668\u3002")
+                QMessageBox.warning(self, "No instance selected", "Pick an emulator from the fleet list first.")
                 return None
             return self._selected_instance_id
 
@@ -740,7 +776,7 @@ def launch_placeholder_gui() -> int:
                     capture_offset=_parse_optional_point(self.offset_input.text()),
                 )
             except ValueError as exc:
-                QMessageBox.warning(self, "\u7de8\u8f2f\u683c\u5f0f\u932f\u8aa4", str(exc))
+                QMessageBox.warning(self, "Invalid draft format", str(exc))
 
         def _reset_editor(self) -> None:
             instance_id = self._require_instance()
