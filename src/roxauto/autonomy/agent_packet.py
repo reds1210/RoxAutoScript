@@ -155,6 +155,16 @@ def _build_changed_file_snapshot(repo_root: Path) -> tuple[list[str], str]:
     return changed_files, diff_excerpt
 
 
+def _build_last_commit_files(repo_root: Path) -> list[str]:
+    return _filter_generated_paths(
+        [
+            line
+            for line in _run_git(repo_root, "show", "--pretty=format:", "--name-only", "HEAD").splitlines()
+            if line.strip()
+        ]
+    )
+
+
 def build_agent_packet(
     repo_root: Path,
     *,
@@ -186,10 +196,11 @@ def build_agent_packet(
     untracked_files = _filter_generated_paths(
         [line for line in _run_git(repo_root, "ls-files", "--others", "--exclude-standard").splitlines() if line.strip()]
     )
+    last_commit_files = _build_last_commit_files(repo_root)
     if not changed_files:
         changed_files = _unique_paths(staged_files + unstaged_files + untracked_files)
     policy_files_touched, shared_files_touched, workflow_files_touched = _collect_path_signals(
-        changed_files,
+        changed_files or last_commit_files,
         policy_files=POLICY_FILES,
     )
 
@@ -211,6 +222,7 @@ def build_agent_packet(
             "unstaged_files": unstaged_files,
             "untracked_files": untracked_files,
             "changed_files": changed_files,
+            "last_commit_files": last_commit_files,
             "policy_files_touched": policy_files_touched,
             "shared_files_touched": shared_files_touched,
             "workflow_files_touched": workflow_files_touched,

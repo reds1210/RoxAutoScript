@@ -28,6 +28,7 @@
 ## What Shipped
 
 - `agent-packet.json` now includes additional path signals for continuation logic:
+  - `git.last_commit_files`
   - `git.policy_files_touched`
   - `git.shared_files_touched`
   - `git.workflow_files_touched`
@@ -35,6 +36,7 @@
 - `render_handoff_brief(...)` now includes:
   - quality-gate summary counts
   - recent commit subjects
+  - last-commit file fallback when the local worktree is clean
   - shared-surface warnings when policy/shared/workflow files changed
 - The GitHub workflow still posts the handoff brief as a PR comment, and now also syncs it into a managed `Latest Codex Handoff` block inside the PR body.
 - The PR template now explicitly warns contributors that CI will maintain that managed handoff block.
@@ -51,6 +53,7 @@
 ## Public Contract Changes
 
 - `agent-packet.json` now exposes `git.policy_files_touched`, `git.shared_files_touched`, and `git.workflow_files_touched`.
+- `agent-packet.json` now also exposes `git.last_commit_files` so clean local branches can still hand off the most recent committed scope.
 - `policy_files` now includes `docs/codex-subscription-setup.md`.
 - PR bodies may now contain a CI-managed block delimited by:
   - `<!-- roxauto-pr-handoff:start -->`

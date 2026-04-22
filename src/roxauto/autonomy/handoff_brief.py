@@ -59,6 +59,7 @@ def render_handoff_brief(
     git = agent_packet.get("git", {})
     commands = quality_gate.get("commands", [])
     changed_files = list(git.get("changed_files", []))
+    last_commit_files = list(git.get("last_commit_files", []))
     quality_gate_summary = _format_quality_gate_summary(quality_gate)
     recent_commit_subjects = _recent_commit_subjects(agent_packet)
     policy_files_touched = list(git.get("policy_files_touched", []))
@@ -69,6 +70,8 @@ def render_handoff_brief(
             for path in git.get(key, []):
                 if path not in changed_files:
                     changed_files.append(path)
+    if not changed_files and last_commit_files:
+        changed_files.extend(last_commit_files)
 
     lines = [
         "<!-- roxauto-subscription-loop -->",
