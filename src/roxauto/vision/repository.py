@@ -160,6 +160,11 @@ class AnchorRepository:
         data = loads(catalog_path.read_text(encoding="utf-8"))
         return ClaimRewardsGoldenCatalog.from_dict(data)
 
+    def get_claim_rewards_post_tap_contract(self) -> dict[str, Any]:
+        support = self.get_task_support("daily_ui.claim_rewards")
+        contract = support.get("post_tap_contract", {})
+        return dict(contract) if isinstance(contract, dict) else {}
+
     def get_claim_rewards_anchor_golden(
         self,
         anchor_id: str,
