@@ -280,8 +280,8 @@
           "notes": "Round 9 remains blocked until visible quantities and post-decision result states are truthful and deterministic.",
           "required_anchor_ids": [
             "common.close_button",
-            "daily_ui.guild_order_list",
-            "daily_ui.guild_order_detail",
+            "daily_ui.guild_order_list_panel",
+            "daily_ui.guild_order_detail_panel",
             "daily_ui.guild_order_submit_button",
             "daily_ui.guild_order_refresh_button"
           ],
@@ -293,9 +293,9 @@
             "daily_ui.guild_order_material_label",
             "daily_ui.guild_order_required_quantity",
             "daily_ui.guild_order_available_quantity",
-            "daily_ui.guild_order_completed_state",
-            "daily_ui.guild_order_insufficient_material_state",
-            "daily_ui.guild_order_submit_result"
+            "daily_ui.guild_order_unavailable_state",
+            "daily_ui.guild_order_insufficient_material_feedback",
+            "daily_ui.guild_order_submit_result_state"
           ],
           "supporting_screen_slugs": [
             "insufficient_material_state",
@@ -310,9 +310,9 @@
           "daily_ui.guild_order_material_label",
           "daily_ui.guild_order_required_quantity",
           "daily_ui.guild_order_available_quantity",
-          "daily_ui.guild_order_completed_state",
-          "daily_ui.guild_order_insufficient_material_state",
-          "daily_ui.guild_order_submit_result"
+          "daily_ui.guild_order_unavailable_state",
+          "daily_ui.guild_order_insufficient_material_feedback",
+          "daily_ui.guild_order_submit_result_state"
         ],
         "supporting_golden_screen_slugs": [
           "insufficient_material_state",
@@ -323,8 +323,8 @@
       "pack_id": "daily_ui",
       "required_anchors": [
         "common.close_button",
-        "daily_ui.guild_order_list",
-        "daily_ui.guild_order_detail",
+        "daily_ui.guild_order_list_panel",
+        "daily_ui.guild_order_detail_panel",
         "daily_ui.guild_order_submit_button",
         "daily_ui.guild_order_refresh_button"
       ],

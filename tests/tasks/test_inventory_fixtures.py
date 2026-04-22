@@ -40,8 +40,8 @@ class TaskFixtureExamplesTests(unittest.TestCase):
             TaskAssetStatus.PLACEHOLDER,
         )
         self.assertEqual(
-            statuses["daily_ui.guild_order_submit:template:daily_ui.guild_order_list"],
-            TaskAssetStatus.MISSING,
+            statuses["daily_ui.guild_order_submit:template:daily_ui.guild_order_list_panel"],
+            TaskAssetStatus.PLACEHOLDER,
         )
         self.assertEqual(
             statuses["daily_ui.guild_order_submit:golden:order_list"],

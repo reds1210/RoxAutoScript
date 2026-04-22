@@ -279,35 +279,39 @@
       "task_id": "daily_ui.guild_order_submit"
     },
     {
-      "asset_id": "daily_ui.guild_order_submit:template:daily_ui.guild_order_list",
+      "asset_id": "daily_ui.guild_order_submit:template:daily_ui.guild_order_list_panel",
       "asset_kind": "template",
       "metadata": {
-        "anchor_id": "daily_ui.guild_order_list",
+        "anchor_id": "daily_ui.guild_order_list_panel",
         "curation_status": "",
-        "placeholder": false,
+        "inspection_role": "guild_order_list",
+        "placeholder": true,
         "requirement_level": "required",
         "source": "template_manifest",
-        "template_path": ""
+        "stage": "open_guild_order_list",
+        "template_path": "anchors/daily_guild_order_list_panel.svg"
       },
       "pack_id": "daily_ui",
-      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.guild_order_list",
-      "status": "missing",
+      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.guild_order_list_panel",
+      "status": "placeholder",
       "task_id": "daily_ui.guild_order_submit"
     },
     {
-      "asset_id": "daily_ui.guild_order_submit:template:daily_ui.guild_order_detail",
+      "asset_id": "daily_ui.guild_order_submit:template:daily_ui.guild_order_detail_panel",
       "asset_kind": "template",
       "metadata": {
-        "anchor_id": "daily_ui.guild_order_detail",
+        "anchor_id": "daily_ui.guild_order_detail_panel",
         "curation_status": "",
-        "placeholder": false,
+        "inspection_role": "guild_order_detail",
+        "placeholder": true,
         "requirement_level": "required",
         "source": "template_manifest",
-        "template_path": ""
+        "stage": "open_guild_order_detail",
+        "template_path": "anchors/daily_guild_order_detail_panel.svg"
       },
       "pack_id": "daily_ui",
-      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.guild_order_detail",
-      "status": "missing",
+      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.guild_order_detail_panel",
+      "status": "placeholder",
       "task_id": "daily_ui.guild_order_submit"
     },
     {
@@ -316,14 +320,16 @@
       "metadata": {
         "anchor_id": "daily_ui.guild_order_submit_button",
         "curation_status": "",
-        "placeholder": false,
+        "inspection_role": "submit_affordance",
+        "placeholder": true,
         "requirement_level": "required",
         "source": "template_manifest",
-        "template_path": ""
+        "stage": "evaluate_order_actions",
+        "template_path": "anchors/daily_guild_order_submit_button.svg"
       },
       "pack_id": "daily_ui",
       "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.guild_order_submit_button",
-      "status": "missing",
+      "status": "placeholder",
       "task_id": "daily_ui.guild_order_submit"
     },
     {
@@ -332,14 +338,16 @@
       "metadata": {
         "anchor_id": "daily_ui.guild_order_refresh_button",
         "curation_status": "",
-        "placeholder": false,
+        "inspection_role": "refresh_affordance",
+        "placeholder": true,
         "requirement_level": "required",
         "source": "template_manifest",
-        "template_path": ""
+        "stage": "evaluate_order_actions",
+        "template_path": "anchors/daily_guild_order_refresh_button.svg"
       },
       "pack_id": "daily_ui",
       "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.guild_order_refresh_button",
-      "status": "missing",
+      "status": "placeholder",
       "task_id": "daily_ui.guild_order_submit"
     },
     {
@@ -391,51 +399,57 @@
       "task_id": "daily_ui.guild_order_submit"
     },
     {
-      "asset_id": "daily_ui.guild_order_submit:template:daily_ui.guild_order_completed_state",
+      "asset_id": "daily_ui.guild_order_submit:template:daily_ui.guild_order_unavailable_state",
       "asset_kind": "template",
       "metadata": {
-        "anchor_id": "daily_ui.guild_order_completed_state",
+        "anchor_id": "daily_ui.guild_order_unavailable_state",
         "curation_status": "",
-        "placeholder": false,
+        "inspection_role": "unavailable_state",
+        "placeholder": true,
         "requirement_level": "supporting",
         "source": "template_manifest",
-        "template_path": ""
+        "stage": "classify_order_state",
+        "template_path": "anchors/daily_guild_order_unavailable_state.svg"
       },
       "pack_id": "daily_ui",
-      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.guild_order_completed_state",
-      "status": "missing",
+      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.guild_order_unavailable_state",
+      "status": "placeholder",
       "task_id": "daily_ui.guild_order_submit"
     },
     {
-      "asset_id": "daily_ui.guild_order_submit:template:daily_ui.guild_order_insufficient_material_state",
+      "asset_id": "daily_ui.guild_order_submit:template:daily_ui.guild_order_insufficient_material_feedback",
       "asset_kind": "template",
       "metadata": {
-        "anchor_id": "daily_ui.guild_order_insufficient_material_state",
+        "anchor_id": "daily_ui.guild_order_insufficient_material_feedback",
         "curation_status": "",
-        "placeholder": false,
+        "inspection_role": "insufficient_material_feedback",
+        "placeholder": true,
         "requirement_level": "supporting",
         "source": "template_manifest",
-        "template_path": ""
+        "stage": "verify_submit_failure",
+        "template_path": "anchors/daily_guild_order_insufficient_material_feedback.svg"
       },
       "pack_id": "daily_ui",
-      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.guild_order_insufficient_material_state",
-      "status": "missing",
+      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.guild_order_insufficient_material_feedback",
+      "status": "placeholder",
       "task_id": "daily_ui.guild_order_submit"
     },
     {
-      "asset_id": "daily_ui.guild_order_submit:template:daily_ui.guild_order_submit_result",
+      "asset_id": "daily_ui.guild_order_submit:template:daily_ui.guild_order_submit_result_state",
       "asset_kind": "template",
       "metadata": {
-        "anchor_id": "daily_ui.guild_order_submit_result",
+        "anchor_id": "daily_ui.guild_order_submit_result_state",
         "curation_status": "",
-        "placeholder": false,
+        "inspection_role": "submit_result_state",
+        "placeholder": true,
         "requirement_level": "supporting",
         "source": "template_manifest",
-        "template_path": ""
+        "stage": "verify_submit_result",
+        "template_path": "anchors/daily_guild_order_submit_result_state.svg"
       },
       "pack_id": "daily_ui",
-      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.guild_order_submit_result",
-      "status": "missing",
+      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.guild_order_submit_result_state",
+      "status": "placeholder",
       "task_id": "daily_ui.guild_order_submit"
     },
     {

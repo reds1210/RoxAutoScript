@@ -36,8 +36,8 @@ class GuildOrderSubmitFoundationsTests(unittest.TestCase):
             blueprint.required_anchors,
             [
                 "common.close_button",
-                "daily_ui.guild_order_list",
-                "daily_ui.guild_order_detail",
+                "daily_ui.guild_order_list_panel",
+                "daily_ui.guild_order_detail_panel",
                 "daily_ui.guild_order_submit_button",
                 "daily_ui.guild_order_refresh_button",
             ],
@@ -48,9 +48,9 @@ class GuildOrderSubmitFoundationsTests(unittest.TestCase):
                 "daily_ui.guild_order_material_label",
                 "daily_ui.guild_order_required_quantity",
                 "daily_ui.guild_order_available_quantity",
-                "daily_ui.guild_order_completed_state",
-                "daily_ui.guild_order_insufficient_material_state",
-                "daily_ui.guild_order_submit_result",
+                "daily_ui.guild_order_unavailable_state",
+                "daily_ui.guild_order_insufficient_material_feedback",
+                "daily_ui.guild_order_submit_result_state",
             ],
         )
         self.assertEqual(material_policy.decision_boundary, "visible_material_evidence_only")

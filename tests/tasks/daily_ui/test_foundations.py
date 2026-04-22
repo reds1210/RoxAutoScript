@@ -39,9 +39,9 @@ class DailyUiFoundationsTests(unittest.TestCase):
                 "daily_ui.guild_order_material_label",
                 "daily_ui.guild_order_required_quantity",
                 "daily_ui.guild_order_available_quantity",
-                "daily_ui.guild_order_completed_state",
-                "daily_ui.guild_order_insufficient_material_state",
-                "daily_ui.guild_order_submit_result",
+                "daily_ui.guild_order_unavailable_state",
+                "daily_ui.guild_order_insufficient_material_feedback",
+                "daily_ui.guild_order_submit_result_state",
             ],
         )
 

@@ -171,12 +171,12 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
             "placeholder",
         )
         self.assertEqual(
-            records["daily_ui.guild_order_submit:template:daily_ui.guild_order_list"].status.value,
-            "missing",
+            records["daily_ui.guild_order_submit:template:daily_ui.guild_order_list_panel"].status.value,
+            "placeholder",
         )
         self.assertEqual(
-            records["daily_ui.guild_order_submit:template:daily_ui.guild_order_list"].source_path,
-            "assets/templates/daily_ui/manifest.json#daily_ui.guild_order_list",
+            records["daily_ui.guild_order_submit:template:daily_ui.guild_order_list_panel"].source_path,
+            "assets/templates/daily_ui/manifest.json#daily_ui.guild_order_list_panel",
         )
         self.assertEqual(
             records["daily_ui.guild_order_submit:template:daily_ui.guild_order_available_quantity"].metadata["requirement_level"],
@@ -339,3 +339,32 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
             ["supporting"],
         )
         self.assertEqual(guild_order_submit.builder_readiness_state.value, "blocked_by_foundation")
+
+    def test_guild_order_foundation_checks_ignore_golden_records(self) -> None:
+        from roxauto.tasks.models import TaskAssetKind, TaskAssetRecord, TaskAssetStatus
+
+        golden_only_records = [
+            TaskAssetRecord(
+                asset_id="daily_ui.guild_order_submit:golden:fake",
+                pack_id="daily_ui",
+                task_id="daily_ui.guild_order_submit",
+                asset_kind=TaskAssetKind.GOLDEN_SCREENSHOT,
+                status=TaskAssetStatus.PRESENT,
+                source_path="assets/templates/daily_ui/goldens/fake.png",
+                metadata={"anchor_id": "daily_ui.guild_order_unavailable_state"},
+            )
+        ]
+
+        self.assertFalse(
+            self.repository._all_anchor_records_present(
+                golden_only_records,
+                ["daily_ui.guild_order_unavailable_state"],
+            )
+        )
+        self.assertEqual(
+            self.repository._anchor_status_summary(
+                golden_only_records,
+                ["daily_ui.guild_order_unavailable_state"],
+            ),
+            "daily_ui.guild_order_unavailable_state:missing",
+        )
