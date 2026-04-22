@@ -318,3 +318,69 @@ Recommended next step after the four-device sweep:
   - `emulator-5560-after-daily-signin-attempt.png`
 - keep `emulator-5556-current-check.png` and `emulator-5556-after-modal-tap.png` as supporting post-claim overlay evidence only unless the confirm-state contract is broadened beyond the explicit confirm-button modal
 - continue capture attempts for `reward_confirm_modal` on another account/day-state that still presents a real confirmation dialog before the claim resolves
+
+## 2026-04-22 Route A Confirm-State Audit Packet
+
+Track:
+
+- `codex/claim-rewards-goldens`
+
+Scope:
+
+- stayed inside `daily_ui.claim_rewards`
+- wrote only to:
+  - `docs/vision/claim_rewards_live/reward_confirm_state_decision_packet.json`
+  - `docs/vision/claim_rewards_live/README.md`
+  - `docs/handoffs/claim-rewards-goldens.md`
+- did not edit runtime, task, GUI, manifest, catalog, or canonical asset files
+
+Files changed:
+
+- `docs/vision/claim_rewards_live/reward_confirm_state_decision_packet.json`
+- `docs/vision/claim_rewards_live/README.md`
+- `docs/handoffs/claim-rewards-goldens.md`
+
+Public APIs added or changed:
+
+- no Python API changed
+- added one machine-readable evidence packet for dispatch/vision review:
+  - `docs/vision/claim_rewards_live/reward_confirm_state_decision_packet.json`
+
+Contract changes:
+
+- no manifest/catalog contract changed in this pass
+- evidence conclusion is now written down explicitly:
+  - reviewed devices with a true live `reward_confirm_modal`: `0`
+  - reviewed devices with a direct post-tap claimed/result state: `3`
+  - reviewed devices with a post-tap reward overlay: `1`
+- the packet also records that the current workspace probe saw no `adb` devices, so this pass was an evidence audit only
+
+Assumptions:
+
+- the four-device sweep recorded earlier in this handoff remains the authoritative raw evidence set for Route A
+- `emulator-5556-after-day7-claim-tap-2026-04-22.png` is still useful live post-tap evidence, but not a like-for-like modal replacement
+- `127.0.0.1:5559`, `127.0.0.1:5563`, and `emulator-5560` direct-to-result captures remain valid evidence that the current live accounts often skip the explicit modal
+
+Verification performed:
+
+- `adb devices`
+- `python -m json.tool docs/vision/claim_rewards_live/reward_confirm_state_decision_packet.json`
+
+Known limitations:
+
+- no new live screenshots were captured in this pass because `adb devices` returned no visible devices from this workspace
+- the new packet summarizes evidence; it does not itself broaden the task or vision contract
+- the unresolved product question still belongs to dispatch / Engine C:
+  - keep `strict_confirm_modal_only`
+  - or broaden to treat direct result overlays as valid post-tap truth
+
+Blockers:
+
+- there is still no reviewed live confirm-button modal capture for `daily_ui.reward_confirm_state`
+- current workspace device visibility prevented a fresh capture attempt during this pass
+
+Recommended next step:
+
+- let Engine C consume `docs/vision/claim_rewards_live/reward_confirm_state_decision_packet.json` as the evidence-side answer for Route A
+- keep the answer to "do we have a true live confirm-modal capture yet?" as `no`
+- only attempt canonical live replacement after a reachable account/day-state exposes the explicit confirmation action surface before claim resolution

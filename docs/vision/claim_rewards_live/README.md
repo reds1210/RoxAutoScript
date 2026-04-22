@@ -2,6 +2,25 @@
 
 This folder keeps the raw live screenshots reviewed for `daily_ui.claim_rewards`.
 
+## Route A Confirm-State Audit
+
+Machine-readable decision packet:
+
+- `reward_confirm_state_decision_packet.json`
+
+Current answer for dispatch:
+
+- no, there is still no true live `reward_confirm_modal` capture
+- all four reviewed devices reached a live claimable panel
+- zero reviewed devices produced a like-for-like live confirm-button modal
+- three reviewed devices resolved directly to a claimed/result state after the claim tap
+- one reviewed device (`emulator-5556`) resolved to a live reward-acquired overlay after the claim tap
+
+Current workspace probe:
+
+- `adb devices` returned no visible devices during this pass, so no new screenshots were captured
+- this pass strengthens the evidence packet from the existing four-device sweep instead of claiming fresh live capture work
+
 Round-8 capture inventory:
 
 - confirmed ADB-visible devices:
@@ -12,10 +31,8 @@ Round-8 capture inventory:
 - landed evidence in the canonical vision contract:
   - `emulator-5556`
   - `emulator-5560`
-- additional raw evidence exists from:
   - `127.0.0.1:5559`
   - `127.0.0.1:5563`
-  - but those captures are still raw/supporting evidence only and have not been promoted into canonical baselines in this branch
 
 Promoted canonical baselines:
 
@@ -34,6 +51,18 @@ Promoted supporting evidence:
   - copied to
     `assets/templates/daily_ui/goldens/claim_rewards/live/daily_ui_claim_rewards__post_tap_reward_overlay__live_capture__emulator_5556__after_day7_claim_tap_2026_04_22.png`
   - proves that one live day-7 claim tap resolved into a reward-acquired overlay, not the explicit confirm-modal contract
+- `raw/127.0.0.1-5559-after-claim-tap.png`
+  - copied to
+    `assets/templates/daily_ui/goldens/claim_rewards/live/daily_ui_claim_rewards__post_tap_claimed_result__live_capture__127_0_0_1_5559__after_claim_tap.png`
+  - proves that the live claim tap on `127.0.0.1:5559` resolved directly into a claimed/result state without surfacing the confirm modal
+- `raw/127.0.0.1-5563-after-claim-tap.png`
+  - copied to
+    `assets/templates/daily_ui/goldens/claim_rewards/live/daily_ui_claim_rewards__post_tap_claimed_result__live_capture__127_0_0_1_5563__after_claim_tap.png`
+  - proves that the live claim tap on `127.0.0.1:5563` resolved directly into a claimed/result state without surfacing the confirm modal
+- `raw/emulator-5560-after-claim-tap.png`
+  - copied to
+    `assets/templates/daily_ui/goldens/claim_rewards/live/daily_ui_claim_rewards__post_tap_claimed_result__live_capture__emulator_5560__after_claim_tap.png`
+  - proves that the live claim tap on `emulator-5560` resolved directly into a claimed/result state without surfacing the confirm modal
 - `raw/emulator-5560-reward-recovery-attempt-2.png`
   - copied to
     `assets/templates/daily_ui/goldens/claim_rewards/live/daily_ui_claim_rewards__wrong_reward_surface__live_capture__emulator_5560__kingdom_pass_rewards.png`
@@ -49,7 +78,8 @@ Current truthful status:
 - `daily_ui.reward_panel`: live capture
 - `daily_ui.claim_reward`: live capture
 - `daily_ui.reward_confirm_state`: still curated stand-in
-  - the live post-tap overlay is useful provenance, but it is not a like-for-like replacement for the expected reward confirmation modal
+  - four-device live post-tap evidence now exists, but every reviewed device resolves into a reward-result surface instead of the strict confirm-modal contract
+  - dispatch recommendation is now `direct_result_overlay_is_valid`, while the current confirm-modal anchor remains a curated stand-in until Engine D changes the task contract
 
 Promotion rule for this track:
 
@@ -148,4 +178,4 @@ Current blocker state after the four-device sweep:
 
 - raw `reward_panel_claimable` evidence is now covered by multiple live devices
 - a like-for-like live `reward_confirm_modal` capture is still missing
-- if future rounds want actual four-device landed evidence in the canonical contract, they still need approved promoted captures from `127.0.0.1:5559` or `127.0.0.1:5563`
+- four-device landed evidence is now available for post-tap outcomes, but not for the strict confirm-modal scene itself

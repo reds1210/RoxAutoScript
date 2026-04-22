@@ -16,19 +16,45 @@
       ],
       "landed_device_serials": [
         "emulator-5556",
-        "emulator-5560"
-      ],
-      "missing_device_serials": [
+        "emulator-5560",
         "127.0.0.1:5559",
         "127.0.0.1:5563"
       ]
+      ,
+      "missing_device_serials": []
     },
     "coverage": {
       "reward_panel_open": "live_capture",
       "reward_panel_claimable": "live_capture",
       "reward_confirm_modal": "curated_stand_in"
     },
-    "notes": "The canonical reward-panel-open golden and claim-button baseline are both approved live zh-TW ROX screenshots. The confirm-modal baseline remains a curated stand-in until an approved live modal capture is available. Round-8 confirmed four ADB-visible devices, but only emulator-5556 and emulator-5560 produced landed evidence in this worktree, so the catalog records the inventory gap machine-readably instead of pretending four-device live parity already exists."
+    "post_tap_contract": {
+      "anchor_id": "daily_ui.reward_confirm_state",
+      "current_scene_id": "reward_confirm_modal",
+      "current_contract_kind": "strict_confirm_modal_only",
+      "dispatch_recommendation": "direct_result_overlay_is_valid",
+      "observed_live_outcome_scene_ids": [
+        "reward_post_tap_overlay",
+        "reward_claimed_result_state"
+      ],
+      "observed_live_outcome_capture_ids": [
+        "post_tap_reward_overlay_live_capture_emulator_5556_after_day7_claim_tap_2026_04_22",
+        "post_tap_claimed_result_live_capture_127_0_0_1_5559_after_claim_tap",
+        "post_tap_claimed_result_live_capture_127_0_0_1_5563_after_claim_tap",
+        "post_tap_claimed_result_live_capture_emulator_5560_after_claim_tap"
+      ],
+      "missing_live_scene_ids": [
+        "reward_confirm_modal"
+      ],
+      "observed_live_device_serials": [
+        "emulator-5556",
+        "emulator-5560",
+        "127.0.0.1:5559",
+        "127.0.0.1:5563"
+      ],
+      "summary": "Four-device live evidence shows the claim tap resolving into a reward-acquired overlay or a direct claimed/result state, not the strict confirm-modal contract."
+    },
+    "notes": "The canonical reward-panel-open golden and claim-button baseline are both approved live zh-TW ROX screenshots. The confirm-modal baseline remains a curated stand-in until an approved live modal capture is available. Round-8 now lands reviewed supporting evidence from all four confirmed ADB-visible devices, and every reviewed live post-tap outcome still resolves to a reward-result surface instead of the strict confirm-modal contract."
   },
   "goldens": [
     {
@@ -100,11 +126,14 @@
       "proves": "Shows the confirmation modal state that appears after tapping the claim button and anchors the confirm-state crop.",
       "supporting_capture_ids": [
         "non_reward_confirm_modal_live_capture_emulator_5560_exit_game_prompt",
-        "post_tap_reward_overlay_live_capture_emulator_5556_after_day7_claim_tap_2026_04_22"
+        "post_tap_reward_overlay_live_capture_emulator_5556_after_day7_claim_tap_2026_04_22",
+        "post_tap_claimed_result_live_capture_127_0_0_1_5559_after_claim_tap",
+        "post_tap_claimed_result_live_capture_127_0_0_1_5563_after_claim_tap",
+        "post_tap_claimed_result_live_capture_emulator_5560_after_claim_tap"
       ],
       "limitations": [
         "no approved live zh-TW confirmation modal was available on the reachable accounts during this round",
-        "live alternate post-tap evidence exists for a reward-acquired overlay, but not for the reward confirmation modal",
+        "four-device live post-tap evidence resolves into reward-result surfaces instead of the reward confirmation modal",
         "live negative-case evidence exists for a generic confirmation dialog, but not for the reward confirmation modal",
         "tracks one curated modal layout only"
       ]
@@ -201,6 +230,69 @@
       "proves": "Shows the live reward-acquired overlay that appeared immediately after the day-7 claim tap on emulator-5556.",
       "failure_case": "Use when the claim tap resolves into the reward-acquired overlay instead of the explicit reward confirmation modal contract.",
       "notes": "This is useful live post-tap evidence, but it is not a like-for-like replacement for the confirm-modal anchor because the overlay hides the modal action surface."
+    },
+    {
+      "capture_id": "post_tap_claimed_result_live_capture_127_0_0_1_5559_after_claim_tap",
+      "file_name": "live/daily_ui_claim_rewards__post_tap_claimed_result__live_capture__127_0_0_1_5559__after_claim_tap.png",
+      "anchor_id": "daily_ui.reward_confirm_state",
+      "inspection_role": "confirm_state_alternate_outcome",
+      "stage": "verify_claim_affordance",
+      "scene_id": "reward_claimed_result_state",
+      "resolution": [1280, 720],
+      "sha256": "ed49e2e82ed0f1386872475a37bffa85faf81f2c6999f15b1f30a5439f938138",
+      "source_kind": "live_zh_tw_rox_capture",
+      "live_capture": true,
+      "evidence_role": "alternate_post_tap_outcome",
+      "proves": "Shows the immediate claimed/result state that appeared on 127.0.0.1:5559 right after tapping the live claim button, without surfacing the reward confirmation modal.",
+      "failure_case": "Use when the claim tap resolves directly into a claimed/result state instead of the explicit reward confirmation modal contract.",
+      "notes": "This capture strengthens the four-device evidence that live post-tap behavior does not match the current curated confirm-modal contract.",
+      "metadata": {
+        "adb_serial": "127.0.0.1:5559",
+        "raw_capture_path": "docs/vision/claim_rewards_live/raw/127.0.0.1-5559-after-claim-tap.png",
+        "post_tap_outcome_kind": "direct_result_state"
+      }
+    },
+    {
+      "capture_id": "post_tap_claimed_result_live_capture_127_0_0_1_5563_after_claim_tap",
+      "file_name": "live/daily_ui_claim_rewards__post_tap_claimed_result__live_capture__127_0_0_1_5563__after_claim_tap.png",
+      "anchor_id": "daily_ui.reward_confirm_state",
+      "inspection_role": "confirm_state_alternate_outcome",
+      "stage": "verify_claim_affordance",
+      "scene_id": "reward_claimed_result_state",
+      "resolution": [1280, 720],
+      "sha256": "7cc60018df1f09d113e2cb83e4b770aec3b67b82f67c4047a28e1ec685141bad",
+      "source_kind": "live_zh_tw_rox_capture",
+      "live_capture": true,
+      "evidence_role": "alternate_post_tap_outcome",
+      "proves": "Shows the immediate claimed/result state that appeared on 127.0.0.1:5563 right after tapping the live claim button, without surfacing the reward confirmation modal.",
+      "failure_case": "Use when the claim tap resolves directly into a claimed/result state instead of the explicit reward confirmation modal contract.",
+      "notes": "This capture strengthens the four-device evidence that live post-tap behavior does not match the current curated confirm-modal contract.",
+      "metadata": {
+        "adb_serial": "127.0.0.1:5563",
+        "raw_capture_path": "docs/vision/claim_rewards_live/raw/127.0.0.1-5563-after-claim-tap.png",
+        "post_tap_outcome_kind": "direct_result_state"
+      }
+    },
+    {
+      "capture_id": "post_tap_claimed_result_live_capture_emulator_5560_after_claim_tap",
+      "file_name": "live/daily_ui_claim_rewards__post_tap_claimed_result__live_capture__emulator_5560__after_claim_tap.png",
+      "anchor_id": "daily_ui.reward_confirm_state",
+      "inspection_role": "confirm_state_alternate_outcome",
+      "stage": "verify_claim_affordance",
+      "scene_id": "reward_claimed_result_state",
+      "resolution": [1280, 720],
+      "sha256": "8c01a5e9ab4ba21b54a2927590016de19c2bbc434b028c0a26945272c14a8e44",
+      "source_kind": "live_zh_tw_rox_capture",
+      "live_capture": true,
+      "evidence_role": "alternate_post_tap_outcome",
+      "proves": "Shows the immediate claimed/result state that appeared on emulator-5560 right after tapping the live claim button, without surfacing the reward confirmation modal.",
+      "failure_case": "Use when the claim tap resolves directly into a claimed/result state instead of the explicit reward confirmation modal contract.",
+      "notes": "This capture strengthens the four-device evidence that live post-tap behavior does not match the current curated confirm-modal contract.",
+      "metadata": {
+        "adb_serial": "emulator-5560",
+        "raw_capture_path": "docs/vision/claim_rewards_live/raw/emulator-5560-after-claim-tap.png",
+        "post_tap_outcome_kind": "direct_result_state"
+      }
     }
   ]
 }
