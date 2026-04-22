@@ -114,11 +114,25 @@ class AnchorRepository:
             return None
         return curation.references[0]
 
+    def list_curation_references(self, anchor_id: str) -> list[AnchorCurationReference]:
+        curation = self.get_anchor_curation(anchor_id)
+        if curation is None:
+            return []
+        return list(curation.references)
+
     def resolve_curation_reference_path(self, anchor_id: str) -> Path | None:
         reference = self.get_primary_curation_reference(anchor_id)
         if reference is None or not reference.image_path:
             return None
         return self.resolve_repository_path(reference.image_path)
+
+    def resolve_curation_reference_paths(self, anchor_id: str) -> list[Path]:
+        paths: list[Path] = []
+        for reference in self.list_curation_references(anchor_id):
+            if not reference.image_path:
+                continue
+            paths.append(self.resolve_repository_path(reference.image_path))
+        return paths
 
     def get_task_support(self, task_id: str) -> dict[str, Any]:
         task_support = self.manifest.metadata.get("task_support", {})

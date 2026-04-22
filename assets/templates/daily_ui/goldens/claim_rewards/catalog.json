@@ -3,7 +3,7 @@
   "workflow": "daily-ui-claim-rewards",
   "version": "0.1.0",
   "metadata": {
-    "notes": "Claim-rewards golden inventory for Engine C. Reward-panel baseline is now backed by a live zh-TW ROX capture; claim-button and confirm-state remain curated stand-ins until equivalent live captures are approved."
+    "notes": "Claim-rewards golden inventory for Engine C. Reward-panel baseline is now backed by a live zh-TW ROX capture; claim-button remains a curated stand-in but now carries live reward-panel context; confirm-state remains a curated stand-in until an equivalent live modal capture is approved."
   },
   "goldens": [
     {
@@ -46,7 +46,8 @@
       "proves": "Shows the claimable reward panel state with an enabled claim button for pre-tap verification.",
       "limitations": [
         "not a live device capture",
-        "tracks one curated baseline variant only"
+        "primary proof is still screenshot-style",
+        "depends on a separate live context capture for the surrounding real ROX panel"
       ]
     },
     {
@@ -72,6 +73,18 @@
     }
   ],
   "supplemental_live_captures": [
+    {
+      "capture_id": "claim_button_context_reward_panel_open_v1",
+      "file_name": "daily_ui_claim_rewards__reward_panel__baseline__v1.png",
+      "anchor_id": "daily_ui.claim_reward",
+      "scene_id": "reward_panel_open",
+      "resolution": [1280, 720],
+      "sha256": "3eb1a7256eb88bb6ad5038cf17ac093de8e0f51ce49263229a8e75facfda7a62",
+      "source_kind": "live_zh_tw_rox_capture",
+      "live_capture": true,
+      "evidence_role": "scene_context_only",
+      "notes": "Reuses the approved live reward-panel baseline as scene-context evidence for the claim button. The button lane is visible in real zh-TW ROX UI, but the enabled claimable state is still not directly proven by a live capture."
+    },
     {
       "capture_id": "reward_panel_open_emulator_5560_daily_signin_v1",
       "file_name": "live/daily_ui_claim_rewards__reward_panel__live_capture__emulator_5560__daily_signin.png",

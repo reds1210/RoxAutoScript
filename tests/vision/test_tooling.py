@@ -65,9 +65,22 @@ class VisionToolingTests(unittest.TestCase):
         self.assertEqual(claim_dependency.readiness_status, TemplateReadinessStatus.READY)
         self.assertEqual(claim_dependency.curation_status.value, "curated")
         self.assertEqual(claim_dependency.provenance_kind, AnchorAssetProvenanceKind.CURATED_STAND_IN)
+        self.assertEqual(claim_dependency.selected_reference_id, "claim_button_baseline_v1")
+        self.assertEqual(claim_dependency.selected_reference_kind, "curated_stand_in")
+        self.assertEqual(claim_dependency.live_reference_count, 1)
+        self.assertEqual(
+            claim_dependency.live_reference_ids,
+            ["claim_button_live_context_reward_panel_open_v1"],
+        )
         self.assertEqual(claim_dependency.failure_case, "claim_button_missing_or_not_tappable")
+        self.assertTrue(
+            claim_dependency.live_reference_image_paths[0].endswith(
+                "daily_ui_claim_rewards__reward_panel__baseline__v1.png"
+            )
+        )
         self.assertIn("locale=zh-TW", claim_dependency.provenance_summary)
         self.assertIn("intent=claim_rewards_claim_button", claim_dependency.curation_summary)
+        self.assertIn("live_refs=1", claim_dependency.curation_summary)
 
     def test_build_anchor_inspector_applies_calibration_override_and_validation_issues(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -367,11 +380,14 @@ class VisionToolingTests(unittest.TestCase):
         self.assertEqual(failure.claim_rewards.selected_source_image, "captures/reward-preview.png")
         self.assertEqual(failure.claim_rewards.selected_anchor_label, "Reward Confirm State")
         self.assertTrue(failure.claim_rewards.selected_template_path.endswith("daily_reward_confirm_state.png"))
+        self.assertEqual(failure.claim_rewards.selected_reference_id, "confirm_state_baseline_v1")
+        self.assertEqual(failure.claim_rewards.selected_reference_kind, "curated_stand_in")
         self.assertTrue(
             failure.claim_rewards.selected_reference_image_path.endswith(
                 "daily_ui_claim_rewards__confirm_state__baseline__v1.png"
             )
         )
+        self.assertEqual(failure.claim_rewards.live_reference_count, 0)
         self.assertEqual(failure.claim_rewards.selected_check.anchor_id, "daily_ui.reward_confirm_state")
         self.assertTrue(failure.claim_rewards.selected_check.is_selected)
         self.assertEqual(failure.claim_rewards.selected_check.selected_image_path, "captures/reward-preview.png")
@@ -381,11 +397,14 @@ class VisionToolingTests(unittest.TestCase):
         self.assertEqual(failure.claim_rewards.selected_check.selected_region.to_tuple(), (520, 220, 880, 520))
         self.assertEqual(failure.claim_rewards.selected_check.selected_region_summary, "520,220,880,520")
         self.assertTrue(failure.claim_rewards.selected_check.selected_template_path.endswith("daily_reward_confirm_state.png"))
+        self.assertEqual(failure.claim_rewards.selected_check.selected_reference_id, "confirm_state_baseline_v1")
+        self.assertEqual(failure.claim_rewards.selected_check.selected_reference_kind, "curated_stand_in")
         self.assertTrue(
             failure.claim_rewards.selected_check.selected_reference_image_path.endswith(
                 "daily_ui_claim_rewards__confirm_state__baseline__v1.png"
             )
         )
+        self.assertEqual(failure.claim_rewards.selected_check.live_reference_count, 0)
         self.assertEqual(failure.claim_rewards.selected_check.curation_status.value, "curated")
         self.assertEqual(
             failure.claim_rewards.selected_check.provenance_kind,
@@ -431,11 +450,42 @@ class VisionToolingTests(unittest.TestCase):
                 "daily_ui_claim_rewards__reward_panel__baseline__v1.png"
             )
         )
+        self.assertEqual(reward_panel_check.selected_reference_id, "reward_panel_baseline_v1")
+        self.assertEqual(reward_panel_check.selected_reference_kind, "live_capture")
+        self.assertEqual(reward_panel_check.live_reference_count, 3)
+        self.assertEqual(
+            reward_panel_check.live_reference_ids,
+            [
+                "reward_panel_baseline_v1",
+                "reward_panel_live_5560_daily_signin_v1",
+                "reward_panel_entry_context_live_v1",
+            ],
+        )
         self.assertEqual(
             reward_panel_check.failure_case,
             "reward_panel_not_open_or_wrong_surface",
         )
         self.assertNotIn("curated stand-in", reward_panel_check.failure_explanation.lower())
+        claim_button_check = next(
+            check for check in failure.claim_rewards.checks if check.check_id == "claim_reward_button"
+        )
+        self.assertEqual(claim_button_check.anchor_id, "daily_ui.claim_reward")
+        self.assertEqual(claim_button_check.selected_reference_id, "claim_button_baseline_v1")
+        self.assertEqual(claim_button_check.selected_reference_kind, "curated_stand_in")
+        self.assertEqual(
+            claim_button_check.reference_ids,
+            ["claim_button_baseline_v1", "claim_button_live_context_reward_panel_open_v1"],
+        )
+        self.assertEqual(claim_button_check.live_reference_count, 1)
+        self.assertEqual(
+            claim_button_check.live_reference_ids,
+            ["claim_button_live_context_reward_panel_open_v1"],
+        )
+        self.assertTrue(
+            claim_button_check.live_reference_image_paths[0].endswith(
+                "daily_ui_claim_rewards__reward_panel__baseline__v1.png"
+            )
+        )
         self.assertEqual(failure.best_candidate.anchor_id, "daily_ui.reward_confirm_state")
         self.assertEqual(failure.candidate_count, 1)
         self.assertEqual(failure.focus_check_id, "confirm_state")
@@ -450,11 +500,14 @@ class VisionToolingTests(unittest.TestCase):
         self.assertEqual(failure.selected_region_summary, "520,220,880,520")
         self.assertEqual(failure.selected_anchor_label, "Reward Confirm State")
         self.assertTrue(failure.selected_template_path.endswith("daily_reward_confirm_state.png"))
+        self.assertEqual(failure.selected_reference_id, "confirm_state_baseline_v1")
+        self.assertEqual(failure.selected_reference_kind, "curated_stand_in")
         self.assertTrue(
             failure.selected_reference_image_path.endswith(
                 "daily_ui_claim_rewards__confirm_state__baseline__v1.png"
             )
         )
+        self.assertEqual(failure.live_reference_count, 0)
         self.assertEqual(failure.curation_status.value, "curated")
         self.assertEqual(failure.provenance_kind, AnchorAssetProvenanceKind.CURATED_STAND_IN)
         self.assertIn("locale=zh-TW", failure.provenance_summary)

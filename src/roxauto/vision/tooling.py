@@ -186,7 +186,14 @@ class MatchInspectorState:
     selected_region: CropRegion | None = None
     selected_region_summary: str = ""
     selected_template_path: str = ""
+    selected_reference_id: str = ""
+    selected_reference_kind: str = ""
     selected_reference_image_path: str = ""
+    reference_ids: list[str] = field(default_factory=list)
+    reference_image_paths: list[str] = field(default_factory=list)
+    live_reference_count: int = 0
+    live_reference_ids: list[str] = field(default_factory=list)
+    live_reference_image_paths: list[str] = field(default_factory=list)
     curation_status: AnchorCurationStatus | None = None
     provenance_kind: AnchorAssetProvenanceKind | None = None
     provenance_summary: str = ""
@@ -274,7 +281,14 @@ class FailureInspectorState:
     selected_region_summary: str = ""
     selected_anchor_label: str = ""
     selected_template_path: str = ""
+    selected_reference_id: str = ""
+    selected_reference_kind: str = ""
     selected_reference_image_path: str = ""
+    reference_ids: list[str] = field(default_factory=list)
+    reference_image_paths: list[str] = field(default_factory=list)
+    live_reference_count: int = 0
+    live_reference_ids: list[str] = field(default_factory=list)
+    live_reference_image_paths: list[str] = field(default_factory=list)
     curation_status: AnchorCurationStatus | None = None
     provenance_kind: AnchorAssetProvenanceKind | None = None
     provenance_summary: str = ""
@@ -313,7 +327,14 @@ class ClaimRewardsCheckState:
     selected_region: CropRegion | None = None
     selected_region_summary: str = ""
     selected_template_path: str = ""
+    selected_reference_id: str = ""
+    selected_reference_kind: str = ""
     selected_reference_image_path: str = ""
+    reference_ids: list[str] = field(default_factory=list)
+    reference_image_paths: list[str] = field(default_factory=list)
+    live_reference_count: int = 0
+    live_reference_ids: list[str] = field(default_factory=list)
+    live_reference_image_paths: list[str] = field(default_factory=list)
     curation_status: AnchorCurationStatus | None = None
     provenance_kind: AnchorAssetProvenanceKind | None = None
     provenance_summary: str = ""
@@ -348,7 +369,14 @@ class ClaimRewardsInspectorState:
     selected_region_summary: str = ""
     selected_anchor_label: str = ""
     selected_template_path: str = ""
+    selected_reference_id: str = ""
+    selected_reference_kind: str = ""
     selected_reference_image_path: str = ""
+    reference_ids: list[str] = field(default_factory=list)
+    reference_image_paths: list[str] = field(default_factory=list)
+    live_reference_count: int = 0
+    live_reference_ids: list[str] = field(default_factory=list)
+    live_reference_image_paths: list[str] = field(default_factory=list)
     selected_curation_status: AnchorCurationStatus | None = None
     selected_provenance_kind: AnchorAssetProvenanceKind | None = None
     selected_provenance_summary: str = ""
@@ -592,7 +620,13 @@ def build_match_inspector(
         expected_anchor_id=expected_anchor_id,
     )
     selected_template_path = _selected_template_path(repository, expected_anchor_id)
+    selected_reference_id = _selected_reference_id(repository, expected_anchor_id)
+    selected_reference_kind = _selected_reference_kind(repository, expected_anchor_id)
     selected_reference_image_path = _selected_reference_image_path(repository, expected_anchor_id)
+    reference_ids = _reference_ids(repository, expected_anchor_id)
+    reference_image_paths = _reference_image_paths(repository, expected_anchor_id)
+    live_reference_ids = _live_reference_ids(repository, expected_anchor_id)
+    live_reference_image_paths = _live_reference_image_paths(repository, expected_anchor_id)
     calibration_resolution = _resolve_selected_calibration(
         repository=repository,
         calibration_profile=calibration_profile,
@@ -631,7 +665,14 @@ def build_match_inspector(
                 )
             ),
             selected_template_path=selected_template_path,
+            selected_reference_id=selected_reference_id,
+            selected_reference_kind=selected_reference_kind,
             selected_reference_image_path=selected_reference_image_path,
+            reference_ids=reference_ids,
+            reference_image_paths=reference_image_paths,
+            live_reference_count=len(live_reference_ids),
+            live_reference_ids=live_reference_ids,
+            live_reference_image_paths=live_reference_image_paths,
             curation_status=curation.status if curation is not None else None,
             provenance_kind=curation.provenance_kind if curation is not None else None,
             provenance_summary=_provenance_summary(curation),
@@ -712,7 +753,14 @@ def build_match_inspector(
             )
         ),
         selected_template_path=selected_template_path,
+        selected_reference_id=selected_reference_id,
+        selected_reference_kind=selected_reference_kind,
         selected_reference_image_path=selected_reference_image_path,
+        reference_ids=reference_ids,
+        reference_image_paths=reference_image_paths,
+        live_reference_count=len(live_reference_ids),
+        live_reference_ids=live_reference_ids,
+        live_reference_image_paths=live_reference_image_paths,
         curation_status=curation.status if curation is not None else None,
         provenance_kind=curation.provenance_kind if curation is not None else None,
         provenance_summary=_provenance_summary(curation),
@@ -811,7 +859,14 @@ def build_failure_inspector(
     selected_region_summary = match_state.selected_region_summary
     selected_anchor_label = match_state.expected_anchor_label
     selected_template_path = match_state.selected_template_path
+    selected_reference_id = match_state.selected_reference_id
+    selected_reference_kind = match_state.selected_reference_kind
     selected_reference_image_path = match_state.selected_reference_image_path
+    reference_ids = list(match_state.reference_ids)
+    reference_image_paths = list(match_state.reference_image_paths)
+    live_reference_count = match_state.live_reference_count
+    live_reference_ids = list(match_state.live_reference_ids)
+    live_reference_image_paths = list(match_state.live_reference_image_paths)
     curation_status = match_state.curation_status
     provenance_kind = match_state.provenance_kind
     provenance_summary = match_state.provenance_summary
@@ -862,7 +917,14 @@ def build_failure_inspector(
         selected_region_summary = selected_claim_check.selected_region_summary
         selected_anchor_label = selected_claim_check.anchor_label
         selected_template_path = selected_claim_check.selected_template_path
+        selected_reference_id = selected_claim_check.selected_reference_id
+        selected_reference_kind = selected_claim_check.selected_reference_kind
         selected_reference_image_path = selected_claim_check.selected_reference_image_path
+        reference_ids = list(selected_claim_check.reference_ids)
+        reference_image_paths = list(selected_claim_check.reference_image_paths)
+        live_reference_count = selected_claim_check.live_reference_count
+        live_reference_ids = list(selected_claim_check.live_reference_ids)
+        live_reference_image_paths = list(selected_claim_check.live_reference_image_paths)
         curation_status = selected_claim_check.curation_status
         provenance_kind = selected_claim_check.provenance_kind
         provenance_summary = selected_claim_check.provenance_summary
@@ -898,7 +960,14 @@ def build_failure_inspector(
         selected_region_summary=selected_region_summary,
         selected_anchor_label=selected_anchor_label,
         selected_template_path=selected_template_path,
+        selected_reference_id=selected_reference_id,
+        selected_reference_kind=selected_reference_kind,
         selected_reference_image_path=selected_reference_image_path,
+        reference_ids=reference_ids,
+        reference_image_paths=reference_image_paths,
+        live_reference_count=live_reference_count,
+        live_reference_ids=live_reference_ids,
+        live_reference_image_paths=live_reference_image_paths,
         curation_status=curation_status,
         provenance_kind=provenance_kind,
         provenance_summary=provenance_summary,
@@ -1300,11 +1369,66 @@ def _selected_reference(
     return repository.get_primary_curation_reference(anchor_id)
 
 
+def _selected_reference_id(repository: AnchorRepository | None, anchor_id: str) -> str:
+    reference = _selected_reference(repository, anchor_id)
+    return str(reference.reference_id) if reference is not None else ""
+
+
+def _selected_reference_kind(repository: AnchorRepository | None, anchor_id: str) -> str:
+    reference = _selected_reference(repository, anchor_id)
+    return str(reference.kind) if reference is not None else ""
+
+
 def _selected_reference_image_path(repository: AnchorRepository | None, anchor_id: str) -> str:
     if repository is None or not anchor_id or not repository.has_anchor(anchor_id):
         return ""
     resolved_path = repository.resolve_curation_reference_path(anchor_id)
     return str(resolved_path) if resolved_path is not None else ""
+
+
+def _reference_ids(repository: AnchorRepository | None, anchor_id: str) -> list[str]:
+    if repository is None or not anchor_id or not repository.has_anchor(anchor_id):
+        return []
+    return [
+        str(reference.reference_id)
+        for reference in repository.list_curation_references(anchor_id)
+        if str(reference.reference_id)
+    ]
+
+
+def _reference_image_paths(repository: AnchorRepository | None, anchor_id: str) -> list[str]:
+    if repository is None or not anchor_id or not repository.has_anchor(anchor_id):
+        return []
+    return [str(path) for path in repository.resolve_curation_reference_paths(anchor_id)]
+
+
+def _is_live_reference(reference: AnchorCurationReference | None) -> bool:
+    if reference is None:
+        return False
+    kind = str(reference.kind or "").strip().lower()
+    if "live" in kind:
+        return True
+    return bool(reference.metadata.get("live_capture", False))
+
+
+def _live_reference_ids(repository: AnchorRepository | None, anchor_id: str) -> list[str]:
+    if repository is None or not anchor_id or not repository.has_anchor(anchor_id):
+        return []
+    return [
+        str(reference.reference_id)
+        for reference in repository.list_curation_references(anchor_id)
+        if str(reference.reference_id) and _is_live_reference(reference)
+    ]
+
+
+def _live_reference_image_paths(repository: AnchorRepository | None, anchor_id: str) -> list[str]:
+    if repository is None or not anchor_id or not repository.has_anchor(anchor_id):
+        return []
+    return [
+        str(repository.resolve_repository_path(reference.image_path))
+        for reference in repository.list_curation_references(anchor_id)
+        if reference.image_path and _is_live_reference(reference)
+    ]
 
 
 def _curation_summary(curation: AnchorCurationProfile | None) -> str:
@@ -1322,6 +1446,7 @@ def _curation_summary(curation: AnchorCurationProfile | None) -> str:
     if curation.variant_id:
         parts.append(f"variant={curation.variant_id}")
     parts.append(f"refs={curation.reference_count}")
+    parts.append(f"live_refs={len([reference for reference in curation.references if _is_live_reference(reference)])}")
     if curation.intent_id:
         parts.append(f"intent={curation.intent_id}")
     return " | ".join(parts)
@@ -1469,6 +1594,10 @@ def _claim_rewards_check_summary(check: ClaimRewardsCheckState | None) -> str:
     )
     if check.selected_region_summary:
         summary += f" | region={check.selected_region_summary}"
+    if check.selected_reference_id:
+        summary += f" | reference_id={check.selected_reference_id}"
+    if check.live_reference_count:
+        summary += f" | live_refs={check.live_reference_count}"
     if check.provenance_summary:
         summary += f" | provenance={check.provenance_summary}"
     if check.curation_summary:
@@ -1516,7 +1645,14 @@ def _mark_claim_rewards_check_selection(
         selected_region=check.selected_region,
         selected_region_summary=check.selected_region_summary,
         selected_template_path=check.selected_template_path,
+        selected_reference_id=check.selected_reference_id,
+        selected_reference_kind=check.selected_reference_kind,
         selected_reference_image_path=check.selected_reference_image_path,
+        reference_ids=list(check.reference_ids),
+        reference_image_paths=list(check.reference_image_paths),
+        live_reference_count=check.live_reference_count,
+        live_reference_ids=list(check.live_reference_ids),
+        live_reference_image_paths=list(check.live_reference_image_paths),
         curation_status=check.curation_status,
         provenance_kind=check.provenance_kind,
         provenance_summary=check.provenance_summary,
@@ -1610,7 +1746,14 @@ def _build_claim_rewards_inspector(
                 selected_region=match_state.selected_region,
                 selected_region_summary=match_state.selected_region_summary,
                 selected_template_path=selected_template_path,
+                selected_reference_id=match_state.selected_reference_id,
+                selected_reference_kind=match_state.selected_reference_kind,
                 selected_reference_image_path=selected_reference_image_path,
+                reference_ids=list(match_state.reference_ids),
+                reference_image_paths=list(match_state.reference_image_paths),
+                live_reference_count=match_state.live_reference_count,
+                live_reference_ids=list(match_state.live_reference_ids),
+                live_reference_image_paths=list(match_state.live_reference_image_paths),
                 curation_status=match_state.curation_status,
                 provenance_kind=match_state.provenance_kind,
                 provenance_summary=match_state.provenance_summary,
@@ -1655,7 +1798,14 @@ def _build_claim_rewards_inspector(
         selected_region_summary=selected_check.selected_region_summary if selected_check is not None else "",
         selected_anchor_label=selected_check.anchor_label if selected_check is not None else "",
         selected_template_path=selected_check.selected_template_path if selected_check is not None else "",
+        selected_reference_id=selected_check.selected_reference_id if selected_check is not None else "",
+        selected_reference_kind=selected_check.selected_reference_kind if selected_check is not None else "",
         selected_reference_image_path=selected_check.selected_reference_image_path if selected_check is not None else "",
+        reference_ids=list(selected_check.reference_ids) if selected_check is not None else [],
+        reference_image_paths=list(selected_check.reference_image_paths) if selected_check is not None else [],
+        live_reference_count=selected_check.live_reference_count if selected_check is not None else 0,
+        live_reference_ids=list(selected_check.live_reference_ids) if selected_check is not None else [],
+        live_reference_image_paths=list(selected_check.live_reference_image_paths) if selected_check is not None else [],
         selected_curation_status=selected_check.curation_status if selected_check is not None else None,
         selected_provenance_kind=selected_check.provenance_kind if selected_check is not None else None,
         selected_provenance_summary=selected_check.provenance_summary if selected_check is not None else "",
