@@ -51,11 +51,7 @@ class TaskFixtureExamplesTests(unittest.TestCase):
             statuses["daily_ui.claim_rewards:golden:confirm_state"],
             TaskAssetStatus.PRESENT,
         )
-        self.assertEqual(
-            records["daily_ui.claim_rewards:template:daily_ui.claim_reward"].metadata["replacement_target"],
-            "approved_live_zh_tw_capture",
-        )
-        self.assertFalse(
+        self.assertTrue(
             records["daily_ui.claim_rewards:template:daily_ui.claim_reward"].metadata["live_capture"]
         )
         self.assertTrue(
@@ -71,7 +67,7 @@ class TaskFixtureExamplesTests(unittest.TestCase):
         self.assertTrue(by_task["daily_ui.claim_rewards"].implementation_requirements[0].satisfied)
         self.assertEqual(
             [item.metadata["anchor_id"] for item in by_task["daily_ui.claim_rewards"].warning_requirements],
-            ["daily_ui.claim_reward", "daily_ui.reward_confirm_state"],
+            ["daily_ui.reward_confirm_state"],
         )
         self.assertIn(
             "runtime_seam_builder=roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_seam",
