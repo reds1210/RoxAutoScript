@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from enum import Enum
+from hashlib import sha256
 from json import JSONDecodeError, loads
 from pathlib import Path
 from re import compile
@@ -731,6 +732,7 @@ def build_vision_workspace_readiness_report(
             "inventory_id": str(document.get("inventory_id", "")),
             "inventory_version": str(document.get("version", "")),
             "claim_rewards_live_capture_coverage": _claim_rewards_live_capture_coverage(repositories_by_id.get("daily_ui")),
+            "claim_rewards_capture_inventory": _claim_rewards_capture_inventory(repositories_by_id.get("daily_ui")),
         },
     )
 
@@ -1018,6 +1020,76 @@ def _validate_claim_rewards_golden_catalog(
             continue
         goldens_by_id[golden_id] = entry
 
+        file_name = str(entry.get("file_name", "")).strip()
+        resolved_golden_path: Path | None = None
+        if not file_name:
+            issues.append(
+                TemplateValidationIssue(
+                    code="missing_claim_rewards_golden_file_name",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=f"Golden '{golden_id}' must define file_name.",
+                    path=str(resolved_catalog_path),
+                    metadata={"task_id": "daily_ui.claim_rewards", "golden_id": golden_id},
+                )
+            )
+        else:
+            resolved_golden_path = (catalog_root / Path(file_name)).resolve()
+            try:
+                resolved_golden_path.relative_to(repository.root.resolve())
+            except ValueError:
+                issues.append(
+                    TemplateValidationIssue(
+                        code="invalid_claim_rewards_golden_path",
+                        severity=TemplateValidationSeverity.ERROR,
+                        message=f"Golden '{golden_id}' cannot resolve outside the repository root.",
+                        path=str(resolved_golden_path),
+                        metadata={"task_id": "daily_ui.claim_rewards", "golden_id": golden_id},
+                    )
+                )
+                resolved_golden_path = None
+            else:
+                if not resolved_golden_path.exists():
+                    issues.append(
+                        TemplateValidationIssue(
+                            code="missing_claim_rewards_golden_asset",
+                            severity=TemplateValidationSeverity.ERROR,
+                            message=f"Golden '{golden_id}' file is missing.",
+                            path=str(resolved_golden_path),
+                            metadata={"task_id": "daily_ui.claim_rewards", "golden_id": golden_id},
+                        )
+                    )
+
+        expected_sha256 = str(entry.get("sha256", "")).strip().lower()
+        if not expected_sha256:
+            issues.append(
+                TemplateValidationIssue(
+                    code="missing_claim_rewards_golden_sha256",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=f"Golden '{golden_id}' must define sha256 for traceable provenance.",
+                    path=str(resolved_catalog_path),
+                    metadata={"task_id": "daily_ui.claim_rewards", "golden_id": golden_id},
+                )
+            )
+        elif resolved_golden_path is not None and resolved_golden_path.exists():
+            actual_sha256 = _file_sha256(resolved_golden_path)
+            if actual_sha256 != expected_sha256:
+                issues.append(
+                    TemplateValidationIssue(
+                        code="claim_rewards_golden_sha256_mismatch",
+                        severity=TemplateValidationSeverity.ERROR,
+                        message=(
+                            f"Golden '{golden_id}' sha256 does not match the current file on disk."
+                        ),
+                        path=str(resolved_golden_path),
+                        metadata={
+                            "task_id": "daily_ui.claim_rewards",
+                            "golden_id": golden_id,
+                            "expected_sha256": expected_sha256,
+                            "actual_sha256": actual_sha256,
+                        },
+                    )
+                )
+
     for entry in supporting_capture_entries:
         if not isinstance(entry, dict):
             issues.append(
@@ -1082,6 +1154,41 @@ def _validate_claim_rewards_golden_catalog(
                             metadata={"task_id": "daily_ui.claim_rewards", "capture_id": capture_id},
                         )
                     )
+                else:
+                    expected_sha256 = str(entry.get("sha256", "")).strip().lower()
+                    if not expected_sha256:
+                        issues.append(
+                            TemplateValidationIssue(
+                                code="missing_claim_rewards_supporting_capture_sha256",
+                                severity=TemplateValidationSeverity.ERROR,
+                                message=(
+                                    f"Supporting capture '{capture_id}' must define sha256 for "
+                                    "traceable provenance."
+                                ),
+                                path=str(resolved_catalog_path),
+                                metadata={"task_id": "daily_ui.claim_rewards", "capture_id": capture_id},
+                            )
+                        )
+                    else:
+                        actual_sha256 = _file_sha256(supporting_path)
+                        if actual_sha256 != expected_sha256:
+                            issues.append(
+                                TemplateValidationIssue(
+                                    code="claim_rewards_supporting_capture_sha256_mismatch",
+                                    severity=TemplateValidationSeverity.ERROR,
+                                    message=(
+                                        f"Supporting capture '{capture_id}' sha256 does not match "
+                                        "the current file on disk."
+                                    ),
+                                    path=str(supporting_path),
+                                    metadata={
+                                        "task_id": "daily_ui.claim_rewards",
+                                        "capture_id": capture_id,
+                                        "expected_sha256": expected_sha256,
+                                        "actual_sha256": actual_sha256,
+                                    },
+                                )
+                            )
 
         anchor_id = str(entry.get("anchor_id", "")).strip()
         if anchor_id and anchor_id not in claim_rewards_anchor_ids:
@@ -1798,6 +1905,24 @@ def _claim_rewards_live_capture_coverage(repository: AnchorRepository | None) ->
         return {}
     coverage = repository.get_task_support("daily_ui.claim_rewards").get("live_capture_coverage", {})
     return dict(coverage) if isinstance(coverage, dict) else {}
+
+
+def _claim_rewards_capture_inventory(repository: AnchorRepository | None) -> dict[str, Any]:
+    if repository is None:
+        return {}
+    catalog = repository.get_claim_rewards_golden_catalog()
+    if catalog is None:
+        return {}
+    capture_inventory = catalog.metadata.get("capture_inventory", {})
+    return dict(capture_inventory) if isinstance(capture_inventory, dict) else {}
+
+
+def _file_sha256(path: Path) -> str:
+    digest = sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _validate_claim_rewards_live_capture_coverage(

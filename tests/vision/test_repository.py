@@ -55,11 +55,11 @@ class AnchorRepositoryTests(unittest.TestCase):
         )
         self.assertEqual(
             repository.get_task_support("daily_ui.claim_rewards")["live_capture_coverage"]["live_anchor_ids"],
-            ["daily_ui.reward_panel"],
+            ["daily_ui.claim_reward", "daily_ui.reward_panel"],
         )
         self.assertEqual(
             repository.get_task_support("daily_ui.claim_rewards")["live_capture_coverage"]["live_context_anchor_ids"],
-            ["daily_ui.claim_reward"],
+            [],
         )
         self.assertEqual(
             reward_panel_curation.metadata["failure_case"],
@@ -80,32 +80,31 @@ class AnchorRepositoryTests(unittest.TestCase):
         )
         claim_button_curation = repository.get_anchor_curation("daily_ui.claim_reward")
         self.assertIsNotNone(claim_button_curation)
-        self.assertEqual(claim_button_curation.reference_count, 2)
+        self.assertEqual(claim_button_curation.reference_count, 1)
+        self.assertEqual(claim_button_curation.provenance.kind.value, "live_capture")
         self.assertEqual(
-            repository.list_curation_references("daily_ui.claim_reward")[1].reference_id,
-            "claim_button_live_context_reward_panel_open_v1",
+            repository.list_curation_references("daily_ui.claim_reward")[0].reference_id,
+            "claim_button_baseline_v1",
         )
         self.assertTrue(
-            str(repository.resolve_curation_reference_paths("daily_ui.claim_reward")[1]).endswith(
-                "daily_ui_claim_rewards__reward_panel__baseline__v1.png"
+            str(repository.resolve_curation_reference_paths("daily_ui.claim_reward")[0]).endswith(
+                "daily_ui_claim_rewards__claim_button__baseline__v1.png"
             )
         )
         claim_button_supporting_captures = repository.list_claim_rewards_supporting_captures("daily_ui.claim_reward")
         self.assertEqual(
             [capture.capture_id for capture in claim_button_supporting_captures],
             [
-                "claim_button_context_reward_panel_open_v1",
                 "non_claimable_daily_signin_live_capture_emulator_5556_after_daily_tab_attempt_2",
             ],
         )
         self.assertEqual(
             [capture.evidence_role for capture in claim_button_supporting_captures],
-            ["scene_context_only", "negative_case"],
+            ["negative_case"],
         )
         self.assertEqual(
             [path.name for path in repository.resolve_claim_rewards_supporting_capture_paths("daily_ui.claim_reward")],
             [
-                "daily_ui_claim_rewards__reward_panel__baseline__v1.png",
                 "daily_ui_claim_rewards__non_claimable_daily_signin__live_capture__emulator_5556__after_daily_tab_attempt_2.png",
             ],
         )

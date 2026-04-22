@@ -60,7 +60,7 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
         )
         self.assertEqual(
             curated.records[0].metadata["asset_provenance"]["replacement_pending_anchor_ids"],
-            ["daily_ui.claim_reward", "daily_ui.reward_confirm_state"],
+            ["daily_ui.reward_confirm_state"],
         )
         self.assertEqual(
             curated.records[0].metadata["runtime_seam"]["runtime_seam_builder"],
@@ -98,7 +98,7 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
         )
         self.assertEqual(
             records["daily_ui.claim_rewards:template:daily_ui.claim_reward"].metadata["provenance_kind"],
-            "curated_stand_in",
+            "live_capture",
         )
         self.assertEqual(
             records["daily_ui.claim_rewards:template:daily_ui.reward_panel"].status.value,
@@ -116,7 +116,7 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
             records["daily_ui.claim_rewards:golden:claim_button"].status.value,
             "present",
         )
-        self.assertFalse(
+        self.assertTrue(
             records["daily_ui.claim_rewards:golden:claim_button"].metadata["live_capture"]
         )
         self.assertEqual(
@@ -201,7 +201,7 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
         )
         self.assertEqual(
             [item.metadata["anchor_id"] for item in by_task["daily_ui.claim_rewards"].warning_requirements],
-            ["daily_ui.claim_reward", "daily_ui.reward_confirm_state"],
+            ["daily_ui.reward_confirm_state"],
         )
         self.assertEqual(by_task["daily_ui.guild_check_in"].builder_readiness_state.value, "blocked_by_asset")
         self.assertEqual(
@@ -224,5 +224,5 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
         self.assertEqual(self.repository.build_readiness_collection().to_dict(), readiness.to_dict())
         self.assertEqual(
             [item.metadata["anchor_id"] for item in claim_rewards.warning_requirements],
-            ["daily_ui.claim_reward", "daily_ui.reward_confirm_state"],
+            ["daily_ui.reward_confirm_state"],
         )
