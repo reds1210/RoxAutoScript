@@ -42,7 +42,7 @@
           "intent_id": "claim_rewards_reward_panel",
           "scene_id": "reward_panel_open",
           "variant_id": "zh_tw_live_emulator_5560",
-          "notes": "Paired with a live zh-TW ROX daily-sign-in capture so failure inspection can show the real panel-open frame before claim-state checks begin.",
+          "notes": "Paired with a live zh-TW ROX daily-sign-in capture so failure inspection can show the real panel-open frame before claim-state checks begin. The catalog also ships a live wrong-reward-surface example so panel-open failures can distinguish daily sign-in from Kingdom Pass rewards.",
           "references": [
             {
               "reference_id": "reward_panel_baseline_v1",
@@ -71,7 +71,7 @@
       "template_path": "anchors/daily_claim_button.png",
       "confidence_threshold": 0.91,
       "match_region": [720, 720, 480, 220],
-      "description": "Curated raster crop for the enabled claim-reward button in the claimable reward panel state.",
+      "description": "Curated raster crop for the enabled claim-reward button in the claimable reward panel state. Supporting live evidence now documents the non-claimable daily-sign-in state, but not a positive live claim button.",
       "tags": ["daily", "reward", "button", "claim_rewards"],
       "metadata": {
         "workflow": "daily-ui",
@@ -84,7 +84,7 @@
           "intent_id": "claim_rewards_claim_button",
           "scene_id": "reward_panel_claimable",
           "variant_id": "tw_baseline",
-          "notes": "Still paired with a curated stand-in because no approved live zh-TW claimable panel was available on the reachable accounts during this round.",
+          "notes": "Still paired with a curated stand-in because no approved live zh-TW claimable panel was available on the reachable accounts during this round. The golden catalog now also carries a live non-claimable daily-sign-in example with greyed controls so failures do not treat panel-open as proof of claimability.",
           "references": [
             {
               "reference_id": "claim_button_baseline_v1",
@@ -113,7 +113,7 @@
       "template_path": "anchors/daily_reward_confirm_state.png",
       "confidence_threshold": 0.92,
       "match_region": [520, 220, 880, 520],
-      "description": "Curated raster crop for the claim confirmation modal that appears after tapping the reward button.",
+      "description": "Curated raster crop for the claim confirmation modal that appears after tapping the reward button. Supporting live evidence now documents a generic non-reward confirmation dialog, but not the real reward confirm modal.",
       "tags": ["daily", "reward", "confirm", "claim_rewards"],
       "metadata": {
         "workflow": "daily-ui",
@@ -126,7 +126,7 @@
           "intent_id": "claim_rewards_confirm_modal",
           "scene_id": "reward_confirm_modal",
           "variant_id": "tw_baseline",
-          "notes": "Still paired with a curated stand-in because no approved live zh-TW confirmation modal was available on the reachable accounts during this round.",
+          "notes": "Still paired with a curated stand-in because no approved live zh-TW confirmation modal was available on the reachable accounts during this round. The golden catalog now also carries a generic exit-game confirmation dialog so failure review can reject the wrong modal explicitly.",
           "references": [
             {
               "reference_id": "confirm_state_baseline_v1",

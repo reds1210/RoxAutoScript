@@ -160,6 +160,7 @@ Current sample coverage:
 - `daily_ui.claim_reward` now ships as a curated PNG crop plus one curated screenshot-style baseline image for the tappable claim button scene
 - `daily_ui.reward_confirm_state` now ships as a curated PNG crop plus one curated screenshot-style baseline image for the confirmation modal scene
 - `docs/vision/claim_rewards_live/raw/` now keeps the supporting live capture trail for this task only
+- `assets/templates/daily_ui/goldens/claim_rewards/live/` now also carries supporting live negative-case captures for a non-claimable daily-sign-in panel, the wrong reward surface, and a non-reward confirmation modal
 - `daily_ui.guild_check_in_button` placeholder template now exists under `assets/templates/daily_ui/`
 - `odin.start_button` placeholder template exists
 - Engine D's task asset inventory still marks the `daily_ui.claim_reward` dependency as `placeholder`; vision readiness now reports the curated template as `ready` and flags the inventory drift as an explicit mismatch instead of degrading the actual template status
@@ -220,8 +221,11 @@ Current claim-rewards golden coverage:
 - `daily_ui_claim_rewards__confirm_state__baseline__v1.png`: curated stand-in for the confirmation modal used by `daily_ui.reward_confirm_state`
 - `live/daily_ui_claim_rewards__reward_panel__live_capture__emulator_5560__daily_signin.png`: descriptive copy of the canonical live panel-open screenshot for manual review and downstream tooling
 - `live/daily_ui_claim_rewards__entry_context__live_capture__emulator_5556__after_fuli_tap.png`: live pre-panel navigation evidence after the Fu Li tap, used to debug failures before the panel-open anchor appears
+- `live/daily_ui_claim_rewards__non_claimable_daily_signin__live_capture__emulator_5556__after_daily_tab_attempt_2.png`: live negative-case evidence that the opened daily sign-in panel may still have no enabled claim affordance
+- `live/daily_ui_claim_rewards__wrong_reward_surface__live_capture__emulator_5560__kingdom_pass_rewards.png`: live negative-case evidence for landing on Kingdom Pass rewards instead of the daily sign-in panel
+- `live/daily_ui_claim_rewards__non_reward_confirm_modal__live_capture__emulator_5560__exit_game_prompt.png`: live negative-case evidence for a generic confirmation dialog that must not be mistaken for the reward confirmation modal
 
-`daily_ui.reward_panel` is now backed by a live capture. `daily_ui.claim_reward` and `daily_ui.reward_confirm_state` still rely on curated stand-ins because the available accounts did not expose approved live claimable or confirmation-modal states during this round. The manifest and golden catalog call this out explicitly so downstream consumers can distinguish canonical live evidence from still-pending live replacements.
+`daily_ui.reward_panel` is now backed by a live capture. `daily_ui.claim_reward` and `daily_ui.reward_confirm_state` still rely on curated stand-ins because the available accounts did not expose approved live claimable or confirmation-modal states during this round. The manifest and golden catalog now also ship live negative-case evidence so downstream consumers can distinguish canonical success scenes from visually similar but incorrect live states without promoting those failures into positive baselines.
 
 ## GUI Consumption
 
