@@ -1,6 +1,8 @@
 # Round 9 Thread Prompts
 
-Use these prompts for new top-level Codex threads during the round-9 guild-order material-logic wave.
+Use these prompts only if dispatch explicitly resumes the round-9 guild-order material-logic wave.
+
+This prompt pack is reference-only while `docs/round-9-guild-order-material-logic.md` remains paused.
 
 ## Shared Opening
 

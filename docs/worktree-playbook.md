@@ -20,7 +20,7 @@ Every worker must read these files before editing:
 3. `docs/engine-roster.md`
 4. `docs/worktree-playbook.md`
 5. `docs/architecture-contracts.md`
-6. the active round brief, currently `docs/round-9-guild-order-material-logic.md`
+6. the active round brief when one is active; the most recent paused brief is `docs/round-9-guild-order-material-logic.md`
 7. the relevant handoff under `docs/handoffs/`
 
 ## 3. Thread and Worktree Rules
@@ -54,7 +54,7 @@ Model policy:
 
 ## 5. Active Round Branches
 
-Use these existing branches and worktrees for round 9:
+Use these existing branches and worktrees for round 9 if dispatch explicitly resumes that wave:
 
 - `codex/core-runtime-step-telemetry`
 - `codex/gui-claim-rewards-production-telemetry`
@@ -63,6 +63,7 @@ Use these existing branches and worktrees for round 9:
 - optional: `codex/claim-rewards-goldens`
 
 Do not fork a fresh branch for the same engine just because a new thread starts.
+Do not start a new round-9 thread from these branches while the round-9 brief remains paused.
 
 ## 6. Worktree Paths
 
@@ -234,4 +235,5 @@ A track is ready to merge when:
 - do not hide contract changes inside unrelated commits
 - do not edit another track's owned area unless explicitly taking over that track
 - always leave a readable handoff
-- round 9 stays scoped to the first-cut guild-order flow only
+- do not start new round-9 worker threads until dispatch publishes a restart brief
+- round 9 stays scoped to the first-cut guild-order flow only when resumed
