@@ -405,6 +405,7 @@ Minimum fields:
 - `active_run_id` optional
 - `active_task_run` optional
 - `last_task_run` optional
+- `last_failed_task_run` optional
 - `stop_requested`
 - `health_check_ok` optional
 - `profile_binding` optional
@@ -416,6 +417,7 @@ Minimum fields:
 Rules:
 
 - runtime-owned execution should update `active_task_run` while a task is running and move the finalized projection into `last_task_run` when the run finishes
+- the latest non-manual failed or aborted run should remain available through `last_failed_task_run` until a newer failed run supersedes it
 - `failure_snapshot` may clear after a successful retry, but `last_failure_snapshot` should preserve the latest failure signal for inspection surfaces
 
 ### `InstanceCommand`

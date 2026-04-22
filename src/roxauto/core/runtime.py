@@ -463,6 +463,7 @@ class _RuntimeTaskActionBridge:
         self.task_metadata["runtime_context"] = self.runtime_context
         self.task_metadata["active_task_run"] = self.runtime_context.active_task_run
         self.task_metadata["last_task_run"] = self.runtime_context.last_task_run
+        self.task_metadata["last_failed_task_run"] = self.runtime_context.last_failed_task_run
         self.task_metadata["health_check_ok"] = self.runtime_context.health_check_ok
         self.task_metadata["health_check_message"] = str(
             self.runtime_context.metadata.get("last_health_check_message", "")
@@ -783,8 +784,11 @@ class TaskRunner:
         if runtime_context is not None:
             runtime_context.last_task_run = cloned
             runtime_context.active_task_run = None
+            if self._should_preserve_failed_run_telemetry(run):
+                runtime_context.last_failed_task_run = self._clone_run_telemetry(cloned)
             if run.failure_snapshot is not None:
                 runtime_context.last_failure_snapshot = run.failure_snapshot
+            context.metadata["last_failed_task_run"] = runtime_context.last_failed_task_run
             context.metadata["last_failure_snapshot"] = runtime_context.last_failure_snapshot
 
     def _clone_run_telemetry(self, telemetry: TaskRunTelemetry) -> TaskRunTelemetry:
@@ -796,6 +800,15 @@ class TaskRunner:
             ],
             metadata=dict(telemetry.metadata),
         )
+
+    def _should_preserve_failed_run_telemetry(self, run: TaskRun) -> bool:
+        if run.status == TaskRunStatus.FAILED:
+            return True
+        if run.status != TaskRunStatus.ABORTED:
+            return False
+        if run.stop_condition is None:
+            return True
+        return run.stop_condition.kind != StopConditionKind.MANUAL
 
     def _collect_stop_conditions(self, spec: TaskSpec) -> list[StopCondition]:
         conditions: list[StopCondition] = []
@@ -1256,6 +1269,9 @@ class RuntimeCoordinator:
             "health_check_message": context.metadata.get("last_health_check_message", ""),
             "preview_frame": context.preview_frame,
             "failure_snapshot": context.failure_snapshot,
+            "last_task_run": context.last_task_run,
+            "last_failed_task_run": context.last_failed_task_run,
+            "last_failure_snapshot": context.last_failure_snapshot,
             "stop_requested": context.stop_requested,
         }
         action_bridge = _RuntimeTaskActionBridge(

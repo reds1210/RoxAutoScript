@@ -120,3 +120,70 @@ Recommended next step:
   - `inspection`
   - `step_data`
 - If later tasks need the same runtime diagnosis path, extend the generic projection rules in `core/runtime.py` rather than adding task-specific branches.
+
+## 2026-04-22 follow-up
+
+What shipped:
+
+- Runtime now preserves the latest non-manual failed `TaskRunTelemetry` projection on `InstanceRuntimeContext.last_failed_task_run` instead of leaving `last_failure_snapshot` as the only sticky failure surface after a later successful retry.
+- `TaskRunner._finalize_run_telemetry()` now records failed or health-aborted runs into `last_failed_task_run` while still letting `last_task_run` move forward to the latest run result.
+- `_RuntimeTaskActionBridge` and task execution metadata now expose `last_failed_task_run` alongside `last_task_run` / `last_failure_snapshot`, so runtime-owned task handlers and downstream consumers can read the preserved failure run without app-local caches.
+- `LiveRuntimeInstanceSnapshot` now exposes `last_failed_task_run`.
+- `LiveRuntimeInstanceSummary` now flattens the preserved failed-run projection into lightweight fields:
+  - `last_failed_task_id`
+  - `last_failed_run_id`
+  - `last_failed_run_status`
+  - `last_failed_step_count`
+  - `last_failed_completed_step_count`
+  - `last_failed_step_id`
+  - `last_failed_step_status`
+  - `last_failed_step_failure_reason_id`
+  - `last_failed_step_outcome_code`
+- Coverage now proves the preserved failed-run telemetry survives:
+  - a later successful retry
+  - reconnect / rediscover flows
+  - health-check aborts that should still remain diagnosable as runtime failures
+
+Files changed:
+
+- `docs/architecture-contracts.md`
+- `docs/handoffs/core-runtime-claim-rewards.md`
+- `src/roxauto/core/models.py`
+- `src/roxauto/core/runtime.py`
+- `src/roxauto/emulator/live_runtime.py`
+- `tests/core/test_runtime.py`
+- `tests/emulator/test_live_runtime.py`
+
+Public APIs added or changed:
+
+- `InstanceRuntimeContext` now exposes `last_failed_task_run`.
+- `LiveRuntimeInstanceSnapshot` now exposes `last_failed_task_run`.
+- `LiveRuntimeInstanceSummary` now exposes:
+  - `last_failed_task_id`
+  - `last_failed_run_id`
+  - `last_failed_run_status`
+  - `last_failed_step_count`
+  - `last_failed_completed_step_count`
+  - `last_failed_step_id`
+  - `last_failed_step_status`
+  - `last_failed_step_failure_reason_id`
+  - `last_failed_step_outcome_code`
+
+Assumptions:
+
+- Manual operator stop should remain a pause/control signal, not overwrite the preserved failed-run history surface.
+- Downstream consumers that need deep sticky diagnosis after a later successful retry should prefer `context.last_failed_task_run.steps[*].data` over relying on enriched `last_failure_snapshot.metadata` alone.
+
+Known limitations:
+
+- `last_failed_task_run` currently keeps only the latest failed or health-aborted run, not a multi-run history archive.
+- Summary flattening intentionally stays lightweight; detailed retry-attempt payloads still live under `last_failed_task_run.steps[*].data` and `last_failure_snapshot.metadata`.
+
+Verification performed:
+
+- `python -m unittest tests.core.test_runtime`
+- `python -m unittest tests.emulator.test_live_runtime`
+
+Recommended next step:
+
+- Engine B should consume `context.last_failed_task_run` as the sticky fallback when `last_failure_snapshot.metadata` no longer carries enough claim-rewards diagnostics after a later success.
