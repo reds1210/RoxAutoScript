@@ -74,6 +74,27 @@ Round 9 may still use multiple ADB-visible devices for evidence work.
 
 When a worker captures live evidence, the handoff should record the exact ADB serial used.
 
+## Current Device Inventory
+
+Validated locally on `2026-04-23`:
+
+- `127.0.0.1:16416`
+- `127.0.0.1:16448`
+- `127.0.0.1:16480`
+- `127.0.0.1:16512`
+
+Observed MuMu window titles on the same machine:
+
+- `舞孃-nxa`
+- `Android Device-1-3`
+- `鐵匠-zippoluo0202`
+- `補師-reds.wang`
+
+Rule:
+
+- dispatch and worker handoffs should assign devices by ADB serial, not by window title alone, unless the title-to-serial mapping is explicitly revalidated in that handoff
+- do not let two active workers use the same ADB serial at the same time
+
 ## Reuse Policy
 
 - do not create a new worktree just because a new round started
