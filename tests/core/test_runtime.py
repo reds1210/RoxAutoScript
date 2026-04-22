@@ -607,6 +607,61 @@ class RuntimeCoordinatorTests(unittest.TestCase):
             "daily_ui.reward_panel",
         )
 
+    def test_running_step_telemetry_projects_step_spec_defaults_before_completion(self) -> None:
+        observed: dict[str, object] = {}
+        step_spec = _claim_rewards_step_spec(
+            "claim_reward",
+            "daily_ui.claim_reward",
+            expected_panel_states=["claimed", "confirm_required"],
+            signal_anchor_ids=[
+                "daily_ui.reward_panel",
+                "daily_ui.claim_reward",
+                "daily_ui.reward_confirm_state",
+            ],
+        )
+
+        def handler(ctx):
+            telemetry = ctx.metadata["task_run_telemetry"]
+            step = telemetry.steps[0]
+            observed["status"] = step.status.value
+            observed["anchor_id"] = step.data.get("anchor_id")
+            observed["expected_anchor_id"] = step.data.get("expected_anchor_id")
+            observed["inspection_retry_limit"] = step.data.get("inspection_retry_limit")
+            observed["signal_anchor_ids"] = step.data.get("signal_anchor_ids")
+            observed["runtime_step_spec_anchor_id"] = step.data.get("runtime_step_spec", {}).get("anchor_id")
+            return step_success("claim_reward", "claimed")
+
+        context = TaskExecutionContext(
+            instance=self.instance,
+            metadata={"task_step_specs": {"claim_reward": step_spec}},
+        )
+        run = TaskRunner().run_task(
+            spec=TaskSpec(
+                task_id="daily_ui.claim_rewards",
+                name="Daily Reward Claim",
+                version="0.1.0",
+                entry_state="ready",
+                metadata=_claim_rewards_task_metadata(step_spec),
+                steps=[TaskStep("claim_reward", "Claim reward", handler)],
+            ),
+            context=context,
+        )
+
+        self.assertEqual(run.status, TaskRunStatus.SUCCEEDED)
+        self.assertEqual(observed["status"], "running")
+        self.assertEqual(observed["anchor_id"], "daily_ui.claim_reward")
+        self.assertEqual(observed["expected_anchor_id"], "daily_ui.claim_reward")
+        self.assertEqual(observed["inspection_retry_limit"], 2)
+        self.assertEqual(
+            observed["signal_anchor_ids"],
+            [
+                "daily_ui.reward_panel",
+                "daily_ui.claim_reward",
+                "daily_ui.reward_confirm_state",
+            ],
+        )
+        self.assertEqual(observed["runtime_step_spec_anchor_id"], "daily_ui.claim_reward")
+
     def test_retry_keeps_last_failure_snapshot_stable_after_successful_rerun(self) -> None:
         coordinator = RuntimeCoordinator(
             queue=TaskQueue(),

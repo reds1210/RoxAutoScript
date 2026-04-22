@@ -193,6 +193,9 @@ class LiveRuntimeInstanceSummary:
     active_run_id: str = ""
     active_step_id: str = ""
     active_step_status: str = ""
+    active_step_anchor_id: str = ""
+    active_step_failure_reason_id: str = ""
+    active_step_outcome_code: str = ""
     stop_requested: bool = False
     health_check_ok: bool | None = None
     profile_id: str = ""
@@ -1042,6 +1045,9 @@ class LiveRuntimeSession:
         active_run_id = ""
         active_step_id = ""
         active_step_status = ""
+        active_step_anchor_id = ""
+        active_step_failure_reason_id = ""
+        active_step_outcome_code = ""
         last_task_id = ""
         last_run_id = ""
         last_run_status = ""
@@ -1065,6 +1071,9 @@ class LiveRuntimeSession:
                 if context.active_task_run.current_step_index >= 0:
                     active_step = context.active_task_run.steps[context.active_task_run.current_step_index]
                     active_step_status = active_step.status.value
+                    active_step_anchor_id = self._read_step_anchor_id(active_step)
+                    active_step_failure_reason_id = self._read_step_failure_reason_id(active_step)
+                    active_step_outcome_code = self._read_step_outcome_code(active_step)
             if context.last_task_run is not None:
                 last_task_id = context.last_task_run.task_id
                 last_run_id = context.last_task_run.run_id
@@ -1147,6 +1156,9 @@ class LiveRuntimeSession:
             active_run_id=active_run_id,
             active_step_id=active_step_id,
             active_step_status=active_step_status,
+            active_step_anchor_id=active_step_anchor_id,
+            active_step_failure_reason_id=active_step_failure_reason_id,
+            active_step_outcome_code=active_step_outcome_code,
             stop_requested=stop_requested,
             health_check_ok=health_check_ok,
             profile_id=profile_id,

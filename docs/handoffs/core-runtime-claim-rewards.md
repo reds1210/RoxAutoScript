@@ -231,3 +231,45 @@ Verification performed:
 Recommended next step:
 
 - Engine B should stop backfilling `anchor_id` / `expected_anchor_id` from claim-rewards drafts when runtime snapshots or `last_failed_task_run` already provide them, and treat draft state as viewer/editor state only.
+
+## 2026-04-22 active-step focus follow-up
+
+What shipped:
+
+- Runtime now projects step-spec defaults into `TaskStepTelemetry.data` as soon as a step enters `running`, instead of waiting until the step returns a result.
+- Running claim-rewards steps therefore expose runtime-owned focus defaults such as:
+  - `runtime_step_spec`
+  - `anchor_id`
+  - `expected_anchor_id`
+  - `signal_anchor_ids`
+  - `inspection_retry_limit`
+- `LiveRuntimeInstanceSummary` now flattens current-step focus fields for lightweight GUI polling:
+  - `active_step_anchor_id`
+  - `active_step_failure_reason_id`
+  - `active_step_outcome_code`
+- This keeps current-step focus aligned with the same runtime-owned path already used for sticky failure history, so GUI no longer needs to invent current claim-rewards anchor focus from task drafts while a step is in flight.
+
+Files changed:
+
+- `docs/architecture-contracts.md`
+- `docs/handoffs/core-runtime-claim-rewards.md`
+- `src/roxauto/core/runtime.py`
+- `src/roxauto/emulator/live_runtime.py`
+- `tests/core/test_runtime.py`
+- `tests/emulator/test_live_runtime.py`
+
+Public APIs added or changed:
+
+- `LiveRuntimeInstanceSummary` now exposes:
+  - `active_step_anchor_id`
+  - `active_step_failure_reason_id`
+  - `active_step_outcome_code`
+
+Verification performed:
+
+- `python -m unittest tests.core.test_runtime`
+- `python -m unittest tests.emulator.test_live_runtime`
+
+Recommended next step:
+
+- Engine B should prefer `selected_instance.active_step_anchor_id` for current focus while a claim-rewards step is running, and reserve deeper reads of `active_task_run.steps[*].data` for drill-down views only.

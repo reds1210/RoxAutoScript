@@ -8,7 +8,16 @@ from tempfile import TemporaryDirectory
 
 import tests._bootstrap  # noqa: F401
 from roxauto.core.commands import CommandDispatchStatus, InstanceCommand, InstanceCommandType
-from roxauto.core.models import InstanceState, InstanceStatus, ProfileBinding, TaskRunStatus, TaskSpec
+from roxauto.core.models import (
+    InstanceState,
+    InstanceStatus,
+    ProfileBinding,
+    TaskRunStatus,
+    TaskRunTelemetry,
+    TaskSpec,
+    TaskStepTelemetry,
+    TaskStepTelemetryStatus,
+)
 from roxauto.core.queue import QueuedTask
 from roxauto.core.runtime import TaskStep, step_failure, step_success
 from roxauto.emulator.adapter import AdbCommandError, AdbCommandResult, AdbEmulatorAdapter
@@ -261,6 +270,52 @@ class LiveRuntimeSessionTests(unittest.TestCase):
         self.assertEqual(snapshot.last_failed_task_run.status.value, "failed")
         self.assertEqual(snapshot.last_failure_snapshot.metadata["anchor_id"], "daily_ui.claim_reward")
         self.assertEqual(snapshot.last_failure_snapshot.metadata["workflow_mode"], "claimable")
+
+    def test_live_state_flattens_active_step_focus_from_runtime_owned_step_data(self) -> None:
+        adapter = FakeAdapter(healthy=True)
+        session = LiveRuntimeSession(adapter, discovery=lambda: [self.instance])
+        session.sync_instances()
+        context = session.get_runtime_context("mumu-0")
+
+        context.active_task_id = "daily_ui.claim_rewards"
+        context.active_run_id = "run-claim-reward"
+        context.active_task_run = TaskRunTelemetry(
+            task_id="daily_ui.claim_rewards",
+            run_id="run-claim-reward",
+            status=TaskRunStatus.RUNNING,
+            step_count=2,
+            current_step_id="claim_reward",
+            current_step_index=1,
+            steps=[
+                TaskStepTelemetry(
+                    step_id="open_reward_panel",
+                    description="Open reward panel",
+                    status=TaskStepTelemetryStatus.SUCCEEDED,
+                ),
+                TaskStepTelemetry(
+                    step_id="claim_reward",
+                    description="Claim reward",
+                    status=TaskStepTelemetryStatus.RUNNING,
+                    data={
+                        "anchor_id": "daily_ui.claim_reward",
+                        "runtime_step_spec": {"anchor_id": "daily_ui.claim_reward"},
+                    },
+                ),
+            ],
+        )
+
+        with session._operation_lock:
+            session._publish_live_state_locked()
+        state = session.get_live_state(instance_id="mumu-0")
+
+        self.assertIsNotNone(state.selected_instance)
+        self.assertEqual(state.selected_instance.active_task_id, "daily_ui.claim_rewards")
+        self.assertEqual(state.selected_instance.active_run_id, "run-claim-reward")
+        self.assertEqual(state.selected_instance.active_step_id, "claim_reward")
+        self.assertEqual(state.selected_instance.active_step_status, "running")
+        self.assertEqual(state.selected_instance.active_step_anchor_id, "daily_ui.claim_reward")
+        self.assertEqual(state.selected_instance.active_step_failure_reason_id, "")
+        self.assertEqual(state.selected_instance.active_step_outcome_code, "")
 
     def test_live_state_preserves_last_failure_summary_after_successful_retry(self) -> None:
         adapter = FakeAdapter(healthy=True)
