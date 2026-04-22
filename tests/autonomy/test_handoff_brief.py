@@ -20,6 +20,7 @@ class HandoffBriefTests(unittest.TestCase):
                 "git": {
                     "branch": "codex/subscription-only",
                     "head_sha": "abcdef1234567890",
+                    "changed_files": ["src/roxauto/cli.py", "README.md", "docs/codex-subscription-setup.md"],
                     "staged_files": ["src/roxauto/cli.py"],
                     "unstaged_files": ["README.md"],
                     "untracked_files": ["docs/codex-subscription-setup.md"],

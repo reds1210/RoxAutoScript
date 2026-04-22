@@ -14,11 +14,12 @@ def render_handoff_brief(
 ) -> str:
     git = agent_packet.get("git", {})
     commands = quality_gate.get("commands", [])
-    changed_files = []
-    for key in ("staged_files", "unstaged_files", "untracked_files"):
-        for path in git.get(key, []):
-            if path not in changed_files:
-                changed_files.append(path)
+    changed_files = list(git.get("changed_files", []))
+    if not changed_files:
+        for key in ("staged_files", "unstaged_files", "untracked_files"):
+            for path in git.get(key, []):
+                if path not in changed_files:
+                    changed_files.append(path)
 
     lines = [
         "<!-- roxauto-subscription-loop -->",
