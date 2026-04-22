@@ -2,15 +2,23 @@
 
 ## Scope
 
-- Shared autonomy-loop surfaces only:
+- Shared autonomy-loop and GitHub workflow surfaces only:
   - `src/roxauto/autonomy/`
   - `tests/autonomy/`
+  - `.github/workflows/`
+  - `.github/pull_request_template.md`
+  - `docs/autonomy-loop.md`
+  - `docs/codex-subscription-setup.md`
   - `docs/handoffs/`
 - No task, GUI, vision, emulator, or runtime execution behavior changed.
-- This pass focused on making the machine-readable handoff packet useful inside GitHub PR workflow runs.
+- This pass focused on making PRs themselves usable as the handoff surface for the next Codex worker.
 
 ## Changed Files
 
+- `.github/pull_request_template.md`
+- `.github/workflows/autonomy-loop.yml`
+- `docs/autonomy-loop.md`
+- `docs/codex-subscription-setup.md`
 - `docs/handoffs/autonomy-loop.md`
 - `src/roxauto/autonomy/agent_packet.py`
 - `src/roxauto/autonomy/handoff_brief.py`
@@ -19,50 +27,49 @@
 
 ## What Shipped
 
-- `build_agent_packet(...)` now resolves the branch name more honestly in detached-HEAD GitHub workflow runs:
-  - prefer the real git branch when available
-  - otherwise fall back to `GITHUB_HEAD_REF`
-  - otherwise fall back to `GITHUB_REF_NAME`
-- PR workflow runs no longer let generated autonomy artifacts pollute the git-state summary:
-  - `artifacts/*`
-  - `runtime_logs/autonomy/*`
-- In GitHub `pull_request` runs where Actions checks out the synthetic merge commit, the agent packet now prefers the merge-parent diff:
-  - changed files come from `HEAD^1..HEAD^2`
-  - diff excerpt comes from the same PR comparison instead of the workflow-generated artifact diff
-- `render_handoff_brief(...)` now prefers `git.changed_files` when the packet provides it, so PR comments can list the real source files changed by the PR instead of transient CI artifact outputs.
+- `agent-packet.json` now includes additional path signals for continuation logic:
+  - `git.last_commit_files`
+  - `git.policy_files_touched`
+  - `git.shared_files_touched`
+  - `git.workflow_files_touched`
+- `docs/codex-subscription-setup.md` is now included in `policy_files`, which keeps the machine-readable restart context aligned with `AGENTS.md`.
+- `render_handoff_brief(...)` now includes:
+  - quality-gate summary counts
+  - recent commit subjects
+  - last-commit file fallback when the local worktree is clean
+  - shared-surface warnings when policy/shared/workflow files changed
+- The GitHub workflow still posts the handoff brief as a PR comment, and now also syncs it into a managed `Latest Codex Handoff` block inside the PR body.
+- The PR template now explicitly warns contributors that CI will maintain that managed handoff block.
 
 ## Why This Matters
 
-- The previous PR handoff comment could say:
-  - branch: `HEAD`
-  - changed files: `artifacts/quality-gate.json`
-- That made the PR comment a weak handoff packet for the next Codex session.
-- After this pass, the same comment path can point at the actual branch and actual PR file set, which makes it usable for "previous conversation archived, continue from PR" workflows.
+- A next worker should be able to open the PR and immediately see:
+  - whether the gate passed
+  - what changed
+  - whether shared surfaces moved
+  - what recent commits actually landed
+- That reduces dependence on archived chat history and makes the PR a better baton-passing surface across Codex threads.
 
 ## Public Contract Changes
 
-- `agent-packet.json` now includes `git.changed_files`.
-- `git.branch` may now resolve from GitHub workflow environment variables when the repo is checked out in detached HEAD mode.
-- Generated autonomy artifact paths are intentionally excluded from:
-  - `git.status_lines`
-  - `git.staged_files`
-  - `git.unstaged_files`
-  - `git.untracked_files`
-  - `git.changed_files`
+- `agent-packet.json` now exposes `git.policy_files_touched`, `git.shared_files_touched`, and `git.workflow_files_touched`.
+- `agent-packet.json` now also exposes `git.last_commit_files` so clean local branches can still hand off the most recent committed scope.
+- `policy_files` now includes `docs/codex-subscription-setup.md`.
+- PR bodies may now contain a CI-managed block delimited by:
+  - `<!-- roxauto-pr-handoff:start -->`
+  - `<!-- roxauto-pr-handoff:end -->`
 
 ## Verification
 
 - `C:\code\RoxAutoScript\.venv\Scripts\python.exe -m pytest tests/autonomy/test_agent_packet.py tests/autonomy/test_handoff_brief.py`
-- `C:\code\RoxAutoScript\.venv\Scripts\python.exe -m ruff check src tests`
 - `powershell -ExecutionPolicy Bypass -File scripts/run-autonomy-loop.ps1 -PythonExe C:\code\RoxAutoScript\.venv\Scripts\python.exe`
-- Result: local autonomy loop passed, including `doctor`, `pytest`, and `ruff`
 
 ## Known Limitations
 
-- The PR changed-file path currently assumes the GitHub `pull_request` checkout is the standard synthetic merge commit with `HEAD^1` and `HEAD^2`.
-- The packet still does not query GitHub directly for PR metadata; it stays git + environment based so local and CI paths remain aligned.
+- The managed PR body block is append-or-replace only; it does not attempt to interpret or rewrite the human-authored template sections above it.
+- The handoff summary still relies on changed files and recent commit subjects; it does not synthesize a free-form product summary from git diffs.
 
 ## Recommended Next Step
 
-- Let this branch open a PR so the updated PR handoff comment can be observed in a real GitHub Actions `pull_request` run.
-- If the team later wants even richer continuation context, extend the packet with optional PR number / base branch / merged-from branch fields, but keep the local CLI path working without GitHub-only dependencies.
+- Observe one real PR run and confirm the managed PR body block stays readable when contributors also fill the human template.
+- If the team wants stricter continuation contracts later, add optional machine-readable fields for blockers, ownership exceptions, and rollback notes instead of trying to infer them from prose.
