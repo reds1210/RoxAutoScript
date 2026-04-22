@@ -73,6 +73,56 @@ _REQUIREMENT_SPECS: dict[str, _RequirementSpec] = {
         implementation_blocking=True,
         asset_anchor_id="daily_ui.guild_check_in_button",
     ),
+    "asset.daily_ui.guild_order_list": _RequirementSpec(
+        requirement_id="asset.daily_ui.guild_order_list",
+        domain=TaskGapDomain.ASSET,
+        summary="Guild-order submit still requires a truthful guild-order list anchor.",
+        builder_blocking=True,
+        implementation_blocking=True,
+        asset_anchor_id="daily_ui.guild_order_list",
+    ),
+    "asset.daily_ui.guild_order_detail": _RequirementSpec(
+        requirement_id="asset.daily_ui.guild_order_detail",
+        domain=TaskGapDomain.ASSET,
+        summary="Guild-order submit still requires a truthful guild-order detail anchor.",
+        builder_blocking=True,
+        implementation_blocking=True,
+        asset_anchor_id="daily_ui.guild_order_detail",
+    ),
+    "asset.daily_ui.guild_order_submit_button": _RequirementSpec(
+        requirement_id="asset.daily_ui.guild_order_submit_button",
+        domain=TaskGapDomain.ASSET,
+        summary="Guild-order submit still requires a truthful submit affordance anchor.",
+        builder_blocking=True,
+        implementation_blocking=True,
+        asset_anchor_id="daily_ui.guild_order_submit_button",
+    ),
+    "asset.daily_ui.guild_order_refresh_button": _RequirementSpec(
+        requirement_id="asset.daily_ui.guild_order_refresh_button",
+        domain=TaskGapDomain.ASSET,
+        summary="Guild-order submit still requires a truthful refresh affordance anchor.",
+        builder_blocking=True,
+        implementation_blocking=True,
+        asset_anchor_id="daily_ui.guild_order_refresh_button",
+    ),
+    "foundation.daily_ui.guild_order_visible_quantity_contract": _RequirementSpec(
+        requirement_id="foundation.daily_ui.guild_order_visible_quantity_contract",
+        domain=TaskGapDomain.FOUNDATION,
+        summary=(
+            "Guild-order material logic still requires a truthful visible-quantity contract for material label, required quantity, and available quantity."
+        ),
+        builder_blocking=True,
+        implementation_blocking=True,
+    ),
+    "foundation.daily_ui.guild_order_result_state_contract": _RequirementSpec(
+        requirement_id="foundation.daily_ui.guild_order_result_state_contract",
+        domain=TaskGapDomain.FOUNDATION,
+        summary=(
+            "Guild-order submit/skip/refresh still requires a truthful verification-state contract for completed, insufficient-material, and submit-result surfaces."
+        ),
+        builder_blocking=True,
+        implementation_blocking=True,
+    ),
     "runtime.daily_ui.dispatch_bridge": _RequirementSpec(
         requirement_id="runtime.daily_ui.dispatch_bridge",
         domain=TaskGapDomain.RUNTIME,
@@ -240,7 +290,11 @@ class TaskFoundationRepository:
                         task_id=blueprint.task_id,
                         asset_kind=TaskAssetKind.TEMPLATE,
                         status=anchor_source.status if anchor_source is not None else TaskAssetStatus.MISSING,
-                        source_path=anchor_source.source_path if anchor_source is not None else "",
+                        source_path=(
+                            anchor_source.source_path
+                            if anchor_source is not None
+                            else self._expected_template_source_path(anchor_id)
+                        ),
                         metadata=self._template_asset_metadata(
                             anchor_id,
                             anchor_source,
@@ -481,6 +535,24 @@ class TaskFoundationRepository:
                 if record.metadata.get("anchor_id") == spec.asset_anchor_id:
                     return record.status is TaskAssetStatus.PRESENT
             return False
+        if spec.requirement_id == "foundation.daily_ui.guild_order_visible_quantity_contract":
+            return self._all_anchor_records_present(
+                asset_records,
+                [
+                    "daily_ui.guild_order_material_label",
+                    "daily_ui.guild_order_required_quantity",
+                    "daily_ui.guild_order_available_quantity",
+                ],
+            )
+        if spec.requirement_id == "foundation.daily_ui.guild_order_result_state_contract":
+            return self._all_anchor_records_present(
+                asset_records,
+                [
+                    "daily_ui.guild_order_completed_state",
+                    "daily_ui.guild_order_insufficient_material_state",
+                    "daily_ui.guild_order_submit_result",
+                ],
+            )
         if spec.requirement_id == "runtime.daily_ui.dispatch_bridge":
             try:
                 from roxauto.tasks.daily_ui import has_claim_rewards_runtime_bridge
@@ -503,6 +575,18 @@ class TaskFoundationRepository:
                         f"source_path={record.source_path or 'n/a'}"
                     )
             return "asset_status=missing source_path=n/a"
+        if spec.requirement_id == "foundation.daily_ui.guild_order_visible_quantity_contract":
+            return (
+                "anchor_statuses="
+                f"{self._anchor_status_summary(asset_records, ['daily_ui.guild_order_material_label', 'daily_ui.guild_order_required_quantity', 'daily_ui.guild_order_available_quantity'])} "
+                "decision_surface=visible_material_label_required_quantity_available_quantity"
+            )
+        if spec.requirement_id == "foundation.daily_ui.guild_order_result_state_contract":
+            return (
+                "anchor_statuses="
+                f"{self._anchor_status_summary(asset_records, ['daily_ui.guild_order_completed_state', 'daily_ui.guild_order_insufficient_material_state', 'daily_ui.guild_order_submit_result'])} "
+                "verification_surface=completed_insufficient_submit_result"
+            )
         if spec.requirement_id == "runtime.daily_ui.dispatch_bridge":
             status = "implemented" if satisfied else "missing"
             return (
@@ -558,6 +642,7 @@ class TaskFoundationRepository:
         if isinstance(post_claim_resolution, dict):
             metadata["post_claim_resolution"] = dict(post_claim_resolution)
         metadata.update(self._claim_rewards_contract_metadata(blueprint))
+        metadata.update(self._guild_order_contract_metadata(blueprint))
         return metadata
 
     def _signal_contract_version(self, blueprint: TaskBlueprint) -> str:
@@ -837,6 +922,12 @@ class TaskFoundationRepository:
                 tracked_anchor_ids.append(normalized_anchor_id)
         return tracked_anchor_ids
 
+    def _expected_template_source_path(self, anchor_id: str) -> str:
+        repository_id = str(anchor_id).split(".", 1)[0].strip()
+        if not repository_id:
+            return ""
+        return f"assets/templates/{repository_id}/manifest.json#{anchor_id}"
+
     def _supporting_anchor_ids(self, blueprint: TaskBlueprint) -> list[str]:
         raw_value = blueprint.metadata.get("supporting_anchor_ids", [])
         if not isinstance(raw_value, list):
@@ -909,6 +1000,24 @@ class TaskFoundationRepository:
                 metadata["claim_rewards_alternate_post_tap_capture_ids"] = alternate_post_tap_capture_ids
         return metadata
 
+    def _guild_order_contract_metadata(self, blueprint: TaskBlueprint) -> dict[str, Any]:
+        if blueprint.task_id != "daily_ui.guild_order_submit":
+            return {}
+        metadata: dict[str, Any] = {}
+        for key in (
+            "guild_order_material_policy",
+            "guild_order_decision_contract",
+            "guild_order_visibility_contract",
+            "guild_order_handoff_fields",
+            "guild_order_spec_builders",
+        ):
+            value = blueprint.metadata.get(key)
+            if isinstance(value, dict):
+                metadata[key] = dict(value)
+            elif isinstance(value, list):
+                metadata[key] = [str(item) for item in value]
+        return metadata
+
     def _provenance_bucket(
         self,
         *,
@@ -957,3 +1066,33 @@ class TaskFoundationRepository:
         if isinstance(value, bool):
             return value
         return None
+
+    def _all_anchor_records_present(
+        self,
+        asset_records: list[TaskAssetRecord],
+        anchor_ids: list[str],
+    ) -> bool:
+        return all(
+            any(
+                record.metadata.get("anchor_id") == anchor_id and record.status is TaskAssetStatus.PRESENT
+                for record in asset_records
+            )
+            for anchor_id in anchor_ids
+        )
+
+    def _anchor_status_summary(
+        self,
+        asset_records: list[TaskAssetRecord],
+        anchor_ids: list[str],
+    ) -> str:
+        summaries: list[str] = []
+        for anchor_id in anchor_ids:
+            record = next(
+                (item for item in asset_records if item.metadata.get("anchor_id") == anchor_id),
+                None,
+            )
+            if record is None:
+                summaries.append(f"{anchor_id}:missing")
+                continue
+            summaries.append(f"{anchor_id}:{record.status.value}")
+        return ",".join(summaries)

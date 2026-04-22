@@ -40,6 +40,14 @@ class TaskFixtureExamplesTests(unittest.TestCase):
             TaskAssetStatus.PLACEHOLDER,
         )
         self.assertEqual(
+            statuses["daily_ui.guild_order_submit:template:daily_ui.guild_order_list"],
+            TaskAssetStatus.MISSING,
+        )
+        self.assertEqual(
+            statuses["daily_ui.guild_order_submit:golden:order_list"],
+            TaskAssetStatus.PLANNED,
+        )
+        self.assertEqual(
             statuses["daily_ui.claim_rewards:template:daily_ui.claim_reward"],
             TaskAssetStatus.PRESENT,
         )
@@ -59,6 +67,10 @@ class TaskFixtureExamplesTests(unittest.TestCase):
         )
         self.assertEqual(
             records["daily_ui.claim_rewards:template:daily_ui.reward_confirm_state"].metadata["requirement_level"],
+            "supporting",
+        )
+        self.assertEqual(
+            records["daily_ui.guild_order_submit:template:daily_ui.guild_order_available_quantity"].metadata["requirement_level"],
             "supporting",
         )
 
@@ -82,4 +94,9 @@ class TaskFixtureExamplesTests(unittest.TestCase):
             by_task["daily_ui.claim_rewards"].implementation_requirements[0].details,
         )
         self.assertEqual(by_task["daily_ui.guild_check_in"].builder_readiness_state.value, "blocked_by_asset")
+        self.assertEqual(by_task["daily_ui.guild_order_submit"].builder_readiness_state.value, "blocked_by_foundation")
+        self.assertEqual(
+            by_task["daily_ui.guild_order_submit"].implementation_readiness_state.value,
+            "blocked_by_foundation",
+        )
         self.assertEqual(by_task["odin.preset_entry"].implementation_readiness_state.value, "blocked_by_calibration")

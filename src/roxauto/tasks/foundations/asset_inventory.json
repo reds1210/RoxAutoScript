@@ -252,6 +252,280 @@
       "task_id": "daily_ui.guild_check_in"
     },
     {
+      "asset_id": "daily_ui.guild_order_submit:fixture:default_tw_guild.fixture",
+      "asset_kind": "fixture_profile",
+      "metadata": {
+        "source": "fixture_profile"
+      },
+      "pack_id": "daily_ui",
+      "source_path": "fixture_profiles/default_tw_guild.fixture.json",
+      "status": "present",
+      "task_id": "daily_ui.guild_order_submit"
+    },
+    {
+      "asset_id": "daily_ui.guild_order_submit:template:common.close_button",
+      "asset_kind": "template",
+      "metadata": {
+        "anchor_id": "common.close_button",
+        "curation_status": "",
+        "placeholder": false,
+        "requirement_level": "required",
+        "source": "template_manifest",
+        "template_path": "anchors/common_close_button.svg"
+      },
+      "pack_id": "daily_ui",
+      "source_path": "assets/templates/common/manifest.json#common.close_button",
+      "status": "present",
+      "task_id": "daily_ui.guild_order_submit"
+    },
+    {
+      "asset_id": "daily_ui.guild_order_submit:template:daily_ui.guild_order_list",
+      "asset_kind": "template",
+      "metadata": {
+        "anchor_id": "daily_ui.guild_order_list",
+        "curation_status": "",
+        "placeholder": false,
+        "requirement_level": "required",
+        "source": "template_manifest",
+        "template_path": ""
+      },
+      "pack_id": "daily_ui",
+      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.guild_order_list",
+      "status": "missing",
+      "task_id": "daily_ui.guild_order_submit"
+    },
+    {
+      "asset_id": "daily_ui.guild_order_submit:template:daily_ui.guild_order_detail",
+      "asset_kind": "template",
+      "metadata": {
+        "anchor_id": "daily_ui.guild_order_detail",
+        "curation_status": "",
+        "placeholder": false,
+        "requirement_level": "required",
+        "source": "template_manifest",
+        "template_path": ""
+      },
+      "pack_id": "daily_ui",
+      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.guild_order_detail",
+      "status": "missing",
+      "task_id": "daily_ui.guild_order_submit"
+    },
+    {
+      "asset_id": "daily_ui.guild_order_submit:template:daily_ui.guild_order_submit_button",
+      "asset_kind": "template",
+      "metadata": {
+        "anchor_id": "daily_ui.guild_order_submit_button",
+        "curation_status": "",
+        "placeholder": false,
+        "requirement_level": "required",
+        "source": "template_manifest",
+        "template_path": ""
+      },
+      "pack_id": "daily_ui",
+      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.guild_order_submit_button",
+      "status": "missing",
+      "task_id": "daily_ui.guild_order_submit"
+    },
+    {
+      "asset_id": "daily_ui.guild_order_submit:template:daily_ui.guild_order_refresh_button",
+      "asset_kind": "template",
+      "metadata": {
+        "anchor_id": "daily_ui.guild_order_refresh_button",
+        "curation_status": "",
+        "placeholder": false,
+        "requirement_level": "required",
+        "source": "template_manifest",
+        "template_path": ""
+      },
+      "pack_id": "daily_ui",
+      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.guild_order_refresh_button",
+      "status": "missing",
+      "task_id": "daily_ui.guild_order_submit"
+    },
+    {
+      "asset_id": "daily_ui.guild_order_submit:template:daily_ui.guild_order_material_label",
+      "asset_kind": "template",
+      "metadata": {
+        "anchor_id": "daily_ui.guild_order_material_label",
+        "curation_status": "",
+        "placeholder": false,
+        "requirement_level": "supporting",
+        "source": "template_manifest",
+        "template_path": ""
+      },
+      "pack_id": "daily_ui",
+      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.guild_order_material_label",
+      "status": "missing",
+      "task_id": "daily_ui.guild_order_submit"
+    },
+    {
+      "asset_id": "daily_ui.guild_order_submit:template:daily_ui.guild_order_required_quantity",
+      "asset_kind": "template",
+      "metadata": {
+        "anchor_id": "daily_ui.guild_order_required_quantity",
+        "curation_status": "",
+        "placeholder": false,
+        "requirement_level": "supporting",
+        "source": "template_manifest",
+        "template_path": ""
+      },
+      "pack_id": "daily_ui",
+      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.guild_order_required_quantity",
+      "status": "missing",
+      "task_id": "daily_ui.guild_order_submit"
+    },
+    {
+      "asset_id": "daily_ui.guild_order_submit:template:daily_ui.guild_order_available_quantity",
+      "asset_kind": "template",
+      "metadata": {
+        "anchor_id": "daily_ui.guild_order_available_quantity",
+        "curation_status": "",
+        "placeholder": false,
+        "requirement_level": "supporting",
+        "source": "template_manifest",
+        "template_path": ""
+      },
+      "pack_id": "daily_ui",
+      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.guild_order_available_quantity",
+      "status": "missing",
+      "task_id": "daily_ui.guild_order_submit"
+    },
+    {
+      "asset_id": "daily_ui.guild_order_submit:template:daily_ui.guild_order_completed_state",
+      "asset_kind": "template",
+      "metadata": {
+        "anchor_id": "daily_ui.guild_order_completed_state",
+        "curation_status": "",
+        "placeholder": false,
+        "requirement_level": "supporting",
+        "source": "template_manifest",
+        "template_path": ""
+      },
+      "pack_id": "daily_ui",
+      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.guild_order_completed_state",
+      "status": "missing",
+      "task_id": "daily_ui.guild_order_submit"
+    },
+    {
+      "asset_id": "daily_ui.guild_order_submit:template:daily_ui.guild_order_insufficient_material_state",
+      "asset_kind": "template",
+      "metadata": {
+        "anchor_id": "daily_ui.guild_order_insufficient_material_state",
+        "curation_status": "",
+        "placeholder": false,
+        "requirement_level": "supporting",
+        "source": "template_manifest",
+        "template_path": ""
+      },
+      "pack_id": "daily_ui",
+      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.guild_order_insufficient_material_state",
+      "status": "missing",
+      "task_id": "daily_ui.guild_order_submit"
+    },
+    {
+      "asset_id": "daily_ui.guild_order_submit:template:daily_ui.guild_order_submit_result",
+      "asset_kind": "template",
+      "metadata": {
+        "anchor_id": "daily_ui.guild_order_submit_result",
+        "curation_status": "",
+        "placeholder": false,
+        "requirement_level": "supporting",
+        "source": "template_manifest",
+        "template_path": ""
+      },
+      "pack_id": "daily_ui",
+      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.guild_order_submit_result",
+      "status": "missing",
+      "task_id": "daily_ui.guild_order_submit"
+    },
+    {
+      "asset_id": "daily_ui.guild_order_submit:golden:order_list",
+      "asset_kind": "golden_screenshot",
+      "metadata": {
+        "requirement_level": "required",
+        "source": "golden_convention",
+        "variant": "baseline",
+        "variants": [
+          "baseline",
+          "failure"
+        ]
+      },
+      "pack_id": "daily_ui",
+      "source_path": "daily_ui/daily_ui_guild_order_submit/order_list/daily_ui_guild_order_submit__order_list__baseline__v1.png",
+      "status": "planned",
+      "task_id": "daily_ui.guild_order_submit"
+    },
+    {
+      "asset_id": "daily_ui.guild_order_submit:golden:order_detail",
+      "asset_kind": "golden_screenshot",
+      "metadata": {
+        "requirement_level": "required",
+        "source": "golden_convention",
+        "variant": "baseline",
+        "variants": [
+          "baseline",
+          "submit_ready",
+          "refresh_ready",
+          "failure"
+        ]
+      },
+      "pack_id": "daily_ui",
+      "source_path": "daily_ui/daily_ui_guild_order_submit/order_detail/daily_ui_guild_order_submit__order_detail__baseline__v1.png",
+      "status": "planned",
+      "task_id": "daily_ui.guild_order_submit"
+    },
+    {
+      "asset_id": "daily_ui.guild_order_submit:golden:insufficient_material_state",
+      "asset_kind": "golden_screenshot",
+      "metadata": {
+        "requirement_level": "supporting",
+        "source": "golden_convention",
+        "variant": "baseline",
+        "variants": [
+          "baseline",
+          "failure"
+        ]
+      },
+      "pack_id": "daily_ui",
+      "source_path": "daily_ui/daily_ui_guild_order_submit/insufficient_material_state/daily_ui_guild_order_submit__insufficient_material_state__baseline__v1.png",
+      "status": "planned",
+      "task_id": "daily_ui.guild_order_submit"
+    },
+    {
+      "asset_id": "daily_ui.guild_order_submit:golden:completed_state",
+      "asset_kind": "golden_screenshot",
+      "metadata": {
+        "requirement_level": "supporting",
+        "source": "golden_convention",
+        "variant": "baseline",
+        "variants": [
+          "baseline",
+          "failure"
+        ]
+      },
+      "pack_id": "daily_ui",
+      "source_path": "daily_ui/daily_ui_guild_order_submit/completed_state/daily_ui_guild_order_submit__completed_state__baseline__v1.png",
+      "status": "planned",
+      "task_id": "daily_ui.guild_order_submit"
+    },
+    {
+      "asset_id": "daily_ui.guild_order_submit:golden:submit_result",
+      "asset_kind": "golden_screenshot",
+      "metadata": {
+        "requirement_level": "supporting",
+        "source": "golden_convention",
+        "variant": "baseline",
+        "variants": [
+          "baseline",
+          "failure"
+        ]
+      },
+      "pack_id": "daily_ui",
+      "source_path": "daily_ui/daily_ui_guild_order_submit/submit_result/daily_ui_guild_order_submit__submit_result__baseline__v1.png",
+      "status": "planned",
+      "task_id": "daily_ui.guild_order_submit"
+    },
+    {
       "asset_id": "odin.preset_entry:fixture:default_tw_odin.fixture",
       "asset_kind": "fixture_profile",
       "metadata": {

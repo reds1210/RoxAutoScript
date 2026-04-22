@@ -22,6 +22,7 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
             [
                 "daily_ui.claim_rewards",
                 "daily_ui.guild_check_in",
+                "daily_ui.guild_order_submit",
                 "odin.preset_entry",
             ],
         )
@@ -30,6 +31,7 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
             {
                 "daily_ui.claim_rewards": "fixtured",
                 "daily_ui.guild_check_in": "spec_only",
+                "daily_ui.guild_order_submit": "spec_only",
                 "odin.preset_entry": "spec_only",
             },
         )
@@ -112,6 +114,11 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
             catalogs[0].entries[0].metadata["supporting_anchor_ids"],
             ["daily_ui.reward_confirm_state"],
         )
+        self.assertEqual(catalogs[0].entries[2].task_id, "daily_ui.guild_order_submit")
+        self.assertEqual(
+            catalogs[0].entries[2].metadata["signal_contract_version"],
+            "guild_order_submit.v1",
+        )
 
     def test_builds_asset_inventory(self) -> None:
         inventory = self.repository.build_asset_inventory()
@@ -162,6 +169,22 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
         self.assertEqual(
             records["daily_ui.guild_check_in:template:daily_ui.guild_check_in_button"].status.value,
             "placeholder",
+        )
+        self.assertEqual(
+            records["daily_ui.guild_order_submit:template:daily_ui.guild_order_list"].status.value,
+            "missing",
+        )
+        self.assertEqual(
+            records["daily_ui.guild_order_submit:template:daily_ui.guild_order_list"].source_path,
+            "assets/templates/daily_ui/manifest.json#daily_ui.guild_order_list",
+        )
+        self.assertEqual(
+            records["daily_ui.guild_order_submit:template:daily_ui.guild_order_available_quantity"].metadata["requirement_level"],
+            "supporting",
+        )
+        self.assertEqual(
+            records["daily_ui.guild_order_submit:golden:order_list"].status.value,
+            "planned",
         )
         self.assertEqual(
             records["odin.preset_entry:golden:odin_idle_state"].status.value,
@@ -216,6 +239,26 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
             ["asset.daily_ui.guild_check_in_button"],
         )
         self.assertEqual(
+            by_task["daily_ui.guild_order_submit"].asset_requirement_ids,
+            [
+                "asset.daily_ui.guild_order_list",
+                "asset.daily_ui.guild_order_detail",
+                "asset.daily_ui.guild_order_submit_button",
+                "asset.daily_ui.guild_order_refresh_button",
+            ],
+        )
+        self.assertEqual(
+            by_task["daily_ui.guild_order_submit"].foundation_requirement_ids,
+            [
+                "foundation.daily_ui.guild_order_visible_quantity_contract",
+                "foundation.daily_ui.guild_order_result_state_contract",
+            ],
+        )
+        self.assertEqual(
+            by_task["daily_ui.guild_order_submit"].metadata["guild_order_decision_contract"]["allowed_decisions"],
+            ["submit", "skip", "refresh"],
+        )
+        self.assertEqual(
             by_task["odin.preset_entry"].calibration_requirement_ids,
             ["calibration.odin.idle_state_profile"],
         )
@@ -251,6 +294,25 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
             by_task["daily_ui.guild_check_in"].implementation_readiness_state.value,
             "blocked_by_asset",
         )
+        self.assertEqual(
+            by_task["daily_ui.guild_order_submit"].builder_readiness_state.value,
+            "blocked_by_foundation",
+        )
+        self.assertEqual(
+            by_task["daily_ui.guild_order_submit"].implementation_readiness_state.value,
+            "blocked_by_foundation",
+        )
+        self.assertEqual(
+            [item.requirement_id for item in by_task["daily_ui.guild_order_submit"].builder_requirements],
+            [
+                "asset.daily_ui.guild_order_list",
+                "asset.daily_ui.guild_order_detail",
+                "asset.daily_ui.guild_order_submit_button",
+                "asset.daily_ui.guild_order_refresh_button",
+                "foundation.daily_ui.guild_order_visible_quantity_contract",
+                "foundation.daily_ui.guild_order_result_state_contract",
+            ],
+        )
         self.assertEqual(by_task["odin.preset_entry"].builder_readiness_state.value, "ready")
         self.assertEqual(
             by_task["odin.preset_entry"].implementation_readiness_state.value,
@@ -261,8 +323,11 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
         readiness = self.repository.load_readiness_report()
 
         self.assertEqual(readiness.report_id, "pre_gate_3_task_readiness")
-        self.assertEqual(len(readiness.reports), 3)
+        self.assertEqual(len(readiness.reports), 4)
         claim_rewards = next(report for report in readiness.reports if report.task_id == "daily_ui.claim_rewards")
+        guild_order_submit = next(
+            report for report in readiness.reports if report.task_id == "daily_ui.guild_order_submit"
+        )
         self.assertEqual(claim_rewards.implementation_readiness_state.value, "ready")
         self.assertEqual(self.repository.build_readiness_collection().to_dict(), readiness.to_dict())
         self.assertEqual(
@@ -273,3 +338,4 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
             [item.metadata["requirement_level"] for item in claim_rewards.warning_requirements],
             ["supporting"],
         )
+        self.assertEqual(guild_order_submit.builder_readiness_state.value, "blocked_by_foundation")

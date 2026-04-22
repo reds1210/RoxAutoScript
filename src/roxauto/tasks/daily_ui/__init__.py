@@ -26,6 +26,24 @@ from roxauto.tasks.daily_ui.claim_rewards import (
     load_claim_rewards_blueprint,
     load_claim_rewards_display_metadata,
 )
+from roxauto.tasks.daily_ui.guild_order_submit import (
+    GuildOrderAvailability,
+    GuildOrderDecision,
+    GuildOrderDecisionContract,
+    GuildOrderDecisionReason,
+    GuildOrderDecisionValue,
+    GuildOrderMaterialPolicy,
+    GuildOrderMaterialSufficiency,
+    GuildOrderRequirement,
+    GuildOrderSubmitSpecification,
+    GuildOrderVerificationState,
+    GuildOrderVisibilityContract,
+    build_guild_order_submit_specification,
+    load_guild_order_submit_blueprint,
+    load_guild_order_submit_decision_contract,
+    load_guild_order_submit_material_policy,
+    load_guild_order_submit_visibility_contract,
+)
 from roxauto.tasks.daily_ui.foundations import load_daily_ui_blueprints, load_daily_ui_catalog
 
 __all__ = [
@@ -42,7 +60,19 @@ __all__ = [
     "ClaimRewardsTemplateMatcher",
     "ClaimRewardsTaskPreset",
     "ClaimRewardsVisionGateway",
+    "GuildOrderAvailability",
+    "GuildOrderDecision",
+    "GuildOrderDecisionContract",
+    "GuildOrderDecisionReason",
+    "GuildOrderDecisionValue",
+    "GuildOrderMaterialPolicy",
+    "GuildOrderMaterialSufficiency",
+    "GuildOrderRequirement",
+    "GuildOrderSubmitSpecification",
+    "GuildOrderVerificationState",
+    "GuildOrderVisibilityContract",
     "TemplateMatcherClaimRewardsVisionGateway",
+    "build_guild_order_submit_specification",
     "build_claim_rewards_step_telemetry",
     "build_claim_rewards_task_display_model",
     "build_claim_rewards_task_preset",
@@ -55,5 +85,9 @@ __all__ = [
     "load_claim_rewards_display_metadata",
     "load_daily_ui_blueprints",
     "load_daily_ui_catalog",
+    "load_guild_order_submit_blueprint",
+    "load_guild_order_submit_decision_contract",
+    "load_guild_order_submit_material_policy",
+    "load_guild_order_submit_visibility_contract",
 ]
 

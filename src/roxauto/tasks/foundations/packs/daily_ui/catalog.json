@@ -76,6 +76,53 @@
       "metadata": {
         "phase": "pre_gate_3"
       }
+    },
+    {
+      "task_id": "daily_ui.guild_order_submit",
+      "blueprint_path": "packs/daily_ui/guild_order_submit.task.json",
+      "display_name": "Guild Order Submit",
+      "fixture_profile_paths": [
+        "fixture_profiles/default_tw_guild.fixture.json"
+      ],
+      "required_anchors": [
+        "common.close_button",
+        "daily_ui.guild_order_list",
+        "daily_ui.guild_order_detail",
+        "daily_ui.guild_order_submit_button",
+        "daily_ui.guild_order_refresh_button"
+      ],
+      "metadata": {
+        "phase": "round-9",
+        "signal_contract_version": "guild_order_submit.v1",
+        "supporting_anchor_ids": [
+          "daily_ui.guild_order_material_label",
+          "daily_ui.guild_order_required_quantity",
+          "daily_ui.guild_order_available_quantity",
+          "daily_ui.guild_order_completed_state",
+          "daily_ui.guild_order_insufficient_material_state",
+          "daily_ui.guild_order_submit_result"
+        ],
+        "supporting_golden_screen_slugs": [
+          "insufficient_material_state",
+          "completed_state",
+          "submit_result"
+        ],
+        "guild_order_spec_builders": {
+          "task_specification_builder": "roxauto.tasks.daily_ui.guild_order_submit.build_guild_order_submit_specification",
+          "material_policy_loader": "roxauto.tasks.daily_ui.guild_order_submit.load_guild_order_submit_material_policy",
+          "decision_contract_loader": "roxauto.tasks.daily_ui.guild_order_submit.load_guild_order_submit_decision_contract",
+          "visibility_contract_loader": "roxauto.tasks.daily_ui.guild_order_submit.load_guild_order_submit_visibility_contract"
+        },
+        "guild_order_handoff_fields": [
+          "decision",
+          "reason_id",
+          "slot_index",
+          "requirements",
+          "availability",
+          "refresh_attempted",
+          "verification_state"
+        ]
+      }
     }
   ],
   "metadata": {
