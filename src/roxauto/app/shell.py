@@ -259,6 +259,13 @@ def launch_placeholder_gui() -> int:
             self.claim_overview = QLabel("")
             self.claim_overview.setObjectName("secondaryText")
             self.claim_overview.setWordWrap(True)
+            claim_focus = QGridLayout()
+            claim_focus.setHorizontalSpacing(10)
+            claim_focus.setVerticalSpacing(10)
+            self.claim_focus_step = self._detail_card(claim_focus, 0, 0, "卡點步驟")
+            self.claim_focus_anchor = self._detail_card(claim_focus, 0, 1, "失敗 Anchor")
+            self.claim_focus_region = self._detail_card(claim_focus, 1, 0, "比對區域")
+            self.claim_focus_threshold = self._detail_card(claim_focus, 1, 1, "信心門檻")
             self.claim_progress = QProgressBar()
             self.claim_progress.setMinimumHeight(28)
             self.claim_progress.setTextVisible(True)
@@ -279,6 +286,7 @@ def launch_placeholder_gui() -> int:
             self.claim_steps.setObjectName("stepList")
             claim_layout.addWidget(self.claim_header)
             claim_layout.addWidget(self.claim_overview)
+            claim_layout.addLayout(claim_focus)
             claim_layout.addWidget(self.claim_progress)
             claim_layout.addWidget(self.claim_status)
             claim_layout.addLayout(claim_actions)
@@ -406,6 +414,20 @@ def launch_placeholder_gui() -> int:
             layout.addWidget(card, row, column)
             return value
 
+        def _detail_card(self, layout: QGridLayout, row: int, column: int, title: str) -> QLabel:
+            card = QGroupBox(title)
+            card.setObjectName("summaryCard")
+            card_layout = QVBoxLayout()
+            card_layout.setContentsMargins(8, 10, 8, 8)
+            card.setLayout(card_layout)
+            value = QLabel("-")
+            value.setObjectName("fieldValue")
+            value.setWordWrap(True)
+            value.setMinimumHeight(36)
+            card_layout.addWidget(value)
+            layout.addWidget(card, row, column)
+            return value
+
         def _poll_live_state(self) -> None:
             state = self._bridge.get_live_state(self._selected_instance_id)
             self._selected_instance_id = state.selected_instance_id
@@ -490,6 +512,10 @@ def launch_placeholder_gui() -> int:
             self.claim_header.setText(f"{claim.task_label} | {_zh_status(claim.workflow_status)}")
             overview_lines = [claim.active_step_summary or "-", f"\u4e0b\u4e00\u6b65\uff1a{claim.next_action_summary or '-'}", claim.workflow_banner or "-"]
             self.claim_overview.setText("\n".join(overview_lines))
+            self.claim_focus_step.setText(claim.focus_step_summary or "-")
+            self.claim_focus_anchor.setText(claim.focus_anchor_summary or "-")
+            self.claim_focus_region.setText(claim.focus_region_summary or "-")
+            self.claim_focus_threshold.setText(claim.focus_threshold_summary or "-")
             total_steps = max(1, claim.progress_total_count or len(claim.step_rows) or 1)
             self.claim_progress.setMaximum(total_steps)
             self.claim_progress.setValue(min(claim.progress_completed_count, total_steps))
@@ -497,14 +523,13 @@ def launch_placeholder_gui() -> int:
             self.claim_status.setPlainText(
                 "\n".join(
                     [
-                        f"目前步驟：{claim.current_step_title or '-'}",
                         f"視覺檢查：{claim.failure_check_summary or '目前沒有需要人工確認的視覺檢查。'}",
-                        f"診斷焦點：{claim.selected_anchor_summary or '-'}",
                         f"素材來源：{claim.selected_provenance_summary or '-'}",
                         f"校對摘要：{claim.selected_curation_summary or '-'}",
                         f"視覺說明：{claim.failure_explanation or '-'}",
                         f"下一步建議：{claim.next_action_summary or '-'}",
                         f"執行條件：{claim.runtime_gate_summary or '-'}",
+                        f"佇列狀態：{claim.queue_summary or '-'}",
                         f"最近執行：{claim.last_run_summary or '-'}",
                         f"失敗原因：{claim.failure_reason or claim.failure_summary or '-'}",
                         f"套用範圍：{claim.selected_scope_summary or '-'}",
@@ -554,6 +579,10 @@ def launch_placeholder_gui() -> int:
                 return
             selected = claim_failure.selected_check
             lines = [
+                f"卡點步驟：{state.claim_rewards.focus_step_summary or '-'}",
+                f"失敗 Anchor：{state.claim_rewards.focus_anchor_summary or '-'}",
+                f"比對區域：{state.claim_rewards.focus_region_summary or '-'}",
+                f"信心門檻：{state.claim_rewards.focus_threshold_summary or '-'}",
                 f"視覺檢查：{state.claim_rewards.failure_check_summary or '-'}",
                 f"診斷焦點：{state.claim_rewards.selected_anchor_summary or '-'}",
                 f"素材來源：{state.claim_rewards.selected_provenance_summary or '-'}",

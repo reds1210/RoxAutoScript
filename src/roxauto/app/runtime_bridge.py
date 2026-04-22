@@ -976,6 +976,24 @@ class OperatorConsoleRuntimeBridge:
                         else ""
                     )
                 ),
+                focus_step_summary=self._claim_rewards_focus_step_summary(
+                    selected_snapshot,
+                    workflow_status=workflow_status,
+                    runtime_blockers=runtime_blockers,
+                    current_step_title=current_step_title,
+                ),
+                focus_anchor_summary=self._claim_rewards_focus_anchor_summary(
+                    selected_anchor_id,
+                    claim_failure=claim_failure,
+                ),
+                focus_region_summary=self._claim_rewards_focus_region_summary(
+                    selected_resolution,
+                    claim_failure=claim_failure,
+                ),
+                focus_threshold_summary=self._claim_rewards_focus_threshold_summary(
+                    selected_resolution,
+                    claim_failure=claim_failure,
+                ),
                 selected_anchor_summary=self._claim_rewards_anchor_summary(
                     selected_anchor_id,
                     selected_resolution=selected_resolution,
@@ -2173,6 +2191,83 @@ class OperatorConsoleRuntimeBridge:
         if selected_snapshot.profile_binding is not None:
             scope_parts.append(f"設定檔：{selected_snapshot.profile_binding.display_name}")
         return " | ".join(scope_parts)
+
+    def _claim_rewards_focus_step_summary(
+        self,
+        selected_snapshot,
+        *,
+        workflow_status: str,
+        runtime_blockers: list[str],
+        current_step_title: str,
+    ) -> str:
+        if selected_snapshot is None:
+            return "請先選擇模擬器"
+        if runtime_blockers:
+            return "執行條件未就緒"
+        if workflow_status == "queued":
+            return f"等待：{current_step_title}" if current_step_title else "等待進入第一步"
+        if workflow_status == "running":
+            return current_step_title or "執行中"
+        if workflow_status in {"failed", "aborted"}:
+            return current_step_title or "需要人工診斷"
+        if workflow_status == "succeeded":
+            return "全部完成"
+        return current_step_title or "待開始"
+
+    def _claim_rewards_focus_anchor_summary(
+        self,
+        anchor_id: str,
+        *,
+        claim_failure=None,
+    ) -> str:
+        selected_check = claim_failure.selected_check if claim_failure is not None else None
+        if selected_check is not None:
+            return self._claim_rewards_selected_check_target(selected_check)
+        if anchor_id.startswith("daily_ui."):
+            return anchor_id
+        return _CLAIM_REWARDS_ANCHOR_ID
+
+    def _claim_rewards_focus_region_summary(
+        self,
+        selected_resolution,
+        *,
+        claim_failure=None,
+    ) -> str:
+        resolution = self._claim_rewards_focus_resolution(
+            selected_resolution,
+            claim_failure=claim_failure,
+        )
+        if resolution is None or resolution.effective_match_region is None:
+            return "-"
+        return self._format_region(resolution.effective_match_region)
+
+    def _claim_rewards_focus_threshold_summary(
+        self,
+        selected_resolution,
+        *,
+        claim_failure=None,
+    ) -> str:
+        selected_check = claim_failure.selected_check if claim_failure is not None else None
+        resolution = self._claim_rewards_focus_resolution(
+            selected_resolution,
+            claim_failure=claim_failure,
+        )
+        if resolution is not None:
+            return f"{resolution.effective_confidence_threshold:.2f}"
+        if selected_check is not None:
+            return f"{selected_check.threshold:.2f}"
+        return "-"
+
+    def _claim_rewards_focus_resolution(
+        self,
+        selected_resolution,
+        *,
+        claim_failure=None,
+    ):
+        selected_check = claim_failure.selected_check if claim_failure is not None else None
+        if selected_check is not None and selected_check.calibration_resolution is not None:
+            return selected_check.calibration_resolution
+        return selected_resolution
 
     def _claim_rewards_selected_provenance_summary(self, claim_failure) -> str:
         if claim_failure is None:
