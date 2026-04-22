@@ -190,3 +190,131 @@ Recommended next step after this pass:
 - have Engine C and D review `emulator-5556-after-fuli-tap-2026-04-22.png` as a candidate live `reward_panel_claimable` source image and decide whether the claimable scene contract allows this live day-7 reward presentation
 - treat `emulator-5556-after-day7-claim-tap-2026-04-22.png` as supporting post-tap evidence only unless the confirm-state contract is broadened to include reward-result overlays
 - if the current confirm-state contract must remain an explicit confirm-button modal, continue capture attempts on another account/day-state that still presents the pre-claim confirmation dialog rather than an immediate reward-result overlay
+
+## 2026-04-22 Four-Device Raw Sweep
+
+Scope for this pass:
+
+- stayed inside `daily_ui.claim_rewards`
+- wrote only to:
+  - `docs/vision/claim_rewards_live/raw/`
+  - `docs/vision/claim_rewards_live/README.md`
+  - this handoff
+- did not edit `assets/templates/...`, `manifest.json`, `catalog.json`, task code, runtime code, or GUI code
+
+Devices visible through `adb` during this pass:
+
+- `127.0.0.1:5559`
+- `127.0.0.1:5563`
+- `emulator-5556`
+- `emulator-5560`
+
+New raw evidence kept from this pass:
+
+- `docs/vision/claim_rewards_live/raw/127.0.0.1-5559-current.png`
+- `docs/vision/claim_rewards_live/raw/127.0.0.1-5559-after-tap1.png`
+- `docs/vision/claim_rewards_live/raw/127.0.0.1-5559-blackcheck.png`
+- `docs/vision/claim_rewards_live/raw/127.0.0.1-5559-return-game.png`
+- `docs/vision/claim_rewards_live/raw/127.0.0.1-5559-after-tap2.png`
+- `docs/vision/claim_rewards_live/raw/127.0.0.1-5559-after-fuli.png`
+- `docs/vision/claim_rewards_live/raw/127.0.0.1-5559-after-daily-signin.png`
+- `docs/vision/claim_rewards_live/raw/127.0.0.1-5559-after-claim-tap.png`
+- `docs/vision/claim_rewards_live/raw/127.0.0.1-5563-after-welfare.png`
+- `docs/vision/claim_rewards_live/raw/127.0.0.1-5563-after-daily-signin-tab.png`
+- `docs/vision/claim_rewards_live/raw/127.0.0.1-5563-after-claim-tap.png`
+- `docs/vision/claim_rewards_live/raw/emulator-5556-current-check.png`
+- `docs/vision/claim_rewards_live/raw/emulator-5556-after-modal-tap.png`
+- `docs/vision/claim_rewards_live/raw/emulator-5556-after-back.png`
+- `docs/vision/claim_rewards_live/raw/emulator-5560-current-live.png`
+- `docs/vision/claim_rewards_live/raw/emulator-5560-after-daily-signin-attempt.png`
+- `docs/vision/claim_rewards_live/raw/emulator-5560-after-claim-tap.png`
+
+Device findings:
+
+- `127.0.0.1:5559`
+  - `127.0.0.1-5559-current.png`
+    - purpose: town-screen provenance before navigation
+    - classification: negative / provenance
+  - `127.0.0.1-5559-after-tap1.png`
+    - purpose: first mistap while trying to reach rewards
+    - classification: negative
+  - `127.0.0.1-5559-blackcheck.png`
+    - purpose: confirms the mistap opened Facebook/Chrome instead of rewards UI
+    - classification: negative
+  - `127.0.0.1-5559-return-game.png`
+    - purpose: provenance after backing out of the browser
+    - classification: negative / provenance
+  - `127.0.0.1-5559-after-tap2.png`
+    - purpose: launcher-menu state with the `福利` entry available
+    - classification: negative / navigation provenance
+  - `127.0.0.1-5559-after-fuli.png`
+    - purpose: reward hub/map before switching to `每日簽到`
+    - classification: negative for `reward_panel_claimable`
+  - `127.0.0.1-5559-after-daily-signin.png`
+    - purpose: daily-sign-in panel with an enabled green `簽到` button
+    - classification: positive for `reward_panel_claimable`
+  - `127.0.0.1-5559-after-claim-tap.png`
+    - purpose: immediate post-tap state on the same account
+    - classification: negative for `reward_confirm_modal`; the UI resolves directly to `已簽到`
+
+- `127.0.0.1:5563`
+  - `127.0.0.1-5563-after-welfare.png`
+    - purpose: launcher/menu provenance before landing on `每日簽到`
+    - classification: negative / navigation provenance
+  - `127.0.0.1-5563-after-daily-signin-tab.png`
+    - purpose: daily-sign-in panel with an enabled green `簽到` button
+    - classification: positive for `reward_panel_claimable`
+  - `127.0.0.1-5563-after-claim-tap.png`
+    - purpose: immediate post-tap state on the same account
+    - classification: negative for `reward_confirm_modal`; no confirm modal appears before the UI flips to `已簽到`
+
+- `emulator-5556`
+  - `emulator-5556-current-check.png`
+    - purpose: post-claim reward-result overlay with `獲得獎勵 / 點擊螢幕繼續`
+    - classification: positive for post-claim provenance, but negative for the current `reward_confirm_modal` contract
+  - `emulator-5556-after-modal-tap.png`
+    - purpose: repeat capture of the same post-claim reward-result overlay after another tap
+    - classification: positive for post-claim provenance, but negative for the current `reward_confirm_modal` contract
+  - `emulator-5556-after-back.png`
+    - purpose: reward-map state after dismissing the result overlay
+    - classification: negative / provenance for the current priority scenes
+
+- `emulator-5560`
+  - `emulator-5560-current-live.png`
+    - purpose: reward hub/map before switching to `每日簽到`
+    - classification: negative / navigation provenance
+  - `emulator-5560-after-daily-signin-attempt.png`
+    - purpose: daily-sign-in panel with an enabled green `簽到` button
+    - classification: positive for `reward_panel_claimable`
+  - `emulator-5560-after-claim-tap.png`
+    - purpose: immediate post-tap state on the same account
+    - classification: negative for `reward_confirm_modal`; the UI resolves directly to `已簽到`
+
+Outcome from this pass:
+
+- closed the raw-evidence gap for `reward_panel_claimable` with clean positive live captures on:
+  - `127.0.0.1:5559`
+  - `127.0.0.1:5563`
+  - `emulator-5560`
+- confirmed again that the current live accounts do not surface a like-for-like `reward_confirm_modal`
+  - `127.0.0.1:5559`, `127.0.0.1:5563`, and `emulator-5560` go straight from `簽到` to `已簽到`
+  - `emulator-5556` shows a reward-result overlay instead of the curated confirm-button modal
+- kept all changes inside raw evidence and documentation only
+
+Updated blockers after the four-device sweep:
+
+- `reward_panel_claimable`
+  - raw live evidence is now available on multiple devices
+  - the remaining work is only canonical promotion / catalog selection, not raw capture discovery
+- `reward_confirm_modal`
+  - still blocked for canonical live replacement
+  - no device in this pass produced the current confirm-button modal shape
+
+Recommended next step after the four-device sweep:
+
+- have Engine C and D choose one of the clean daily-sign-in captures as the live raw source for `reward_panel_claimable`:
+  - `127.0.0.1-5559-after-daily-signin.png`
+  - `127.0.0.1-5563-after-daily-signin-tab.png`
+  - `emulator-5560-after-daily-signin-attempt.png`
+- keep `emulator-5556-current-check.png` and `emulator-5556-after-modal-tap.png` as supporting post-claim overlay evidence only unless the confirm-state contract is broadened beyond the explicit confirm-button modal
+- continue capture attempts for `reward_confirm_modal` on another account/day-state that still presents a real confirmation dialog before the claim resolves

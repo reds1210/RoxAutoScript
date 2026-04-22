@@ -34,3 +34,95 @@ Remaining blockers:
 
 - approved live zh-TW claimable-panel capture
 - approved live zh-TW reward-confirmation-modal capture
+
+## 2026-04-22 Four-Device Raw Sweep
+
+This follow-up pass used all four `adb` devices visible from this worktree:
+
+- `127.0.0.1:5559`
+- `127.0.0.1:5563`
+- `emulator-5556`
+- `emulator-5560`
+
+Priority-scene outcome from this pass:
+
+- `reward_panel_claimable`
+  - clean positive raw evidence now exists on three devices:
+    - `raw/127.0.0.1-5559-after-daily-signin.png`
+    - `raw/127.0.0.1-5563-after-daily-signin-tab.png`
+    - `raw/emulator-5560-after-daily-signin-attempt.png`
+  - this raw-evidence gap is no longer blocked; canonical promotion still needs a later manifest/catalog decision
+- `reward_confirm_modal`
+  - still no like-for-like live positive raw for the current confirm-button modal contract
+  - `127.0.0.1:5559`, `127.0.0.1:5563`, and `emulator-5560` all went straight from a tappable `簽到` button to an `已簽到` state
+  - `emulator-5556` showed a post-claim `獲得獎勵 / 點擊螢幕繼續` overlay instead of the curated confirm-modal shape
+
+Reviewed raw evidence kept from this pass:
+
+### `127.0.0.1:5559`
+
+- `raw/127.0.0.1-5559-current.png`
+  - purpose: town-screen provenance before navigation
+  - classification: negative / provenance for both priority scenes
+- `raw/127.0.0.1-5559-after-tap1.png`
+  - purpose: first mistap after starting navigation
+  - classification: negative; transient off-path capture
+- `raw/127.0.0.1-5559-blackcheck.png`
+  - purpose: confirm that the mistap opened Facebook/Chrome rather than rewards UI
+  - classification: negative for both priority scenes
+- `raw/127.0.0.1-5559-return-game.png`
+  - purpose: provenance after backing out of the browser and returning to ROX
+  - classification: negative / provenance for both priority scenes
+- `raw/127.0.0.1-5559-after-tap2.png`
+  - purpose: launcher-menu state with the `福利` entry exposed
+  - classification: negative / navigation provenance
+- `raw/127.0.0.1-5559-after-fuli.png`
+  - purpose: reward hub/map after entering `福利`, before switching to `每日簽到`
+  - classification: negative for `reward_panel_claimable`
+- `raw/127.0.0.1-5559-after-daily-signin.png`
+  - purpose: daily-sign-in panel with an enabled green `簽到` button
+  - classification: positive for `reward_panel_claimable`, negative for `reward_confirm_modal`
+- `raw/127.0.0.1-5559-after-claim-tap.png`
+  - purpose: immediate post-tap state on the same account
+  - classification: negative for `reward_confirm_modal`; the UI flips directly to `已簽到`
+
+### `127.0.0.1:5563`
+
+- `raw/127.0.0.1-5563-after-welfare.png`
+  - purpose: on-device launcher/menu provenance before landing on the sign-in panel
+  - classification: negative / navigation provenance
+- `raw/127.0.0.1-5563-after-daily-signin-tab.png`
+  - purpose: daily-sign-in panel with an enabled green `簽到` button
+  - classification: positive for `reward_panel_claimable`, negative for `reward_confirm_modal`
+- `raw/127.0.0.1-5563-after-claim-tap.png`
+  - purpose: immediate post-tap state on the same account
+  - classification: negative for `reward_confirm_modal`; no confirm modal appears before the button resolves to `已簽到`
+
+### `emulator-5556`
+
+- `raw/emulator-5556-current-check.png`
+  - purpose: post-claim reward-result overlay capture
+  - classification: positive for post-claim provenance, but negative for the current `reward_confirm_modal` contract
+- `raw/emulator-5556-after-modal-tap.png`
+  - purpose: repeat capture of the same post-claim reward-result overlay after another tap
+  - classification: positive for post-claim provenance, but negative for the current `reward_confirm_modal` contract
+- `raw/emulator-5556-after-back.png`
+  - purpose: reward-map state after dismissing the result overlay
+  - classification: negative / provenance for both priority scenes in the current contract
+
+### `emulator-5560`
+
+- `raw/emulator-5560-current-live.png`
+  - purpose: reward hub/map before switching to `每日簽到`
+  - classification: negative / navigation provenance
+- `raw/emulator-5560-after-daily-signin-attempt.png`
+  - purpose: daily-sign-in panel with an enabled green `簽到` button
+  - classification: positive for `reward_panel_claimable`, negative for `reward_confirm_modal`
+- `raw/emulator-5560-after-claim-tap.png`
+  - purpose: immediate post-tap state on the same account
+  - classification: negative for `reward_confirm_modal`; the UI goes straight to `已簽到`
+
+Current blocker state after the four-device sweep:
+
+- raw `reward_panel_claimable` evidence is now covered by multiple live devices
+- a like-for-like live `reward_confirm_modal` capture is still missing
