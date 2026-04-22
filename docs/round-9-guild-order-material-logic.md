@@ -54,6 +54,33 @@ If a worker captures live guild-order evidence during this round:
 
 If visible material quantities or result states are not actually capturable from stable UI, preserve that as a gap instead of guessing.
 
+Validated local ADB serials on `2026-04-23`:
+
+- `127.0.0.1:16416`
+- `127.0.0.1:16448`
+- `127.0.0.1:16480`
+- `127.0.0.1:16512`
+
+Observed MuMu window titles on the same machine:
+
+- `舞孃-nxa`
+- `Android Device-1-3`
+- `鐵匠-zippoluo0202`
+- `補師-reds.wang`
+
+If a worker needs emulator access:
+
+- first try the currently connected `adb` targets
+- if the needed device is missing, inspect local MuMu windows and listening localhost ports
+- attempt `adb connect` to likely MuMu ports before declaring capture blocked
+- verify the chosen serial with a cheap command such as `adb -s <serial> get-state` before starting real work
+
+Device reservation rule:
+
+- do not let two active workers use the same ADB serial at the same time
+- dispatch should assign device work by ADB serial, not by window title alone, unless the mapping was revalidated in that handoff
+- if no free serial remains after local connect attempts, add an `Operator Questions` section to the PR or handoff and wait instead of racing another worker for the same device
+
 ## Worker Lineup
 
 ### Engine E

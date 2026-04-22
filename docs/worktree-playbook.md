@@ -157,6 +157,19 @@ When a worker captures evidence:
 - prefer fixed device roles instead of random screenshot collection when more than one device is involved
 - do not promote a raw capture to canonical status unless provenance is explicit and the target scene contract is satisfied
 
+If a worker needs emulator access and `adb devices` does not already show the expected target:
+
+- do not stop at the first empty `adb devices` result
+- inspect local MuMu processes and listening localhost ports first
+- attempt `adb connect` against the likely MuMu ADB ports before declaring capture blocked
+- record the connection attempts and final result in the handoff
+
+Device reservation rule:
+
+- one active worker must not share the same ADB serial with another active worker
+- dispatch should assign a primary ADB serial per worker whenever emulator work is required
+- if a worker cannot identify a free device after local connect attempts, stop and raise an explicit operator question instead of guessing
+
 ## 10. How To Start A Thread
 
 Recommended flow:
@@ -185,6 +198,7 @@ Every handoff must include:
 - public APIs added or changed
 - assumptions
 - blockers
+- operator questions when device access, screenshots, or other external input is required
 - verification performed
 - next recommended step
 
