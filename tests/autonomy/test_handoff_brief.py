@@ -21,14 +21,27 @@ class HandoffBriefTests(unittest.TestCase):
                     "branch": "codex/subscription-only",
                     "head_sha": "abcdef1234567890",
                     "changed_files": ["src/roxauto/cli.py", "README.md", "docs/codex-subscription-setup.md"],
+                    "policy_files_touched": ["README.md", "docs/codex-subscription-setup.md"],
+                    "shared_files_touched": ["README.md"],
+                    "workflow_files_touched": [".github/workflows/autonomy-loop.yml"],
                     "staged_files": ["src/roxauto/cli.py"],
                     "unstaged_files": ["README.md"],
                     "untracked_files": ["docs/codex-subscription-setup.md"],
+                    "recent_commits": [
+                        {"subject": "Improve PR handoff packet accuracy"},
+                        {"subject": "Document Codex dispatch workflow"},
+                    ],
                 }
             },
         )
 
         self.assertIn("Subscription Loop", markdown)
+        self.assertIn("checks summary", markdown)
+        self.assertIn("Change Summary", markdown)
+        self.assertIn("Improve PR handoff packet accuracy", markdown)
         self.assertIn("`doctor`: `passed`", markdown)
         self.assertIn("`README.md`", markdown)
+        self.assertIn("Shared Surfaces", markdown)
+        self.assertIn("Policy files touched", markdown)
+        self.assertIn("Workflow files touched", markdown)
         self.assertIn("@codex review", markdown)

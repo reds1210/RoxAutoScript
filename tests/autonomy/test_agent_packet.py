@@ -38,8 +38,12 @@ class AgentPacketTests(unittest.TestCase):
         self.assertTrue(packet["git"]["working_tree_dirty"])
         self.assertEqual(packet["git"]["staged_files"], ["src/roxauto/cli.py"])
         self.assertEqual(packet["git"]["untracked_files"], ["AGENTS.md"])
+        self.assertEqual(packet["git"]["policy_files_touched"], ["README.md", "AGENTS.md"])
+        self.assertEqual(packet["git"]["shared_files_touched"], ["README.md"])
+        self.assertEqual(packet["git"]["workflow_files_touched"], [])
         self.assertEqual(packet["git"]["recent_commits"][0]["subject"], "Add autonomy loop")
         self.assertIn("docs/autonomy-loop.md", packet["policy_files"])
+        self.assertIn("docs/codex-subscription-setup.md", packet["policy_files"])
 
     @patch.dict(
         os.environ,
@@ -76,6 +80,9 @@ class AgentPacketTests(unittest.TestCase):
             packet["git"]["changed_files"],
             ["src/roxauto/app/shell.py", "assets/ui/operator_console.qss"],
         )
+        self.assertEqual(packet["git"]["policy_files_touched"], [])
+        self.assertEqual(packet["git"]["shared_files_touched"], [])
+        self.assertEqual(packet["git"]["workflow_files_touched"], [])
         self.assertEqual(packet["git"]["untracked_files"], [])
         self.assertIn("diff --git", packet["git"]["diff_excerpt"])
 

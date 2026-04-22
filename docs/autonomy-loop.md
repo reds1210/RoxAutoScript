@@ -8,6 +8,11 @@ This repo now includes a minimal guarded autonomy harness for Codex subscription
 
 The goal is not blind auto-merge. The goal is to make coding, review, and strategy loopable without requiring a person to manually restate context between steps.
 
+On pull requests, the workflow now keeps the same handoff packet visible in two places:
+
+- an updatable PR comment for review threads
+- a managed PR body section so the next worker can continue from the PR itself
+
 ## Files
 
 - `AGENTS.md`
@@ -21,7 +26,7 @@ The goal is not blind auto-merge. The goal is to make coding, review, and strate
 - `scripts/run-autonomy-loop.ps1`
   Windows entry point for the local loop.
 - `.github/workflows/autonomy-loop.yml`
-  CI loop for pull requests and codex branches that avoids API-billed review calls.
+  CI loop for pull requests and codex branches that avoids API-billed review calls and refreshes the managed PR handoff section.
 - `docs/codex-subscription-setup.md`
   Setup checklist for ChatGPT sign-in, GitHub connection, and Codex review.
 

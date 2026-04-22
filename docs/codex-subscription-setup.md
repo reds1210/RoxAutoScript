@@ -75,6 +75,7 @@ Use it to keep every PR aligned with the subscription-only loop:
 - paste a short quality-gate summary
 - record ownership and risk
 - explicitly state whether Codex automatic review is enabled or whether you used `@codex review`
+- expect a managed `Latest Codex Handoff` section to be appended and refreshed by CI
 
 ## If You Hit Plan Limits
 

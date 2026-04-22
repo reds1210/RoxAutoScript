@@ -17,12 +17,19 @@ POLICY_FILES = [
     "docs/worktree-playbook.md",
     "docs/architecture-contracts.md",
     "docs/autonomy-loop.md",
+    "docs/codex-subscription-setup.md",
 ]
 
 GENERATED_ARTIFACT_PREFIXES = (
     "artifacts/",
     "runtime_logs/autonomy/",
 )
+
+SHARED_FILE_PATHS = {
+    "README.md",
+    "pyproject.toml",
+    "docs/architecture-contracts.md",
+}
 
 
 def _utc_now() -> datetime:
@@ -82,6 +89,40 @@ def _filter_generated_paths(paths: list[str]) -> list[str]:
             continue
         filtered.append(normalized)
     return filtered
+
+
+def _unique_paths(paths: list[str]) -> list[str]:
+    return list(dict.fromkeys(paths))
+
+
+def _is_round_brief(path: str) -> bool:
+    return path.startswith("docs/round-") and path.endswith(".md")
+
+
+def _collect_path_signals(
+    changed_files: list[str],
+    *,
+    policy_files: list[str],
+) -> tuple[list[str], list[str], list[str]]:
+    normalized_policy_files = {_normalize_repo_path(path) for path in policy_files}
+    policy_files_touched: list[str] = []
+    shared_files_touched: list[str] = []
+    workflow_files_touched: list[str] = []
+
+    for path in changed_files:
+        normalized = _normalize_repo_path(path)
+        if normalized in normalized_policy_files:
+            policy_files_touched.append(normalized)
+        if normalized in SHARED_FILE_PATHS or _is_round_brief(normalized):
+            shared_files_touched.append(normalized)
+        if normalized.startswith(".github/"):
+            workflow_files_touched.append(normalized)
+
+    return (
+        _unique_paths(policy_files_touched),
+        _unique_paths(shared_files_touched),
+        _unique_paths(workflow_files_touched),
+    )
 
 
 def _resolve_branch_name(repo_root: Path) -> str:
@@ -146,7 +187,11 @@ def build_agent_packet(
         [line for line in _run_git(repo_root, "ls-files", "--others", "--exclude-standard").splitlines() if line.strip()]
     )
     if not changed_files:
-        changed_files = list(dict.fromkeys(staged_files + unstaged_files + untracked_files))
+        changed_files = _unique_paths(staged_files + unstaged_files + untracked_files)
+    policy_files_touched, shared_files_touched, workflow_files_touched = _collect_path_signals(
+        changed_files,
+        policy_files=POLICY_FILES,
+    )
 
     return {
         "generated_at": _utc_now(),
@@ -166,6 +211,9 @@ def build_agent_packet(
             "unstaged_files": unstaged_files,
             "untracked_files": untracked_files,
             "changed_files": changed_files,
+            "policy_files_touched": policy_files_touched,
+            "shared_files_touched": shared_files_touched,
+            "workflow_files_touched": workflow_files_touched,
             "diff_excerpt": diff_excerpt,
             "diff_truncated": diff_truncated,
             "recent_commits": _parse_recent_commits(

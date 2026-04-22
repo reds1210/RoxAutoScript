@@ -92,6 +92,39 @@ jobs:
               });
             }
 
+      - name: Sync PR body handoff section
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require("fs");
+            const startMarker = "<!-- roxauto-pr-handoff:start -->";
+            const endMarker = "<!-- roxauto-pr-handoff:end -->";
+            const handoffBody = fs.readFileSync("artifacts/handoff-brief.md", "utf8").trim();
+            const managedSection = `${startMarker}\n\n## Latest Codex Handoff\n\n${handoffBody}\n\n${endMarker}`;
+            const currentBody = context.payload.pull_request.body || "";
+
+            let nextBody = managedSection;
+            const startIndex = currentBody.indexOf(startMarker);
+            const endIndex = currentBody.indexOf(endMarker);
+
+            if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
+              const before = currentBody.slice(0, startIndex).trimEnd();
+              const after = currentBody.slice(endIndex + endMarker.length).trimStart();
+              nextBody = [before, managedSection, after].filter(Boolean).join("\n\n");
+            } else if (currentBody.trim()) {
+              nextBody = `${currentBody.trim()}\n\n${managedSection}`;
+            }
+
+            if (nextBody !== currentBody) {
+              await github.rest.pulls.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.issue.number,
+                body: nextBody,
+              });
+            }
+
       - name: Fail when quality gate fails
         if: ${{ steps.quality_gate.outputs.exit_code != '0' }}
         shell: pwsh
