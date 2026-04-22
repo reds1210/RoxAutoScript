@@ -69,11 +69,24 @@ Use two stages instead of jumping straight to full autonomy:
 1. Guarded autonomy
    Codex writes code, the repo gate validates the change, and Codex GitHub review or the next session consumes the handoff packet. Human still approves merge or deploy.
 2. Expanded autonomy
-   Allow auto-merge only for low-risk scopes where:
+   Allow auto-merge for eligible Codex scopes where:
    - owned paths are respected
    - quality gate passes
-   - Codex review returns no blocking findings
    - rollback path is already defined
+
+## Automatic Merge
+
+The repository now merges eligible Codex pull requests automatically after the autonomy gate passes.
+
+Rules:
+
+- branch scope: same-repository `codex/*` pull requests targeting `main`
+- runtime gate: the `autonomy` job must pass before the merge job runs
+- draft safety: draft pull requests do not auto-merge
+- merge method: the workflow picks the first merge method allowed by the repository in this order: squash, rebase, merge
+- review policy: if review must remain mandatory, keep that requirement in GitHub branch protection; the workflow does not parse Codex issue-comment text
+
+This removes the manual label and repository-variable gate while still keeping the deterministic quality gate in front of merge.
 
 ## Why This Matches The Official Direction
 
