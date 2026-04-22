@@ -53,7 +53,7 @@ class TemplateValidationTests(unittest.TestCase):
         }
 
         self.assertTrue(report.is_valid)
-        self.assertEqual(report.anchor_count, 4)
+        self.assertEqual(report.anchor_count, 12)
         self.assertNotIn("missing_task_support_anchor_role", issue_codes)
         self.assertNotIn("duplicate_task_support_anchor_role", issue_codes)
         self.assertNotIn("missing_anchor_task_support_role", issue_codes)
@@ -94,6 +94,58 @@ class TemplateValidationTests(unittest.TestCase):
         self.assertNotIn("claim_rewards_post_tap_contract_catalog_mismatch", issue_codes)
         self.assertNotIn("unknown_claim_rewards_post_tap_contract_capture", issue_codes)
         self.assertNotIn("claim_rewards_post_tap_contract_capture_anchor_mismatch", issue_codes)
+
+    def test_validate_template_repository_accepts_guild_order_scene_contract(self) -> None:
+        repository = AnchorRepository.load(self.templates_root / "daily_ui")
+
+        report = validate_template_repository(repository)
+        issue_codes = {
+            issue.code
+            for issue in report.issues
+            if issue.metadata.get("task_id") == "daily_ui.guild_order_submit"
+        }
+
+        self.assertTrue(report.is_valid)
+        self.assertNotIn("missing_task_support_anchor_role", issue_codes)
+        self.assertNotIn("duplicate_task_support_anchor_role", issue_codes)
+        self.assertNotIn("missing_anchor_task_support_role", issue_codes)
+        self.assertNotIn("missing_guild_order_scene_contract", issue_codes)
+        self.assertNotIn("guild_order_scene_contract_ready_placeholder_overlap", issue_codes)
+        self.assertNotIn("guild_order_scene_contract_ready_blocked_overlap", issue_codes)
+        self.assertNotIn("guild_order_scene_contract_placeholder_blocked_overlap", issue_codes)
+        self.assertNotIn("unknown_guild_order_scene_contract_anchor", issue_codes)
+        self.assertNotIn("missing_guild_order_scene_contract_required_scenes", issue_codes)
+        self.assertNotIn("missing_guild_order_scene_contract_evidence_state", issue_codes)
+        self.assertNotIn("missing_guild_order_scene_contract_decision_surface_state", issue_codes)
+        self.assertNotIn("missing_guild_order_scene_contract_summary", issue_codes)
+        self.assertNotIn("guild_order_placeholder_anchor_missing_from_scene_contract", issue_codes)
+        self.assertNotIn("guild_order_ready_anchor_marked_placeholder", issue_codes)
+        self.assertNotIn("guild_order_placeholder_anchor_not_placeholder", issue_codes)
+        self.assertNotIn("guild_order_ready_anchor_missing_from_scene_contract", issue_codes)
+
+    def test_validate_template_repository_rejects_guild_order_scene_contract_drift(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            repository_root = Path(temp_dir) / "daily_ui"
+            shutil.copytree(self.templates_root / "daily_ui", repository_root)
+            manifest_path = repository_root / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            contract = manifest["metadata"]["task_support"]["daily_ui.guild_order_submit"]["scene_contract"]
+            contract["ready_anchor_ids"] = ["daily_ui.guild_order_hub_entry"]
+            contract["placeholder_anchor_ids"] = [
+                anchor_id
+                for anchor_id in contract["placeholder_anchor_ids"]
+                if anchor_id != "daily_ui.guild_order_hub_entry"
+            ]
+            contract["summary"] = ""
+            manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+
+            report = validate_template_repository(AnchorRepository.load(repository_root))
+
+        issue_codes = {issue.code for issue in report.issues}
+        self.assertFalse(report.is_valid)
+        self.assertIn("guild_order_placeholder_anchor_missing_from_scene_contract", issue_codes)
+        self.assertIn("guild_order_ready_anchor_marked_placeholder", issue_codes)
+        self.assertIn("missing_guild_order_scene_contract_summary", issue_codes)
 
     def test_validate_template_repository_rejects_claim_rewards_catalog_hash_drift(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -505,6 +557,35 @@ class TemplateValidationTests(unittest.TestCase):
                 "post_tap_claimed_result_live_capture_127_0_0_1_5559_after_claim_tap",
                 "post_tap_claimed_result_live_capture_127_0_0_1_5563_after_claim_tap",
                 "post_tap_claimed_result_live_capture_emulator_5560_after_claim_tap",
+            ],
+        )
+        self.assertEqual(
+            report.metadata["guild_order_scene_contract"]["evidence_state"],
+            "placeholder_only",
+        )
+        self.assertEqual(
+            report.metadata["guild_order_scene_contract"]["decision_surface_state"],
+            "blocked_by_missing_material_evidence",
+        )
+        self.assertEqual(
+            report.metadata["guild_order_scene_contract"]["blocked_scene_ids"],
+            [
+                "guild_order_requirement_material",
+                "guild_order_required_quantity",
+                "guild_order_available_material_count",
+            ],
+        )
+        self.assertEqual(
+            report.metadata["guild_order_scene_contract"]["placeholder_anchor_ids"],
+            [
+                "daily_ui.guild_order_hub_entry",
+                "daily_ui.guild_order_list_panel",
+                "daily_ui.guild_order_detail_panel",
+                "daily_ui.guild_order_submit_button",
+                "daily_ui.guild_order_refresh_button",
+                "daily_ui.guild_order_unavailable_state",
+                "daily_ui.guild_order_insufficient_material_feedback",
+                "daily_ui.guild_order_submit_result_state",
             ],
         )
 

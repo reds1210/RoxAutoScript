@@ -35,6 +35,9 @@ Constraints:
 - this round only advances the first-cut guild-order flow
 - do not expand to crafting, buying, gathering, pathing, or a second new task
 - if you depend on another track, read main and handoffs instead of assuming you know another thread's chat history
+- if your task needs emulator access, do not stop at an empty `adb devices` result; inspect local MuMu windows and listening localhost ports, attempt `adb connect` to likely MuMu ports, and record the result
+- do not use the same ADB serial as another active worker at the same time
+- if you need emulator access and no free serial remains after local connect attempts, add an `Operator Questions` section to the handoff or PR and wait instead of guessing
 ```
 
 ## Engine E Prompt
@@ -54,6 +57,7 @@ Round-9 goals:
   - insufficient-material or already-complete states if they are visible
 - keep raw evidence, file naming, and provenance clear enough for later promotion
 - do not change core, app, or task logic
+- claim your assigned ADB serials explicitly in the handoff before using them
 ```
 
 ## Engine D Prompt
@@ -81,6 +85,7 @@ Round-9 goals:
 - turn guild-order evidence into a truthful anchor and scene contract
 - promote captures only when the contract remains honest
 - keep provenance machine-readable and blocked surfaces explicit
+- if you need new live evidence, ask dispatch for a free ADB serial instead of sharing one already in use
 ```
 
 ## Engine A Prompt

@@ -2,11 +2,13 @@
 
 ## Status
 
-This document is a planning brief for the next bounded task wave.
+This document started as a planning brief for the next bounded task wave.
 
-It is not the active round yet.
+Round 9 is now active in:
 
-Current repo ownership rules still keep the active round locked to `daily_ui.claim_rewards`. Do not launch new guild-order worker threads from this document until dispatch explicitly rolls the wave forward.
+- `docs/round-9-guild-order-material-logic.md`
+
+Use this file as the deeper planning and dispatch reference for that active round.
 
 ## Goal
 

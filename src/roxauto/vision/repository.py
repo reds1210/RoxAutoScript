@@ -181,6 +181,11 @@ class AnchorRepository:
         contract = support.get("post_tap_contract", {})
         return dict(contract) if isinstance(contract, dict) else {}
 
+    def get_guild_order_scene_contract(self) -> dict[str, Any]:
+        support = self.get_task_support("daily_ui.guild_order_submit")
+        contract = support.get("scene_contract", {})
+        return dict(contract) if isinstance(contract, dict) else {}
+
     def get_claim_rewards_anchor_golden(
         self,
         anchor_id: str,
