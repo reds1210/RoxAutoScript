@@ -123,6 +123,7 @@ The readiness report is intentionally stricter than raw filesystem validation:
 - `resolve_repository_path()` keeps non-template repository assets such as golden screenshots anchored at the repository root.
 - `get_anchor_curation()` exposes the parsed `AnchorCurationProfile` for one anchor.
 - `get_primary_curation_reference()` and `resolve_curation_reference_path()` expose the first GUI-facing baseline image for one curated anchor.
+- `resolve_claim_rewards_catalog_path()`, `get_claim_rewards_golden_catalog()`, `get_claim_rewards_anchor_golden()`, and `list_claim_rewards_supporting_captures()` expose the claim-rewards golden catalog and its supporting live evidence without forcing callers to parse raw JSON.
 - `get_task_support()` returns manifest-level `metadata.task_support` without forcing callers to read the raw manifest dict.
 
 ## GUI Panels
@@ -152,20 +153,20 @@ The vision package now exposes service-layer builders so the GUI can stop invent
 - `resolve_calibration_override()` centralizes per-anchor threshold/region/crop resolution so GUI and tooling do not each re-implement override logic.
 - `build_image_inspection_state()` turns match/crop/calibration context into a shared `ImageInspectionState` that preview, capture, and failure panes can all consume directly.
 - `FailureInspectorState.claim_rewards` now exposes a claim-specific checklist for `daily_ui.claim_rewards`, including per-check match summaries and one `ImageInspectionState` per check so GUI can focus directly on panel/button/confirm failures.
-- `MatchInspectorState`, `ClaimRewardsCheckState`, `ClaimRewardsInspectorState`, and `FailureInspectorState` now flatten GUI-facing render fields such as `selected_image_path`, `selected_overlay`, `selected_overlay_summary`, `selected_region`, `selected_region_summary`, `selected_threshold`, `failure_case`, `failure_explanation`, selected curation summaries, `selected_anchor_label`, `selected_template_path`, `selected_reference_id`, `selected_reference_kind`, `selected_reference_image_path`, and the full `reference_ids` / `live_reference_ids` surfaces.
+- `MatchInspectorState`, `ClaimRewardsCheckState`, `ClaimRewardsInspectorState`, and `FailureInspectorState` now flatten GUI-facing render fields such as `selected_image_path`, `selected_overlay`, `selected_overlay_summary`, `selected_region`, `selected_region_summary`, `selected_threshold`, `failure_case`, `failure_explanation`, selected curation summaries, `selected_anchor_label`, `golden_catalog_path`, `selected_golden_id`, `selected_golden_image_path`, `selected_template_path`, `selected_reference_id`, `selected_reference_kind`, `selected_reference_image_path`, the full `reference_ids` / `live_reference_ids` surfaces, and claim-rewards `supporting_capture_*` surfaces for negative/context evidence.
 
 These builders stay inside the vision layer and do not depend on `app`, `core` runtime orchestration details, or emulator transport implementations.
 
 Current sample coverage:
 
 - `daily_ui.reward_panel` now ships as a curated PNG crop plus one live zh-TW ROX baseline image for the opened reward panel scene
-- `daily_ui.claim_reward` now ships as a curated PNG crop plus one curated screenshot-style baseline image for the tappable claim button scene
+- `daily_ui.claim_reward` now ships as a curated PNG crop plus one curated screenshot-style baseline image for the tappable claim button scene, with both live context and live negative-case supporting captures tracked in the golden catalog
 - `daily_ui.reward_confirm_state` now ships as a curated PNG crop plus one curated screenshot-style baseline image for the confirmation modal scene
 - `docs/vision/claim_rewards_live/raw/` now keeps the supporting live capture trail for this task only
 - `assets/templates/daily_ui/goldens/claim_rewards/live/` now also carries supporting live negative-case captures for a non-claimable daily-sign-in panel, the wrong reward surface, and a non-reward confirmation modal
 - `daily_ui.guild_check_in_button` placeholder template now exists under `assets/templates/daily_ui/`
 - `odin.start_button` placeholder template exists
-- Engine D's task asset inventory still marks the `daily_ui.claim_reward` dependency as `placeholder`; vision readiness now reports the curated template as `ready` and flags the inventory drift as an explicit mismatch instead of degrading the actual template status
+- the current asset inventory in this worktree aligns with the shipped claim-rewards anchors, so readiness no longer needs a special-case mismatch note for `daily_ui.claim_reward`
 
 ## Claim Rewards Support
 
@@ -227,12 +228,13 @@ Current claim-rewards golden coverage:
 - `daily_ui_claim_rewards__confirm_state__baseline__v1.png`: curated stand-in for the confirmation modal used by `daily_ui.reward_confirm_state`
 - `live/daily_ui_claim_rewards__reward_panel__live_capture__emulator_5560__daily_signin.png`: descriptive copy of the canonical live panel-open screenshot for manual review and downstream tooling
 - `live/daily_ui_claim_rewards__entry_context__live_capture__emulator_5556__after_fuli_tap.png`: live pre-panel navigation evidence after the Fu Li tap, used to debug failures before the panel-open anchor appears
+- the claim-button golden now explicitly references both `claim_button_context_reward_panel_open_v1` and `non_claimable_daily_signin_live_capture_emulator_5556_after_daily_tab_attempt_2` so GUI can render context-vs-negative evidence without inferring it from prose
 - `live/daily_ui_claim_rewards__non_claimable_daily_signin__live_capture__emulator_5556__after_daily_tab_attempt_2.png`: live negative-case evidence that the opened daily sign-in panel may still have no enabled claim affordance
 - `live/daily_ui_claim_rewards__wrong_reward_surface__live_capture__emulator_5560__kingdom_pass_rewards.png`: live negative-case evidence for landing on Kingdom Pass rewards instead of the daily sign-in panel
 - `live/daily_ui_claim_rewards__non_reward_confirm_modal__live_capture__emulator_5560__exit_game_prompt.png`: live negative-case evidence for a generic confirmation dialog that must not be mistaken for the reward confirmation modal
 
 `daily_ui.reward_panel` is now backed by a live capture. `daily_ui.claim_reward` and `daily_ui.reward_confirm_state` still rely on curated stand-ins because the available accounts did not expose approved live claimable or confirmation-modal states during this round. The manifest and golden catalog now also ship live negative-case evidence so downstream consumers can distinguish canonical success scenes from visually similar but incorrect live states without promoting those failures into positive baselines.
-Supporting raw screenshots used during this curation pass are tracked under `docs/vision/claim_rewards_live/raw/` so future replacements can verify which files were true live captures versus upstream context only. Some round-7 raw captures are traceability-only and should not be treated as canonical claim-rewards baselines unless they are explicitly promoted into `catalog.json`.
+Supporting raw screenshots used during this curation pass are tracked under `docs/vision/claim_rewards_live/raw/` so future replacements can verify which files were true live captures versus upstream context only. Some round-7 raw captures are traceability-only and should not be treated as canonical claim-rewards baselines unless they are explicitly promoted into `catalog.json`. A newer raw candidate for a live claimable panel exists outside this worktree (`emulator-5556-after-fuli-tap-2026-04-22.png`), but it is not promoted here until the canonical template/golden asset import lands in this repository state.
 
 ## GUI Consumption
 
@@ -252,11 +254,21 @@ When the failure metadata includes a nested `claim_rewards` payload, Engine B sh
 - `FailureInspectorState.claim_rewards.selected_reference_id`
 - `FailureInspectorState.claim_rewards.selected_reference_kind`
 - `FailureInspectorState.claim_rewards.selected_reference_image_path`
+- `FailureInspectorState.claim_rewards.golden_catalog_path`
+- `FailureInspectorState.claim_rewards.selected_golden_id`
+- `FailureInspectorState.claim_rewards.selected_golden_image_path`
 - `FailureInspectorState.claim_rewards.reference_ids`
 - `FailureInspectorState.claim_rewards.reference_image_paths`
 - `FailureInspectorState.claim_rewards.live_reference_count`
 - `FailureInspectorState.claim_rewards.live_reference_ids`
 - `FailureInspectorState.claim_rewards.live_reference_image_paths`
+- `FailureInspectorState.claim_rewards.supporting_capture_count`
+- `FailureInspectorState.claim_rewards.supporting_capture_ids`
+- `FailureInspectorState.claim_rewards.supporting_capture_image_paths`
+- `FailureInspectorState.claim_rewards.supporting_capture_evidence_roles`
+- `FailureInspectorState.claim_rewards.supporting_capture_failure_cases`
+- `FailureInspectorState.claim_rewards.live_supporting_capture_count`
+- `FailureInspectorState.claim_rewards.live_supporting_capture_ids`
 - `FailureInspectorState.claim_rewards.selected_provenance_kind`
 - `FailureInspectorState.claim_rewards.selected_provenance_summary`
 - `FailureInspectorState.claim_rewards.selected_curation_summary`
@@ -273,11 +285,21 @@ When the failure metadata includes a nested `claim_rewards` payload, Engine B sh
 - `FailureInspectorState.selected_reference_id`
 - `FailureInspectorState.selected_reference_kind`
 - `FailureInspectorState.selected_reference_image_path`
+- `FailureInspectorState.golden_catalog_path`
+- `FailureInspectorState.selected_golden_id`
+- `FailureInspectorState.selected_golden_image_path`
 - `FailureInspectorState.reference_ids`
 - `FailureInspectorState.reference_image_paths`
 - `FailureInspectorState.live_reference_count`
 - `FailureInspectorState.live_reference_ids`
 - `FailureInspectorState.live_reference_image_paths`
+- `FailureInspectorState.supporting_capture_count`
+- `FailureInspectorState.supporting_capture_ids`
+- `FailureInspectorState.supporting_capture_image_paths`
+- `FailureInspectorState.supporting_capture_evidence_roles`
+- `FailureInspectorState.supporting_capture_failure_cases`
+- `FailureInspectorState.live_supporting_capture_count`
+- `FailureInspectorState.live_supporting_capture_ids`
 - `FailureInspectorState.provenance_kind`
 - `FailureInspectorState.provenance_summary`
 - `FailureInspectorState.failure_case`

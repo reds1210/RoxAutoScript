@@ -240,6 +240,152 @@ class AnchorCurationProfile:
 
 
 @dataclass(slots=True)
+class ClaimRewardsGoldenCatalogEntry:
+    golden_id: str
+    file_name: str
+    reference_id: str = ""
+    anchor_id: str = ""
+    inspection_role: str = ""
+    stage: str = ""
+    scene_id: str = ""
+    variant_id: str = ""
+    source_image_role: str = ""
+    resolution: tuple[int, int] | None = None
+    sha256: str = ""
+    source_kind: str = ""
+    live_capture: bool = False
+    failure_case: str = ""
+    proves: str = ""
+    supporting_capture_ids: list[str] = field(default_factory=list)
+    limitations: list[str] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return to_primitive(asdict(self))
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        resolution = data.get("resolution")
+        normalized_resolution = None
+        if isinstance(resolution, (list, tuple)) and len(resolution) == 2:
+            normalized_resolution = (int(resolution[0]), int(resolution[1]))
+        return cls(
+            golden_id=str(data.get("golden_id", "")),
+            file_name=str(data.get("file_name", "")),
+            reference_id=str(data.get("reference_id", "")),
+            anchor_id=str(data.get("anchor_id", "")),
+            inspection_role=str(data.get("inspection_role", "")),
+            stage=str(data.get("stage", "")),
+            scene_id=str(data.get("scene_id", "")),
+            variant_id=str(data.get("variant_id", "")),
+            source_image_role=str(data.get("source_image_role", "")),
+            resolution=normalized_resolution,
+            sha256=str(data.get("sha256", "")),
+            source_kind=str(data.get("source_kind", "")),
+            live_capture=bool(data.get("live_capture", False)),
+            failure_case=str(data.get("failure_case", "")),
+            proves=str(data.get("proves", "")),
+            supporting_capture_ids=[
+                str(capture_id)
+                for capture_id in data.get("supporting_capture_ids", [])
+                if str(capture_id)
+            ],
+            limitations=[str(entry) for entry in data.get("limitations", []) if str(entry)],
+            metadata=dict(data.get("metadata", {})),
+        )
+
+
+@dataclass(slots=True)
+class ClaimRewardsSupportingCapture:
+    capture_id: str
+    file_name: str
+    anchor_id: str = ""
+    inspection_role: str = ""
+    stage: str = ""
+    scene_id: str = ""
+    resolution: tuple[int, int] | None = None
+    sha256: str = ""
+    source_kind: str = ""
+    live_capture: bool = False
+    evidence_role: str = ""
+    proves: str = ""
+    failure_case: str = ""
+    notes: str = ""
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return to_primitive(asdict(self))
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        resolution = data.get("resolution")
+        normalized_resolution = None
+        if isinstance(resolution, (list, tuple)) and len(resolution) == 2:
+            normalized_resolution = (int(resolution[0]), int(resolution[1]))
+        return cls(
+            capture_id=str(data.get("capture_id", "")),
+            file_name=str(data.get("file_name", "")),
+            anchor_id=str(data.get("anchor_id", "")),
+            inspection_role=str(data.get("inspection_role", "")),
+            stage=str(data.get("stage", "")),
+            scene_id=str(data.get("scene_id", "")),
+            resolution=normalized_resolution,
+            sha256=str(data.get("sha256", "")),
+            source_kind=str(data.get("source_kind", "")),
+            live_capture=bool(data.get("live_capture", False)),
+            evidence_role=str(data.get("evidence_role", "")),
+            proves=str(data.get("proves", "")),
+            failure_case=str(data.get("failure_case", "")),
+            notes=str(data.get("notes", "")),
+            metadata=dict(data.get("metadata", {})),
+        )
+
+
+@dataclass(slots=True)
+class ClaimRewardsGoldenCatalog:
+    task_id: str
+    workflow: str = ""
+    version: str = ""
+    metadata: dict[str, Any] = field(default_factory=dict)
+    goldens: list[ClaimRewardsGoldenCatalogEntry] = field(default_factory=list)
+    supporting_captures: list[ClaimRewardsSupportingCapture] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return to_primitive(asdict(self))
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        return cls(
+            task_id=str(data.get("task_id", "")),
+            workflow=str(data.get("workflow", "")),
+            version=str(data.get("version", "")),
+            metadata=dict(data.get("metadata", {})),
+            goldens=[
+                ClaimRewardsGoldenCatalogEntry.from_dict(entry)
+                for entry in data.get("goldens", [])
+                if isinstance(entry, dict)
+            ],
+            supporting_captures=[
+                ClaimRewardsSupportingCapture.from_dict(entry)
+                for entry in data.get("supporting_captures", [])
+                if isinstance(entry, dict)
+            ],
+        )
+
+    def get_golden(self, golden_id: str) -> ClaimRewardsGoldenCatalogEntry | None:
+        for golden in self.goldens:
+            if golden.golden_id == golden_id:
+                return golden
+        return None
+
+    def get_supporting_capture(self, capture_id: str) -> ClaimRewardsSupportingCapture | None:
+        for capture in self.supporting_captures:
+            if capture.capture_id == capture_id:
+                return capture
+        return None
+
+
+@dataclass(slots=True)
 class CropRegion:
     x: int
     y: int
