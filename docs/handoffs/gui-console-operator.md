@@ -99,6 +99,10 @@
   - selected anchor provenance such as `live_capture` vs `curated_stand_in`
   - selected curation summary
   - selected failure explanation
+- The claim-rewards main pane now reads more like a single-task operator console instead of a status dump:
+  - four focus cards show `卡點步驟` / `失敗 Anchor` / `比對區域` / `信心門檻`
+  - those fields prefer runtime/task/vision-owned claim-rewards signals and no longer follow unrelated `common.*` viewer anchor focus
+  - the supporting text box was trimmed down to queue/runtime/failure/provenance context instead of repeating the same anchor and step copy
 - The GUI no longer only says that readiness is blocked while still leaving `加入佇列` / `立即執行` available:
   - claim-rewards action enablement now respects current runtime blockers
   - queued state disables duplicate queueing while still allowing `立即執行`
@@ -111,6 +115,7 @@
 - Added regression coverage for:
   - queued vs runnable button state after a claim-rewards queue entry already exists
   - succeeded state keeping claim-rewards actions available for a rerun
+  - focus-card projection for step / anchor / region / threshold across queued, succeeded, failed, and blocked states
   - blocked readiness disabling claim-rewards actions in both `claim_rewards_pane(...)` and `get_live_state(...)`
   - blocked readiness causing `queue_claim_rewards(...)` to fail early with the blocker summary
 

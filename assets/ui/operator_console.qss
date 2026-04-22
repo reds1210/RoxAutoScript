@@ -50,6 +50,12 @@ QLabel#sectionTitle {
     color: #23312d;
 }
 
+QLabel#fieldValue {
+    font-size: 15px;
+    font-weight: 700;
+    color: #23312d;
+}
+
 QLabel#statusBanner {
     background: #e7d5bc;
     border: 1px solid #cfbaa0;
