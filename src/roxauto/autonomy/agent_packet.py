@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import json
+import os
 from pathlib import Path
 import subprocess
 
@@ -17,6 +18,11 @@ POLICY_FILES = [
     "docs/architecture-contracts.md",
     "docs/autonomy-loop.md",
 ]
+
+GENERATED_ARTIFACT_PREFIXES = (
+    "artifacts/",
+    "runtime_logs/autonomy/",
+)
 
 
 def _utc_now() -> datetime:
@@ -62,6 +68,52 @@ def _parse_recent_commits(raw: str) -> list[dict[str, str]]:
     return commits
 
 
+def _normalize_repo_path(path: str) -> str:
+    return path.replace("\\", "/").strip()
+
+
+def _filter_generated_paths(paths: list[str]) -> list[str]:
+    filtered: list[str] = []
+    for path in paths:
+        normalized = _normalize_repo_path(path)
+        if not normalized:
+            continue
+        if any(normalized.startswith(prefix) for prefix in GENERATED_ARTIFACT_PREFIXES):
+            continue
+        filtered.append(normalized)
+    return filtered
+
+
+def _resolve_branch_name(repo_root: Path) -> str:
+    branch = _run_git(repo_root, "rev-parse", "--abbrev-ref", "HEAD")
+    if branch and branch != "HEAD":
+        return branch
+
+    for environment_name in ("GITHUB_HEAD_REF", "GITHUB_REF_NAME"):
+        value = os.environ.get(environment_name, "").strip()
+        if value:
+            return value
+
+    return branch or "unknown"
+
+
+def _build_changed_file_snapshot(repo_root: Path) -> tuple[list[str], str]:
+    event_name = os.environ.get("GITHUB_EVENT_NAME", "").strip()
+    branch_name = _run_git(repo_root, "rev-parse", "--abbrev-ref", "HEAD")
+    if event_name != "pull_request" or branch_name != "HEAD":
+        return [], ""
+
+    changed_files = _filter_generated_paths(
+        [
+            line
+            for line in _run_git(repo_root, "diff", "--name-only", "HEAD^1", "HEAD^2").splitlines()
+            if line.strip()
+        ]
+    )
+    diff_excerpt = _run_git(repo_root, "diff", "--no-color", "--unified=1", "HEAD^1", "HEAD^2")
+    return changed_files, diff_excerpt
+
+
 def build_agent_packet(
     repo_root: Path,
     *,
@@ -72,15 +124,29 @@ def build_agent_packet(
     repo_root = Path(repo_root).resolve()
     quality_gate = _load_json(quality_gate_path)
 
-    diff_excerpt = _run_git(repo_root, "diff", "--no-color", "--unified=1", "HEAD")
+    changed_files, diff_excerpt = _build_changed_file_snapshot(repo_root)
+    if not diff_excerpt:
+        diff_excerpt = _run_git(repo_root, "diff", "--no-color", "--unified=1", "HEAD")
     diff_truncated = len(diff_excerpt) > max_diff_chars
     if diff_truncated:
         diff_excerpt = diff_excerpt[:max_diff_chars].rstrip() + "\n...[truncated]"
 
-    status_lines = [line for line in _run_git(repo_root, "status", "--short").splitlines() if line.strip()]
-    staged_files = [line for line in _run_git(repo_root, "diff", "--cached", "--name-only").splitlines() if line.strip()]
-    unstaged_files = [line for line in _run_git(repo_root, "diff", "--name-only").splitlines() if line.strip()]
-    untracked_files = [line for line in _run_git(repo_root, "ls-files", "--others", "--exclude-standard").splitlines() if line.strip()]
+    status_lines = [
+        line
+        for line in _run_git(repo_root, "status", "--short").splitlines()
+        if line.strip() and not any(_normalize_repo_path(line[3:]).startswith(prefix) for prefix in GENERATED_ARTIFACT_PREFIXES)
+    ]
+    staged_files = _filter_generated_paths(
+        [line for line in _run_git(repo_root, "diff", "--cached", "--name-only").splitlines() if line.strip()]
+    )
+    unstaged_files = _filter_generated_paths(
+        [line for line in _run_git(repo_root, "diff", "--name-only").splitlines() if line.strip()]
+    )
+    untracked_files = _filter_generated_paths(
+        [line for line in _run_git(repo_root, "ls-files", "--others", "--exclude-standard").splitlines() if line.strip()]
+    )
+    if not changed_files:
+        changed_files = list(dict.fromkeys(staged_files + unstaged_files + untracked_files))
 
     return {
         "generated_at": _utc_now(),
@@ -92,13 +158,14 @@ def build_agent_packet(
             "python -m roxauto handoff-brief --quality-gate runtime_logs/autonomy/quality-gate.json --agent-packet runtime_logs/autonomy/agent-packet.json --output runtime_logs/autonomy/handoff-brief.md",
         ],
         "git": {
-            "branch": _run_git(repo_root, "rev-parse", "--abbrev-ref", "HEAD"),
+            "branch": _resolve_branch_name(repo_root),
             "head_sha": _run_git(repo_root, "rev-parse", "HEAD"),
             "working_tree_dirty": bool(status_lines),
             "status_lines": status_lines,
             "staged_files": staged_files,
             "unstaged_files": unstaged_files,
             "untracked_files": untracked_files,
+            "changed_files": changed_files,
             "diff_excerpt": diff_excerpt,
             "diff_truncated": diff_truncated,
             "recent_commits": _parse_recent_commits(
