@@ -209,10 +209,13 @@ class ClaimRewardsTaskBuilderTests(unittest.TestCase):
             [
                 "daily_ui.reward_panel",
                 "daily_ui.claim_reward",
-                "daily_ui.reward_confirm_state",
                 "common.confirm_button",
                 "common.close_button",
             ],
+        )
+        self.assertEqual(
+            runtime_input.supporting_anchor_ids,
+            ["daily_ui.reward_confirm_state"],
         )
         self.assertEqual(
             [step.step_id for step in runtime_input.step_specs],
@@ -243,12 +246,37 @@ class ClaimRewardsTaskBuilderTests(unittest.TestCase):
             "claim_rewards.v2",
         )
         self.assertEqual(
+            runtime_input.display_metadata.metadata["post_claim_resolution"]["decision"],
+            "direct_result_overlay_is_valid",
+        )
+        self.assertEqual(
             runtime_input.builder_input.metadata["runtime_seam"]["runtime_seam_builder"],
             "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_seam",
         )
         self.assertEqual(
+            runtime_input.builder_input.metadata["supporting_anchor_ids"],
+            ["daily_ui.reward_confirm_state"],
+        )
+        self.assertEqual(
             runtime_input.metadata["runtime_seam"]["task_spec_builder"],
             "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_task_spec",
+        )
+        self.assertEqual(
+            runtime_input.metadata["post_claim_resolution"]["decision"],
+            "direct_result_overlay_is_valid",
+        )
+        self.assertEqual(
+            runtime_input.metadata["claim_rewards_alternate_post_tap_capture_ids"],
+            [
+                "post_tap_reward_overlay_live_capture_emulator_5556_after_day7_claim_tap_2026_04_22",
+                "post_tap_claimed_result_live_capture_127_0_0_1_5559_after_claim_tap",
+                "post_tap_claimed_result_live_capture_127_0_0_1_5563_after_claim_tap",
+                "post_tap_claimed_result_live_capture_emulator_5560_after_claim_tap",
+            ],
+        )
+        self.assertEqual(
+            runtime_input.metadata["claim_rewards_capture_inventory"]["missing_device_serials"],
+            [],
         )
         self.assertEqual(
             runtime_input.metadata["result_signal_keys"],
@@ -288,6 +316,18 @@ class ClaimRewardsTaskBuilderTests(unittest.TestCase):
         self.assertEqual(spec.metadata["implementation_readiness_state"], "ready")
         self.assertEqual(spec.metadata["builder_input"]["task_id"], "daily_ui.claim_rewards")
         self.assertEqual(spec.metadata["runtime_input"]["fixture_id"], "fixture.tw.daily_ui.default")
+        self.assertEqual(
+            spec.metadata["supporting_anchor_ids"],
+            ["daily_ui.reward_confirm_state"],
+        )
+        self.assertEqual(
+            spec.metadata["runtime_input"]["supporting_anchor_ids"],
+            ["daily_ui.reward_confirm_state"],
+        )
+        self.assertEqual(
+            spec.metadata["runtime_input"]["metadata"]["post_claim_resolution"]["decision"],
+            "direct_result_overlay_is_valid",
+        )
         self.assertEqual(
             spec.metadata["runtime_seam"]["metadata"]["runtime_seam_builder"],
             "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_seam",
@@ -336,6 +376,10 @@ class ClaimRewardsTaskBuilderTests(unittest.TestCase):
         self.assertEqual(
             runtime_seam.metadata["runtime_seam_builder"],
             "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_seam",
+        )
+        self.assertEqual(
+            runtime_seam.metadata["supporting_anchor_ids"],
+            ["daily_ui.reward_confirm_state"],
         )
         self.assertEqual(
             runtime_seam.result_signal_keys,

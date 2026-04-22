@@ -1,43 +1,22 @@
 {
   "inventory_id": "pre_gate_3_task_foundations",
-  "version": "0.1.0",
+  "metadata": {
+    "purpose": "task_foundation_inventory"
+  },
   "records": [
     {
-      "task_id": "daily_ui.claim_rewards",
-      "pack_id": "daily_ui",
-      "implementation_state": "fixtured",
-      "manifest_path": "packs/daily_ui/daily_claim_rewards.task.json",
+      "asset_requirement_ids": [],
+      "calibration_requirement_ids": [],
       "fixture_profile_paths": [
         "fixture_profiles/default_tw_daily.fixture.json"
       ],
-      "golden_root": "daily_ui/daily_ui_claim_rewards/{screen_slug}",
-      "required_anchors": [
-        "daily_ui.reward_panel",
-        "daily_ui.claim_reward",
-        "daily_ui.reward_confirm_state",
-        "common.confirm_button",
-        "common.close_button"
-      ],
-      "asset_requirement_ids": [],
-      "runtime_requirement_ids": [
-        "runtime.daily_ui.dispatch_bridge"
-      ],
-      "calibration_requirement_ids": [],
       "foundation_requirement_ids": [],
+      "golden_root": "daily_ui/daily_ui_claim_rewards/{screen_slug}",
+      "implementation_state": "fixtured",
+      "manifest_path": "packs/daily_ui/daily_claim_rewards.task.json",
       "metadata": {
-        "source": "curated_inventory",
-        "phase": "pre_gate_3",
-        "asset_state": "mixed_live_capture_and_curated_stand_in",
         "asset_provenance": {
-          "template_anchor_provenance": {
-            "curated_stand_in": [
-              "daily_ui.reward_confirm_state"
-            ],
-            "live_capture": [
-              "daily_ui.reward_panel",
-              "daily_ui.claim_reward"
-            ]
-          },
+          "asset_state": "mixed_live_capture_and_curated_stand_in",
           "golden_case_provenance": {
             "curated_stand_in": [
               "confirm_state"
@@ -53,15 +32,73 @@
           "replacement_pending_golden_screen_slugs": [
             "confirm_state"
           ],
-          "asset_state": "mixed_live_capture_and_curated_stand_in"
+          "template_anchor_provenance": {
+            "curated_stand_in": [
+              "daily_ui.reward_confirm_state"
+            ],
+            "live_capture": [
+              "daily_ui.reward_panel",
+              "daily_ui.claim_reward"
+            ]
+          }
         },
+        "asset_state": "mixed_live_capture_and_curated_stand_in",
+        "claim_rewards_alternate_post_tap_capture_ids": [
+          "post_tap_reward_overlay_live_capture_emulator_5556_after_day7_claim_tap_2026_04_22",
+          "post_tap_claimed_result_live_capture_127_0_0_1_5559_after_claim_tap",
+          "post_tap_claimed_result_live_capture_127_0_0_1_5563_after_claim_tap",
+          "post_tap_claimed_result_live_capture_emulator_5560_after_claim_tap"
+        ],
+        "claim_rewards_capture_inventory": {
+          "capture_round": "round-8",
+          "confirmed_device_serials": [
+            "emulator-5556",
+            "emulator-5560",
+            "127.0.0.1:5559",
+            "127.0.0.1:5563"
+          ],
+          "landed_device_serials": [
+            "emulator-5556",
+            "emulator-5560",
+            "127.0.0.1:5559",
+            "127.0.0.1:5563"
+          ],
+          "missing_device_serials": []
+        },
+        "claim_rewards_live_capture_coverage": {
+          "blocked_scene_ids": [
+            "reward_confirm_modal"
+          ],
+          "live_anchor_ids": [
+            "daily_ui.claim_reward",
+            "daily_ui.reward_panel"
+          ],
+          "live_context_anchor_ids": [],
+          "stand_in_anchor_ids": [
+            "daily_ui.reward_confirm_state"
+          ]
+        },
+        "phase": "pre_gate_3",
+        "post_claim_resolution": {
+          "accepted_post_tap_panel_states": [
+            "claimed",
+            "confirm_required"
+          ],
+          "decision": "direct_result_overlay_is_valid",
+          "notes": "The task now treats a direct post-tap claimed/result-overlay path as a valid success transition while keeping the explicit confirm modal as an optional supporting path when it appears.",
+          "supporting_anchor_ids": [
+            "daily_ui.reward_confirm_state"
+          ],
+          "supporting_golden_screen_slugs": [
+            "confirm_state"
+          ],
+          "terminal_success_panel_states": [
+            "claimed"
+          ]
+        },
+        "preset_id": "daily_ui.claim_rewards.mvp",
+        "product_display_name": "\u6bcf\u65e5\u9818\u734e",
         "runtime_seam": {
-          "runtime_input_builder": "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_input",
-          "runtime_seam_builder": "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_seam",
-          "task_spec_builder": "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_task_spec",
-          "task_preset_builder": "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_task_preset",
-          "task_display_builder": "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_task_display_model",
-          "signal_contract_version": "claim_rewards.v2",
           "result_signal_keys": [
             "failure_reason_id",
             "outcome_code",
@@ -71,63 +108,83 @@
             "step_outcome",
             "telemetry",
             "task_action"
-          ]
+          ],
+          "runtime_input_builder": "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_input",
+          "runtime_seam_builder": "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_seam",
+          "signal_contract_version": "claim_rewards.v2",
+          "task_display_builder": "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_task_display_model",
+          "task_preset_builder": "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_task_preset",
+          "task_spec_builder": "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_task_spec"
         },
         "signal_contract_version": "claim_rewards.v2",
-        "preset_id": "daily_ui.claim_rewards.mvp",
-        "product_display_name": "每日領獎"
-      }
+        "source": "curated_inventory",
+        "supporting_anchor_ids": [
+          "daily_ui.reward_confirm_state"
+        ],
+        "supporting_golden_screen_slugs": [
+          "confirm_state"
+        ]
+      },
+      "pack_id": "daily_ui",
+      "required_anchors": [
+        "daily_ui.reward_panel",
+        "daily_ui.claim_reward",
+        "common.confirm_button",
+        "common.close_button"
+      ],
+      "runtime_requirement_ids": [
+        "runtime.daily_ui.dispatch_bridge"
+      ],
+      "task_id": "daily_ui.claim_rewards"
     },
     {
-      "task_id": "daily_ui.guild_check_in",
-      "pack_id": "daily_ui",
-      "implementation_state": "spec_only",
-      "manifest_path": "packs/daily_ui/guild_check_in.task.json",
+      "asset_requirement_ids": [
+        "asset.daily_ui.guild_check_in_button"
+      ],
+      "calibration_requirement_ids": [],
       "fixture_profile_paths": [
         "fixture_profiles/default_tw_guild.fixture.json"
       ],
+      "foundation_requirement_ids": [],
       "golden_root": "daily_ui/daily_ui_guild_check_in/{screen_slug}",
+      "implementation_state": "spec_only",
+      "manifest_path": "packs/daily_ui/guild_check_in.task.json",
+      "metadata": {
+        "phase": "pre_gate_3",
+        "source": "curated_inventory"
+      },
+      "pack_id": "daily_ui",
       "required_anchors": [
         "common.close_button",
         "daily_ui.guild_check_in_button"
       ],
-      "asset_requirement_ids": [
-        "asset.daily_ui.guild_check_in_button"
-      ],
       "runtime_requirement_ids": [],
-      "calibration_requirement_ids": [],
-      "foundation_requirement_ids": [],
-      "metadata": {
-        "source": "curated_inventory",
-        "phase": "pre_gate_3"
-      }
+      "task_id": "daily_ui.guild_check_in"
     },
     {
-      "task_id": "odin.preset_entry",
-      "pack_id": "odin",
-      "implementation_state": "spec_only",
-      "manifest_path": "packs/odin/odin_preset_entry.task.json",
+      "asset_requirement_ids": [],
+      "calibration_requirement_ids": [
+        "calibration.odin.idle_state_profile"
+      ],
       "fixture_profile_paths": [
         "fixture_profiles/default_tw_odin.fixture.json"
       ],
+      "foundation_requirement_ids": [],
       "golden_root": "odin/odin_preset_entry/{screen_slug}",
+      "implementation_state": "spec_only",
+      "manifest_path": "packs/odin/odin_preset_entry.task.json",
+      "metadata": {
+        "phase": "pre_gate_3",
+        "source": "curated_inventory"
+      },
+      "pack_id": "odin",
       "required_anchors": [
         "common.close_button",
         "odin.start_button"
       ],
-      "asset_requirement_ids": [],
       "runtime_requirement_ids": [],
-      "calibration_requirement_ids": [
-        "calibration.odin.idle_state_profile"
-      ],
-      "foundation_requirement_ids": [],
-      "metadata": {
-        "source": "curated_inventory",
-        "phase": "pre_gate_3"
-      }
+      "task_id": "odin.preset_entry"
     }
   ],
-  "metadata": {
-    "purpose": "task_foundation_inventory"
-  }
+  "version": "0.1.0"
 }

@@ -25,6 +25,7 @@
         "live_capture": true,
         "placeholder": false,
         "provenance_kind": "live_capture",
+        "requirement_level": "required",
         "source": "template_manifest",
         "source_kind": "live_zh_tw_rox_capture",
         "stage": "open_reward_panel",
@@ -45,6 +46,7 @@
         "live_capture": true,
         "placeholder": false,
         "provenance_kind": "live_capture",
+        "requirement_level": "required",
         "source": "template_manifest",
         "source_kind": "live_zh_tw_rox_capture",
         "stage": "verify_claim_affordance",
@@ -56,33 +58,13 @@
       "task_id": "daily_ui.claim_rewards"
     },
     {
-      "asset_id": "daily_ui.claim_rewards:template:daily_ui.reward_confirm_state",
-      "asset_kind": "template",
-      "metadata": {
-        "anchor_id": "daily_ui.reward_confirm_state",
-        "curation_status": "curated",
-        "inspection_role": "confirm_state",
-        "live_capture": false,
-        "placeholder": false,
-        "provenance_kind": "curated_stand_in",
-        "replacement_target": "approved_live_zh_tw_capture",
-        "source": "template_manifest",
-        "source_kind": "repo_curated_screenshot_style",
-        "stage": "verify_claim_affordance",
-        "template_path": "anchors/daily_reward_confirm_state.png"
-      },
-      "pack_id": "daily_ui",
-      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.reward_confirm_state",
-      "status": "present",
-      "task_id": "daily_ui.claim_rewards"
-    },
-    {
       "asset_id": "daily_ui.claim_rewards:template:common.confirm_button",
       "asset_kind": "template",
       "metadata": {
         "anchor_id": "common.confirm_button",
         "curation_status": "",
         "placeholder": false,
+        "requirement_level": "required",
         "source": "template_manifest",
         "template_path": "anchors/common_confirm_button.svg"
       },
@@ -98,11 +80,34 @@
         "anchor_id": "common.close_button",
         "curation_status": "",
         "placeholder": false,
+        "requirement_level": "required",
         "source": "template_manifest",
         "template_path": "anchors/common_close_button.svg"
       },
       "pack_id": "daily_ui",
       "source_path": "assets/templates/common/manifest.json#common.close_button",
+      "status": "present",
+      "task_id": "daily_ui.claim_rewards"
+    },
+    {
+      "asset_id": "daily_ui.claim_rewards:template:daily_ui.reward_confirm_state",
+      "asset_kind": "template",
+      "metadata": {
+        "anchor_id": "daily_ui.reward_confirm_state",
+        "curation_status": "curated",
+        "inspection_role": "confirm_state",
+        "live_capture": false,
+        "placeholder": false,
+        "provenance_kind": "curated_stand_in",
+        "replacement_target": "approved_live_zh_tw_capture",
+        "requirement_level": "supporting",
+        "source": "template_manifest",
+        "source_kind": "repo_curated_screenshot_style",
+        "stage": "verify_claim_affordance",
+        "template_path": "anchors/daily_reward_confirm_state.png"
+      },
+      "pack_id": "daily_ui",
+      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.reward_confirm_state",
       "status": "present",
       "task_id": "daily_ui.claim_rewards"
     },
@@ -115,6 +120,7 @@
         "inspection_role": "reward_panel",
         "live_capture": true,
         "reference_id": "reward_panel_baseline_v1",
+        "requirement_level": "required",
         "scene_id": "reward_panel_open",
         "source": "golden_asset_sources",
         "source_kind": "live_zh_tw_rox_capture",
@@ -141,6 +147,7 @@
         "inspection_role": "claim_reward_button",
         "live_capture": true,
         "reference_id": "claim_button_baseline_v1",
+        "requirement_level": "required",
         "scene_id": "reward_panel_claimable",
         "source": "golden_asset_sources",
         "source_kind": "live_zh_tw_rox_capture",
@@ -165,6 +172,7 @@
         "inspection_role": "confirm_state",
         "live_capture": false,
         "reference_id": "confirm_state_baseline_v1",
+        "requirement_level": "supporting",
         "scene_id": "reward_confirm_modal",
         "source": "golden_asset_sources",
         "source_kind": "repo_curated_screenshot_style",
@@ -199,6 +207,7 @@
         "anchor_id": "common.close_button",
         "curation_status": "",
         "placeholder": false,
+        "requirement_level": "required",
         "source": "template_manifest",
         "template_path": "anchors/common_close_button.svg"
       },
@@ -214,6 +223,7 @@
         "anchor_id": "daily_ui.guild_check_in_button",
         "curation_status": "",
         "placeholder": true,
+        "requirement_level": "required",
         "source": "template_manifest",
         "template_path": "anchors/daily_guild_check_in_button.svg"
       },
@@ -226,6 +236,7 @@
       "asset_id": "daily_ui.guild_check_in:golden:guild_hub",
       "asset_kind": "golden_screenshot",
       "metadata": {
+        "requirement_level": "required",
         "source": "golden_convention",
         "variant": "baseline",
         "variants": [
@@ -258,6 +269,7 @@
         "anchor_id": "common.close_button",
         "curation_status": "",
         "placeholder": false,
+        "requirement_level": "required",
         "source": "template_manifest",
         "template_path": "anchors/common_close_button.svg"
       },
@@ -273,6 +285,7 @@
         "anchor_id": "odin.start_button",
         "curation_status": "",
         "placeholder": true,
+        "requirement_level": "required",
         "source": "template_manifest",
         "template_path": "anchors/odin_start_button.svg"
       },
@@ -285,6 +298,7 @@
       "asset_id": "odin.preset_entry:golden:odin_setup_panel",
       "asset_kind": "golden_screenshot",
       "metadata": {
+        "requirement_level": "required",
         "source": "golden_convention",
         "variant": "baseline",
         "variants": [
@@ -303,6 +317,7 @@
       "asset_id": "odin.preset_entry:golden:odin_idle_state",
       "asset_kind": "golden_screenshot",
       "metadata": {
+        "requirement_level": "required",
         "source": "golden_convention",
         "variant": "baseline",
         "variants": [
