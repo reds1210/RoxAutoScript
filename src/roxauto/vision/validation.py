@@ -595,6 +595,10 @@ def build_vision_workspace_readiness_report(
             metadata={
                 "asset_inventory_exists": inventory_path.exists(),
                 "asset_inventory_is_file": inventory_path.is_file(),
+                "claim_rewards_live_capture_coverage": _claim_rewards_live_capture_coverage(repositories_by_id.get("daily_ui")),
+                "claim_rewards_capture_inventory": _claim_rewards_capture_inventory(repositories_by_id.get("daily_ui")),
+                "claim_rewards_post_tap_contract": _claim_rewards_post_tap_contract(repositories_by_id.get("daily_ui")),
+                "guild_order_scene_contract": _guild_order_scene_contract(repositories_by_id.get("daily_ui")),
             },
         )
 
@@ -734,6 +738,7 @@ def build_vision_workspace_readiness_report(
             "claim_rewards_live_capture_coverage": _claim_rewards_live_capture_coverage(repositories_by_id.get("daily_ui")),
             "claim_rewards_capture_inventory": _claim_rewards_capture_inventory(repositories_by_id.get("daily_ui")),
             "claim_rewards_post_tap_contract": _claim_rewards_post_tap_contract(repositories_by_id.get("daily_ui")),
+            "guild_order_scene_contract": _guild_order_scene_contract(repositories_by_id.get("daily_ui")),
         },
     )
 
@@ -1733,6 +1738,8 @@ def _validate_task_support_contract(
         if normalized_task_id == "daily_ui.claim_rewards":
             issues.extend(_validate_claim_rewards_live_capture_coverage(repository, support))
             issues.extend(_validate_claim_rewards_post_tap_contract(repository, support))
+        if normalized_task_id == "daily_ui.guild_order_submit":
+            issues.extend(_validate_guild_order_scene_contract(repository, support))
     return issues
 
 
@@ -1963,6 +1970,52 @@ def _normalize_claim_rewards_post_tap_contract(contract: dict[str, Any] | None) 
             for serial in contract.get("observed_live_device_serials", [])
             if str(serial).strip()
         ],
+        "summary": str(contract.get("summary", "")).strip(),
+    }
+
+
+def _guild_order_scene_contract(repository: AnchorRepository | None) -> dict[str, Any]:
+    if repository is None:
+        return {}
+    return _normalize_guild_order_scene_contract(repository.get_guild_order_scene_contract())
+
+
+def _normalize_guild_order_scene_contract(contract: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(contract, dict):
+        return {}
+    return {
+        "ready_anchor_ids": [
+            str(anchor_id).strip()
+            for anchor_id in contract.get("ready_anchor_ids", [])
+            if str(anchor_id).strip()
+        ],
+        "placeholder_anchor_ids": [
+            str(anchor_id).strip()
+            for anchor_id in contract.get("placeholder_anchor_ids", [])
+            if str(anchor_id).strip()
+        ],
+        "blocked_anchor_ids": [
+            str(anchor_id).strip()
+            for anchor_id in contract.get("blocked_anchor_ids", [])
+            if str(anchor_id).strip()
+        ],
+        "required_scene_ids": [
+            str(scene_id).strip()
+            for scene_id in contract.get("required_scene_ids", [])
+            if str(scene_id).strip()
+        ],
+        "blocked_scene_ids": [
+            str(scene_id).strip()
+            for scene_id in contract.get("blocked_scene_ids", [])
+            if str(scene_id).strip()
+        ],
+        "ambiguous_scene_ids": [
+            str(scene_id).strip()
+            for scene_id in contract.get("ambiguous_scene_ids", [])
+            if str(scene_id).strip()
+        ],
+        "evidence_state": str(contract.get("evidence_state", "")).strip(),
+        "decision_surface_state": str(contract.get("decision_surface_state", "")).strip(),
         "summary": str(contract.get("summary", "")).strip(),
     }
 
@@ -2376,6 +2429,174 @@ def _validate_claim_rewards_post_tap_contract(
                         "anchor_id": capture.anchor_id,
                         "expected_anchor_id": anchor_id,
                     },
+                )
+            )
+
+    return issues
+
+
+def _validate_guild_order_scene_contract(
+    repository: AnchorRepository,
+    support: dict[str, Any],
+) -> list[TemplateValidationIssue]:
+    raw_contract = support.get("scene_contract")
+    if not isinstance(raw_contract, dict):
+        return [
+            TemplateValidationIssue(
+                code="missing_guild_order_scene_contract",
+                severity=TemplateValidationSeverity.ERROR,
+                message=(
+                    "Task support for 'daily_ui.guild_order_submit' must define "
+                    "metadata.task_support[task_id].scene_contract."
+                ),
+                path=str(repository.manifest_path),
+                metadata={"task_id": "daily_ui.guild_order_submit"},
+            )
+        ]
+
+    contract = _normalize_guild_order_scene_contract(raw_contract)
+    ready_anchor_ids = set(contract.get("ready_anchor_ids", []))
+    placeholder_anchor_ids = set(contract.get("placeholder_anchor_ids", []))
+    blocked_anchor_ids = set(contract.get("blocked_anchor_ids", []))
+    issues: list[TemplateValidationIssue] = []
+
+    for code, left, right, message in [
+        (
+            "guild_order_scene_contract_ready_placeholder_overlap",
+            ready_anchor_ids,
+            placeholder_anchor_ids,
+            "Guild-order scene_contract cannot list the same anchor in both ready_anchor_ids and placeholder_anchor_ids.",
+        ),
+        (
+            "guild_order_scene_contract_ready_blocked_overlap",
+            ready_anchor_ids,
+            blocked_anchor_ids,
+            "Guild-order scene_contract cannot list the same anchor in both ready_anchor_ids and blocked_anchor_ids.",
+        ),
+        (
+            "guild_order_scene_contract_placeholder_blocked_overlap",
+            placeholder_anchor_ids,
+            blocked_anchor_ids,
+            "Guild-order scene_contract cannot list the same anchor in both placeholder_anchor_ids and blocked_anchor_ids.",
+        ),
+    ]:
+        overlap = sorted(left & right)
+        if overlap:
+            issues.append(
+                TemplateValidationIssue(
+                    code=code,
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=message,
+                    path=str(repository.manifest_path),
+                    metadata={"task_id": "daily_ui.guild_order_submit", "anchor_ids": overlap},
+                )
+            )
+
+    task_anchor_ids = {
+        anchor.anchor_id
+        for anchor in repository.list_anchors()
+        if "daily_ui.guild_order_submit" in _anchor_task_ids(dict(anchor.metadata))
+    }
+    contract_anchor_ids = ready_anchor_ids | placeholder_anchor_ids | blocked_anchor_ids
+    unknown_anchor_ids = sorted(contract_anchor_ids - task_anchor_ids)
+    if unknown_anchor_ids:
+        issues.append(
+            TemplateValidationIssue(
+                code="unknown_guild_order_scene_contract_anchor",
+                severity=TemplateValidationSeverity.ERROR,
+                message=(
+                    "Guild-order scene_contract must only reference anchors assigned to "
+                    "daily_ui.guild_order_submit."
+                ),
+                path=str(repository.manifest_path),
+                metadata={
+                    "task_id": "daily_ui.guild_order_submit",
+                    "anchor_ids": unknown_anchor_ids,
+                },
+            )
+        )
+
+    for field_name, code in [
+        ("required_scene_ids", "missing_guild_order_scene_contract_required_scenes"),
+        ("evidence_state", "missing_guild_order_scene_contract_evidence_state"),
+        ("decision_surface_state", "missing_guild_order_scene_contract_decision_surface_state"),
+        ("summary", "missing_guild_order_scene_contract_summary"),
+    ]:
+        value = contract.get(field_name)
+        is_missing = not value
+        if isinstance(value, list):
+            is_missing = len(value) == 0
+        if is_missing:
+            issues.append(
+                TemplateValidationIssue(
+                    code=code,
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=(
+                        f"Guild-order scene_contract must define '{field_name}' so the "
+                        "placeholder/blocked state stays machine-readable."
+                    ),
+                    path=str(repository.manifest_path),
+                    metadata={"task_id": "daily_ui.guild_order_submit"},
+                )
+            )
+
+    for anchor_id in sorted(task_anchor_ids):
+        anchor = repository.get_anchor(anchor_id)
+        is_placeholder = bool(anchor.metadata.get("placeholder", False))
+        if is_placeholder and anchor_id not in placeholder_anchor_ids:
+            issues.append(
+                TemplateValidationIssue(
+                    code="guild_order_placeholder_anchor_missing_from_scene_contract",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=(
+                        f"Anchor '{anchor_id}' is still placeholder scaffolding and must appear "
+                        "in scene_contract.placeholder_anchor_ids."
+                    ),
+                    anchor_id=anchor_id,
+                    path=str(repository.manifest_path),
+                    metadata={"task_id": "daily_ui.guild_order_submit"},
+                )
+            )
+        if anchor_id in ready_anchor_ids and is_placeholder:
+            issues.append(
+                TemplateValidationIssue(
+                    code="guild_order_ready_anchor_marked_placeholder",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=(
+                        f"Anchor '{anchor_id}' cannot appear in scene_contract.ready_anchor_ids "
+                        "while metadata.placeholder is still true."
+                    ),
+                    anchor_id=anchor_id,
+                    path=str(repository.manifest_path),
+                    metadata={"task_id": "daily_ui.guild_order_submit"},
+                )
+            )
+        if anchor_id in placeholder_anchor_ids and not is_placeholder:
+            issues.append(
+                TemplateValidationIssue(
+                    code="guild_order_placeholder_anchor_not_placeholder",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=(
+                        f"Anchor '{anchor_id}' appears in scene_contract.placeholder_anchor_ids "
+                        "but metadata.placeholder is false."
+                    ),
+                    anchor_id=anchor_id,
+                    path=str(repository.manifest_path),
+                    metadata={"task_id": "daily_ui.guild_order_submit"},
+                )
+            )
+        if not is_placeholder and anchor_id not in ready_anchor_ids and anchor_id not in blocked_anchor_ids:
+            issues.append(
+                TemplateValidationIssue(
+                    code="guild_order_ready_anchor_missing_from_scene_contract",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=(
+                        f"Anchor '{anchor_id}' is no longer placeholder scaffolding and must appear "
+                        "in scene_contract.ready_anchor_ids or blocked_anchor_ids."
+                    ),
+                    anchor_id=anchor_id,
+                    path=str(repository.manifest_path),
+                    metadata={"task_id": "daily_ui.guild_order_submit"},
                 )
             )
 
