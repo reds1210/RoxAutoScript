@@ -39,6 +39,19 @@ These artifacts give Codex and reviewers a stable handoff packet without using t
 4. Let repository-level Codex automatic review run, or comment `@codex review`.
 5. Apply feedback and rerun the loop until the gate is green and the PR review is clear.
 
+## Dispatch Workflow
+
+If you want to use Codex more like a team of parallel workers, use the dispatch model in:
+
+- `docs/dispatch-workflow.md`
+
+That workflow keeps:
+
+- one persistent main thread for user requests and task dispatch
+- multiple worker threads on separate branches/worktrees
+- PRs as the durable handoff surface
+- PR watch / merge reporting separate from coding work
+
 ## Automatic Merge
 
 Eligible same-repository `codex/*` pull requests targeting `main` now merge automatically after the autonomy quality gate passes.
