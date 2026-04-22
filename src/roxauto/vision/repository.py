@@ -137,6 +137,22 @@ class AnchorRepository:
             paths.append(self.resolve_repository_path(reference.image_path))
         return paths
 
+    def _anchor_task_ids(self, anchor_id: str) -> set[str]:
+        if not self.has_anchor(anchor_id):
+            return set()
+        metadata = dict(self.get_anchor(anchor_id).metadata)
+        task_ids: set[str] = set()
+        raw_task_id = metadata.get("task_id")
+        if raw_task_id:
+            task_ids.add(str(raw_task_id))
+        raw_task_ids = metadata.get("task_ids")
+        if isinstance(raw_task_ids, list):
+            task_ids.update(str(task_id) for task_id in raw_task_ids if str(task_id))
+        return task_ids
+
+    def _is_claim_rewards_anchor(self, anchor_id: str) -> bool:
+        return "daily_ui.claim_rewards" in self._anchor_task_ids(anchor_id)
+
     def resolve_claim_rewards_catalog_path(self) -> Path | None:
         catalog_path = str(
             self.get_task_support("daily_ui.claim_rewards").get("golden_catalog_path", "")
@@ -175,7 +191,7 @@ class AnchorRepository:
         anchor_id: str,
     ) -> ClaimRewardsGoldenCatalogEntry | None:
         catalog = self.get_claim_rewards_golden_catalog()
-        if catalog is None:
+        if catalog is None or not self._is_claim_rewards_anchor(anchor_id):
             return None
         curation = self.get_anchor_curation(anchor_id)
         golden_id = ""

@@ -116,6 +116,11 @@ class AnchorRepositoryTests(unittest.TestCase):
                 "daily_ui_claim_rewards__non_claimable_daily_signin__live_capture__emulator_5556__after_daily_tab_attempt_2.png",
             ],
         )
+        self.assertIsNone(repository.get_claim_rewards_anchor_golden("daily_ui.guild_check_in_button"))
+        self.assertIsNone(repository.get_claim_rewards_anchor_golden("daily_ui.guild_order_list_panel"))
+        self.assertIsNone(repository.resolve_claim_rewards_golden_image_path("daily_ui.guild_check_in_button"))
+        self.assertEqual(repository.list_claim_rewards_supporting_captures("daily_ui.guild_check_in_button"), [])
+        self.assertEqual(repository.resolve_claim_rewards_supporting_capture_paths("daily_ui.guild_order_list_panel"), [])
 
     def test_daily_ui_repository_exposes_guild_order_scene_contract(self) -> None:
         repository = AnchorRepository.load(self.templates_root / "daily_ui")

@@ -1,0 +1,297 @@
+{
+  "fixture_profile_paths": [
+    "fixture_profiles/default_tw_guild.fixture.json"
+  ],
+  "golden_cases": [
+    {
+      "notes": "Guild-order list state before selecting or verifying one order.",
+      "screen_slug": "order_list",
+      "variants": [
+        "baseline",
+        "failure"
+      ]
+    },
+    {
+      "notes": "Guild-order detail state where submit or refresh may be considered.",
+      "screen_slug": "order_detail",
+      "variants": [
+        "baseline",
+        "submit_ready",
+        "refresh_ready",
+        "failure"
+      ]
+    },
+    {
+      "notes": "Supporting insufficient-material state used to verify skip or refresh decisions honestly.",
+      "screen_slug": "insufficient_material_state",
+      "variants": [
+        "baseline",
+        "failure"
+      ]
+    },
+    {
+      "notes": "Supporting already-completed state used to verify skip decisions honestly.",
+      "screen_slug": "completed_state",
+      "variants": [
+        "baseline",
+        "failure"
+      ]
+    },
+    {
+      "notes": "Supporting post-submit result state used to verify successful submission honestly.",
+      "screen_slug": "submit_result",
+      "variants": [
+        "baseline",
+        "failure"
+      ]
+    }
+  ],
+  "implementation_state": "spec_only",
+  "steps": [
+    {
+      "step_id": "open_guild_order_list",
+      "action": "deterministic_navigation",
+      "success_condition": "Guild-order list is visible and stable enough for fixed-UI inspection.",
+      "failure_condition": "Guild-order list cannot be reached through deterministic navigation.",
+      "notes": "Round 9 keeps navigation bounded to the fixed guild-order UI only."
+    },
+    {
+      "step_id": "inspect_visible_order",
+      "action": "vision_verify",
+      "success_condition": "The current order slot, visible requirement, and visible available-material state can be classified honestly.",
+      "failure_condition": "The current order requirement or visible quantity state remains ambiguous.",
+      "notes": "No freeform OCR-only inference is allowed in this first cut."
+    },
+    {
+      "step_id": "decide_material_action",
+      "action": "task_policy",
+      "success_condition": "The task chooses submit, skip, or refresh from machine-readable material policy and visible evidence only.",
+      "failure_condition": "No truthful bounded decision can be made from visible state and configured policy.",
+      "notes": "This step must not introduce crafting, buying, gathering, or pathing as hidden dependencies."
+    },
+    {
+      "step_id": "apply_material_decision",
+      "action": "tap_anchor",
+      "success_condition": "The selected bounded decision path is applied without expanding beyond submit, skip, or refresh.",
+      "failure_condition": "Submit or refresh affordances are missing when the bounded decision requires them.",
+      "notes": "Skip remains an explicit no-action path that still records the reason honestly."
+    },
+    {
+      "step_id": "verify_material_outcome",
+      "action": "vision_verify",
+      "success_condition": "The task verifies the chosen submit, skip, or refresh outcome with truthful post-decision evidence.",
+      "failure_condition": "The bounded decision outcome cannot be verified from stable guild-order UI evidence.",
+      "notes": "Round 9 requires honest verification instead of assuming the action succeeded."
+    }
+  ],
+  "metadata": {
+    "phase": "round-9",
+    "task_pack_owner": "engine_d",
+    "asset_requirement_ids": [
+      "asset.daily_ui.guild_order_list",
+      "asset.daily_ui.guild_order_detail",
+      "asset.daily_ui.guild_order_submit_button",
+      "asset.daily_ui.guild_order_refresh_button"
+    ],
+    "foundation_requirement_ids": [
+      "foundation.daily_ui.guild_order_visible_quantity_contract",
+      "foundation.daily_ui.guild_order_result_state_contract"
+    ],
+    "supporting_anchor_ids": [
+      "daily_ui.guild_order_material_label",
+      "daily_ui.guild_order_required_quantity",
+      "daily_ui.guild_order_available_quantity",
+      "daily_ui.guild_order_unavailable_state",
+      "daily_ui.guild_order_insufficient_material_feedback",
+      "daily_ui.guild_order_submit_result_state"
+    ],
+    "supporting_golden_screen_slugs": [
+      "insufficient_material_state",
+      "completed_state",
+      "submit_result"
+    ],
+    "guild_order_material_policy": {
+      "allowed_material_ids": [],
+      "allowed_material_labels": [],
+      "blocked_material_ids": [],
+      "blocked_material_labels": [],
+      "reserve_quantity_by_material_id": {},
+      "reserve_quantity_by_material_label": {},
+      "refresh_allowed": true,
+      "max_refresh_attempts_per_run": 1,
+      "decision_priority": [
+        "submit",
+        "refresh",
+        "skip"
+      ],
+      "decision_boundary": "visible_material_evidence_only",
+      "disallowed_behaviors": [
+        "crafting",
+        "buying",
+        "gathering",
+        "pathing"
+      ],
+      "notes": "Round 9 only allows submit, skip, or refresh when the visible order requirement and visible quantity evidence are sufficient for a truthful bounded decision."
+    },
+    "guild_order_decision_contract": {
+      "allowed_decisions": [
+        "submit",
+        "skip",
+        "refresh"
+      ],
+      "reason_ids": [
+        "materials_sufficient",
+        "materials_insufficient",
+        "policy_blocked_material",
+        "order_already_completed",
+        "order_state_unknown",
+        "refresh_not_allowed",
+        "refresh_limit_reached",
+        "submit_verification_failed",
+        "refresh_verification_failed"
+      ],
+      "verification_state_ids": [
+        "submit_verified",
+        "skip_recorded",
+        "refresh_verified",
+        "verification_failed",
+        "order_state_unknown"
+      ],
+      "decision_signal_keys": [
+        "decision",
+        "reason_id",
+        "slot_index",
+        "requirements",
+        "availability",
+        "refresh_attempted",
+        "verification_state"
+      ],
+      "material_evidence_fields": [
+        "slot_index",
+        "material_label",
+        "normalized_material_id",
+        "required_quantity",
+        "available_quantity",
+        "sufficiency"
+      ],
+      "decision_rules": {
+        "submit": "Visible requirement is allowed and visible available quantity satisfies the configured reserve policy.",
+        "skip": "Visible order is already completed, refresh is disallowed, or no truthful bounded action remains after policy evaluation.",
+        "refresh": "Visible order is unsuitable and one bounded refresh remains allowed by policy."
+      },
+      "notes": "Unknown order state should fail honestly instead of inventing a fourth hidden action path."
+    },
+    "guild_order_visibility_contract": {
+      "required_anchor_ids": [
+        "common.close_button",
+        "daily_ui.guild_order_list_panel",
+        "daily_ui.guild_order_detail_panel",
+        "daily_ui.guild_order_submit_button",
+        "daily_ui.guild_order_refresh_button"
+      ],
+      "supporting_anchor_ids": [
+        "daily_ui.guild_order_material_label",
+        "daily_ui.guild_order_required_quantity",
+        "daily_ui.guild_order_available_quantity",
+        "daily_ui.guild_order_unavailable_state",
+        "daily_ui.guild_order_insufficient_material_feedback",
+        "daily_ui.guild_order_submit_result_state"
+      ],
+      "required_screen_slugs": [
+        "order_list",
+        "order_detail"
+      ],
+      "supporting_screen_slugs": [
+        "insufficient_material_state",
+        "completed_state",
+        "submit_result"
+      ],
+      "decision_input_fields": [
+        "slot_index",
+        "material_label",
+        "required_quantity",
+        "available_quantity"
+      ],
+      "foundation_requirement_ids": [
+        "foundation.daily_ui.guild_order_visible_quantity_contract",
+        "foundation.daily_ui.guild_order_result_state_contract"
+      ],
+      "notes": "Round 9 remains blocked until visible quantities and post-decision result states are truthful and deterministic."
+    },
+    "guild_order_handoff_fields": [
+      "decision",
+      "reason_id",
+      "slot_index",
+      "requirements",
+      "availability",
+      "refresh_attempted",
+      "verification_state"
+    ],
+    "guild_order_spec_builders": {
+      "task_specification_builder": "roxauto.tasks.daily_ui.guild_order_submit.build_guild_order_submit_specification",
+      "material_policy_loader": "roxauto.tasks.daily_ui.guild_order_submit.load_guild_order_submit_material_policy",
+      "decision_contract_loader": "roxauto.tasks.daily_ui.guild_order_submit.load_guild_order_submit_decision_contract",
+      "visibility_contract_loader": "roxauto.tasks.daily_ui.guild_order_submit.load_guild_order_submit_visibility_contract"
+    }
+  },
+  "notes": "Round-9 specification-only blueprint for deterministic guild-order submit / skip / refresh logic using visible material evidence only.",
+  "pack_id": "daily_ui",
+  "required_anchors": [
+    "common.close_button",
+    "daily_ui.guild_order_list_panel",
+    "daily_ui.guild_order_detail_panel",
+    "daily_ui.guild_order_submit_button",
+    "daily_ui.guild_order_refresh_button"
+  ],
+  "task_manifest": {
+    "entry_condition": "Guild panel and guild-order list are reachable through deterministic menu navigation and the account belongs to a guild.",
+    "failure_condition": "The order state, visible material evidence, or bounded verification path cannot be classified honestly.",
+    "metadata": {
+      "implementation_state": "spec_only",
+      "phase": "round-9",
+      "signal_contract_version": "guild_order_submit.v1"
+    },
+    "name": "Guild Order Submit",
+    "recovery_policy": "abort",
+    "requires": [
+      "common.close_button",
+      "daily_ui.guild_order_list_panel",
+      "daily_ui.guild_order_detail_panel",
+      "daily_ui.guild_order_submit_button",
+      "daily_ui.guild_order_refresh_button"
+    ],
+    "stop_conditions": [
+      {
+        "condition_id": "daily_ui.guild_order_submit.timeout",
+        "enabled": true,
+        "kind": "timeout",
+        "message": "Guild-order submit fixture exceeded task-side timeout.",
+        "metadata": {
+          "scope": "task"
+        },
+        "timeout_ms": 90000
+      },
+      {
+        "condition_id": "daily_ui.guild_order_submit.manual_stop",
+        "enabled": true,
+        "kind": "manual",
+        "message": "Operator stop should abort guild-order submit immediately.",
+        "metadata": {
+          "scope": "operator"
+        }
+      },
+      {
+        "condition_id": "daily_ui.guild_order_submit.vision",
+        "enabled": true,
+        "kind": "vision_mismatch",
+        "message": "Expected guild-order anchors did not match stable UI.",
+        "metadata": {
+          "scope": "vision"
+        }
+      }
+    ],
+    "success_condition": "The task reaches a truthful submit, skip, or refresh outcome and records why that outcome was chosen.",
+    "task_id": "daily_ui.guild_order_submit",
+    "version": "0.1.0"
+  }
+}

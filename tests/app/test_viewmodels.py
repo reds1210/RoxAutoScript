@@ -154,13 +154,14 @@ class ConsoleSnapshotTests(unittest.TestCase):
 
     def test_task_readiness_pane_projects_foundation_gaps(self) -> None:
         repository = _task_foundations()
+        reports = repository.evaluate_task_readinesses()
         pane = build_task_readiness_pane(
-            repository.evaluate_task_readinesses(),
+            reports,
             repository.build_runtime_builder_inputs(),
             selected_instance_snapshot=_runtime_snapshot().get_instance_snapshot("mumu-9"),
         )
 
-        self.assertEqual(pane.total_tasks, 3)
+        self.assertEqual(pane.total_tasks, len(reports))
         self.assertEqual(pane.builder_ready_count, 2)
         self.assertEqual(pane.blocked_by_asset_count, 1)
         self.assertEqual(pane.blocked_by_runtime_count, 0)
