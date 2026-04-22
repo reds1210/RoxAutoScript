@@ -44,6 +44,7 @@ These artifacts give Codex and reviewers a stable handoff packet without using t
 If you want to use Codex more like a team of parallel workers, use the dispatch model in:
 
 - `docs/dispatch-workflow.md`
+- `docs/guild-order-material-logic-plan.md` for the planned next guild-order/material-logic wave after `claim_rewards`
 
 That workflow keeps:
 
