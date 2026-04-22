@@ -65,6 +65,7 @@ class VisionToolingTests(unittest.TestCase):
         self.assertEqual(claim_dependency.readiness_status, TemplateReadinessStatus.READY)
         self.assertEqual(claim_dependency.curation_status.value, "curated")
         self.assertEqual(claim_dependency.provenance_kind, AnchorAssetProvenanceKind.CURATED_STAND_IN)
+        self.assertEqual(claim_dependency.failure_case, "claim_button_missing_or_not_tappable")
         self.assertIn("locale=zh-TW", claim_dependency.provenance_summary)
         self.assertIn("intent=claim_rewards_claim_button", claim_dependency.curation_summary)
 
@@ -187,6 +188,8 @@ class VisionToolingTests(unittest.TestCase):
         self.assertIn("confidence=0.910", failure.best_candidate_summary)
         self.assertEqual(failure.calibration_resolution.anchor_id, "common.close_button")
         self.assertEqual(failure.inspection.selected_overlay.kind, InspectionOverlayKind.MATCHED_ANCHOR)
+        self.assertEqual(failure.selected_region.to_tuple(), (10, 20, 30, 40))
+        self.assertEqual(failure.selected_region_summary, "10,20,30,40")
 
     def test_build_vision_tooling_state_stitches_workspace_capture_replay_and_failure(self) -> None:
         repository = AnchorRepository.load(self.templates_root / "common")
@@ -287,6 +290,8 @@ class VisionToolingTests(unittest.TestCase):
         self.assertEqual(tooling.match.selected_image_path, "preview://sample")
         self.assertEqual(tooling.match.selected_source_image, "preview://sample")
         self.assertEqual(tooling.match.selected_overlay.kind, InspectionOverlayKind.MATCHED_ANCHOR)
+        self.assertEqual(tooling.match.selected_region.to_tuple(), (10, 20, 30, 40))
+        self.assertEqual(tooling.match.selected_region_summary, "10,20,30,40")
         self.assertIn("Matched close button", tooling.match.failure_explanation)
         self.assertEqual(tooling.match.curation_summary, "")
         self.assertEqual(tooling.preview.selected_overlay.kind, InspectionOverlayKind.MATCHED_ANCHOR)
@@ -373,6 +378,8 @@ class VisionToolingTests(unittest.TestCase):
         self.assertEqual(failure.claim_rewards.selected_check.threshold, 0.92)
         self.assertIn("below threshold 0.920", failure.claim_rewards.selected_check.failure_explanation)
         self.assertEqual(failure.claim_rewards.selected_check.anchor_label, "Reward Confirm State")
+        self.assertEqual(failure.claim_rewards.selected_check.selected_region.to_tuple(), (520, 220, 880, 520))
+        self.assertEqual(failure.claim_rewards.selected_check.selected_region_summary, "520,220,880,520")
         self.assertTrue(failure.claim_rewards.selected_check.selected_template_path.endswith("daily_reward_confirm_state.png"))
         self.assertTrue(
             failure.claim_rewards.selected_check.selected_reference_image_path.endswith(
@@ -387,12 +394,24 @@ class VisionToolingTests(unittest.TestCase):
         self.assertIn("locale=zh-TW", failure.claim_rewards.selected_check.provenance_summary)
         self.assertIn("scene=reward_confirm_modal", failure.claim_rewards.selected_check.curation_summary)
         self.assertEqual(
+            failure.claim_rewards.selected_check.failure_case,
+            "confirm_modal_missing_after_claim_tap",
+        )
+        self.assertEqual(
             failure.claim_rewards.selected_provenance_kind,
             AnchorAssetProvenanceKind.CURATED_STAND_IN,
         )
         self.assertIn("locale=zh-TW", failure.claim_rewards.selected_provenance_summary)
+        self.assertEqual(
+            failure.claim_rewards.selected_failure_case,
+            "confirm_modal_missing_after_claim_tap",
+        )
+        self.assertEqual(failure.claim_rewards.selected_region.to_tuple(), (520, 220, 880, 520))
+        self.assertEqual(failure.claim_rewards.selected_region_summary, "520,220,880,520")
         self.assertIn("threshold=0.920", failure.claim_rewards.selected_check_summary)
         self.assertIn("image=captures/reward-preview.png", failure.claim_rewards.selected_check_summary)
+        self.assertIn("region=520,220,880,520", failure.claim_rewards.selected_check_summary)
+        self.assertIn("failure_case=confirm_modal_missing_after_claim_tap", failure.claim_rewards.selected_check_summary)
         self.assertIn("provenance=curated_stand_in", failure.claim_rewards.selected_check_summary)
         self.assertIn("below threshold 0.920", failure.claim_rewards.failure_explanation)
         self.assertIn("Reward Confirm State (daily_ui.reward_confirm_state)", failure.claim_rewards.failure_explanation)
@@ -404,11 +423,17 @@ class VisionToolingTests(unittest.TestCase):
         self.assertEqual(reward_panel_check.anchor_id, "daily_ui.reward_panel")
         self.assertEqual(reward_panel_check.provenance_kind, AnchorAssetProvenanceKind.LIVE_CAPTURE)
         self.assertIn("locale=zh-TW", reward_panel_check.provenance_summary)
+        self.assertEqual(reward_panel_check.selected_region.to_tuple(), (420, 120, 1080, 840))
+        self.assertEqual(reward_panel_check.selected_region_summary, "420,120,1080,840")
         self.assertTrue(reward_panel_check.selected_template_path.endswith("daily_reward_panel.png"))
         self.assertTrue(
             reward_panel_check.selected_reference_image_path.endswith(
                 "daily_ui_claim_rewards__reward_panel__baseline__v1.png"
             )
+        )
+        self.assertEqual(
+            reward_panel_check.failure_case,
+            "reward_panel_not_open_or_wrong_surface",
         )
         self.assertNotIn("curated stand-in", reward_panel_check.failure_explanation.lower())
         self.assertEqual(failure.best_candidate.anchor_id, "daily_ui.reward_confirm_state")
@@ -421,6 +446,8 @@ class VisionToolingTests(unittest.TestCase):
         self.assertEqual(failure.selected_source_image, "captures/reward-preview.png")
         self.assertEqual(failure.selected_overlay.kind, InspectionOverlayKind.EXPECTED_ANCHOR)
         self.assertIn("expected:daily_ui.reward_confirm_state", failure.selected_overlay_summary)
+        self.assertEqual(failure.selected_region.to_tuple(), (520, 220, 880, 520))
+        self.assertEqual(failure.selected_region_summary, "520,220,880,520")
         self.assertEqual(failure.selected_anchor_label, "Reward Confirm State")
         self.assertTrue(failure.selected_template_path.endswith("daily_reward_confirm_state.png"))
         self.assertTrue(
@@ -432,6 +459,7 @@ class VisionToolingTests(unittest.TestCase):
         self.assertEqual(failure.provenance_kind, AnchorAssetProvenanceKind.CURATED_STAND_IN)
         self.assertIn("locale=zh-TW", failure.provenance_summary)
         self.assertIn("scene=reward_confirm_modal", failure.curation_summary)
+        self.assertEqual(failure.failure_case, "confirm_modal_missing_after_claim_tap")
         self.assertIn("below threshold 0.920", failure.failure_explanation)
         self.assertIn("curated stand-in", failure.failure_explanation)
         self.assertIn("template=", failure.failure_explanation)

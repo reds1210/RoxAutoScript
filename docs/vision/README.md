@@ -94,6 +94,7 @@ Vision-side tooling can now validate template packs before GUI or task code cons
 - `TemplateDependencyReadiness` carries task/pack/anchor-level readiness, placeholder state, and inventory-mismatch information.
 - claim-rewards anchors now also validate their curation contract: they must declare `metadata.curation`, `metadata.curation.provenance`, and a `curated` anchor must carry at least one reference plus a raster template asset.
 - claim-rewards task support must also point at a valid `metadata.task_support.daily_ui.claim_rewards.golden_catalog_path`, and every curated anchor must map its `golden_id`, primary reference, and `live_capture` flag back to the matching catalog entry.
+- round-7 claim-rewards support now also validates `metadata.task_support.daily_ui.claim_rewards.live_capture_coverage`, plus per-anchor `metadata.curation.metadata.failure_case`, so missing live captures and expected failure cases stay machine-readable.
 
 Validation only enforces rules that are already part of the documented contracts:
 
@@ -154,7 +155,7 @@ The vision package now exposes service-layer builders so the GUI can stop invent
 - `resolve_calibration_override()` centralizes per-anchor threshold/region/crop resolution so GUI and tooling do not each re-implement override logic.
 - `build_image_inspection_state()` turns match/crop/calibration context into a shared `ImageInspectionState` that preview, capture, and failure panes can all consume directly.
 - `FailureInspectorState.claim_rewards` now exposes a claim-specific checklist for `daily_ui.claim_rewards`, including per-check match summaries and one `ImageInspectionState` per check so GUI can focus directly on panel/button/confirm failures.
-- `MatchInspectorState`, `ClaimRewardsCheckState`, `ClaimRewardsInspectorState`, and `FailureInspectorState` now flatten GUI-facing render fields such as `selected_image_path`, `selected_overlay`, `selected_overlay_summary`, `selected_threshold`, `failure_explanation`, selected curation summaries, `selected_anchor_label`, `selected_template_path`, and `selected_reference_image_path`.
+- `MatchInspectorState`, `ClaimRewardsCheckState`, `ClaimRewardsInspectorState`, and `FailureInspectorState` now flatten GUI-facing render fields such as `selected_image_path`, `selected_overlay`, `selected_overlay_summary`, `selected_region`, `selected_region_summary`, `selected_threshold`, `failure_case`, `failure_explanation`, selected curation summaries, `selected_anchor_label`, `selected_template_path`, and `selected_reference_image_path`.
 
 These builders stay inside the vision layer and do not depend on `app`, `core` runtime orchestration details, or emulator transport implementations.
 
@@ -192,6 +193,8 @@ Each anchor participating in that contract carries:
 - `metadata.curation.metadata.golden_catalog_path`
 - `metadata.curation.metadata.golden_id`
 - `metadata.curation.metadata.source_kind`
+- `metadata.curation.metadata.failure_case`
+- `metadata.task_support["daily_ui.claim_rewards"].live_capture_coverage`
 
 This gives the vision layer enough information to:
 
@@ -211,7 +214,7 @@ The branch now also ships a minimal golden organization for this task only:
 
 The reward-panel baseline is now promoted to a live zh-TW ROX capture. The claim-button and confirm-state baselines remain repo-curated screenshot-style stand-ins, and the provenance surface makes that distinction explicit without changing the anchor ids or flatten payload shape.
 
-Supporting raw screenshots used during this curation pass are tracked under `docs/vision/claim_rewards_live/raw/` so future replacements can verify which files were true live captures versus upstream context only.
+Supporting raw screenshots used during this curation pass are tracked under `docs/vision/claim_rewards_live/raw/` so future replacements can verify which files were true live captures versus upstream context only. Some round-7 raw captures are traceability-only and should not be treated as canonical claim-rewards baselines unless they are explicitly promoted into `catalog.json`.
 
 ## GUI Consumption
 
@@ -223,6 +226,8 @@ When the failure metadata includes a nested `claim_rewards` payload, Engine B sh
 - `FailureInspectorState.claim_rewards.selected_image_path`
 - `FailureInspectorState.claim_rewards.selected_threshold`
 - `FailureInspectorState.claim_rewards.selected_overlay_summary`
+- `FailureInspectorState.claim_rewards.selected_region`
+- `FailureInspectorState.claim_rewards.selected_region_summary`
 - `FailureInspectorState.claim_rewards.failure_explanation`
 - `FailureInspectorState.claim_rewards.selected_anchor_label`
 - `FailureInspectorState.claim_rewards.selected_template_path`
@@ -230,16 +235,20 @@ When the failure metadata includes a nested `claim_rewards` payload, Engine B sh
 - `FailureInspectorState.claim_rewards.selected_provenance_kind`
 - `FailureInspectorState.claim_rewards.selected_provenance_summary`
 - `FailureInspectorState.claim_rewards.selected_curation_summary`
+- `FailureInspectorState.claim_rewards.selected_failure_case`
 - `FailureInspectorState.claim_rewards.selected_check_summary`: a one-line summary for the selected check
 - `FailureInspectorState.inspection`: the same selected-check inspection promoted to the generic failure pane for backward-compatible fallback rendering
 - `FailureInspectorState.selected_image_path`
 - `FailureInspectorState.selected_threshold`
 - `FailureInspectorState.selected_overlay_summary`
+- `FailureInspectorState.selected_region`
+- `FailureInspectorState.selected_region_summary`
 - `FailureInspectorState.selected_anchor_label`
 - `FailureInspectorState.selected_template_path`
 - `FailureInspectorState.selected_reference_image_path`
 - `FailureInspectorState.provenance_kind`
 - `FailureInspectorState.provenance_summary`
+- `FailureInspectorState.failure_case`
 - `FailureInspectorState.failure_explanation`
 - `FailureInspectorState.curation_summary`
 

@@ -20,6 +20,7 @@
       "sha256": "3eb1a7256eb88bb6ad5038cf17ac093de8e0f51ce49263229a8e75facfda7a62",
       "source_kind": "live_zh_tw_rox_capture",
       "live_capture": true,
+      "failure_case": "reward_panel_not_open_or_wrong_surface",
       "proves": "Shows the opened daily-sign-in reward panel on live zh-TW ROX UI and serves as the baseline used to crop the stable reward-panel anchor.",
       "limitations": [
         "captures the panel-open scene only",
@@ -41,6 +42,7 @@
       "sha256": "3d69da22c38d59b291e40dbf1ea2d35664f84a20d178c10eb53e15718e66dc51",
       "source_kind": "repo_curated_screenshot_style",
       "live_capture": false,
+      "failure_case": "claim_button_missing_or_not_tappable",
       "proves": "Shows the claimable reward panel state with an enabled claim button for pre-tap verification.",
       "limitations": [
         "not a live device capture",
@@ -61,6 +63,7 @@
       "sha256": "86a6aa741dc9b22ab2e9b7779a077909b007637ca852fc9ebc1379b5f384b143",
       "source_kind": "repo_curated_screenshot_style",
       "live_capture": false,
+      "failure_case": "confirm_modal_missing_after_claim_tap",
       "proves": "Shows the confirmation modal state that appears after tapping the claim button and anchors the confirm-state crop.",
       "limitations": [
         "not a live device capture",

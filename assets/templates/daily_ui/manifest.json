@@ -13,7 +13,20 @@
           "confirm_state"
         ],
         "workflow": "daily-ui-claim-rewards",
-        "golden_catalog_path": "goldens/claim_rewards/catalog.json"
+        "golden_catalog_path": "goldens/claim_rewards/catalog.json",
+        "live_capture_coverage": {
+          "live_anchor_ids": [
+            "daily_ui.reward_panel"
+          ],
+          "stand_in_anchor_ids": [
+            "daily_ui.claim_reward",
+            "daily_ui.reward_confirm_state"
+          ],
+          "blocked_scene_ids": [
+            "reward_panel_claimable",
+            "reward_confirm_modal"
+          ]
+        }
       }
     }
   },
@@ -72,7 +85,8 @@
             "source_kind": "live_zh_tw_rox_capture",
             "live_capture": true,
             "replacement_target": "",
-            "proof_summary": "Shows the opened live daily-sign-in reward panel and anchors the panel-open check on real ROX UI."
+            "proof_summary": "Shows the opened live daily-sign-in reward panel and anchors the panel-open check on real ROX UI.",
+            "failure_case": "reward_panel_not_open_or_wrong_surface"
           }
         }
       }
@@ -119,7 +133,8 @@
             "source_kind": "repo_curated_screenshot_style",
             "live_capture": false,
             "replacement_target": "approved_live_zh_tw_capture",
-            "proof_summary": "Shows the claimable panel state used to verify the enabled claim button before the tap step."
+            "proof_summary": "Shows the claimable panel state used to verify the enabled claim button before the tap step.",
+            "failure_case": "claim_button_missing_or_not_tappable"
           }
         }
       }
@@ -166,7 +181,8 @@
             "source_kind": "repo_curated_screenshot_style",
             "live_capture": false,
             "replacement_target": "approved_live_zh_tw_capture",
-            "proof_summary": "Shows the confirmation modal state used to verify the post-claim confirm step."
+            "proof_summary": "Shows the confirmation modal state used to verify the post-claim confirm step.",
+            "failure_case": "confirm_modal_missing_after_claim_tap"
           }
         }
       }

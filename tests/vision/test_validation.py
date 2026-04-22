@@ -59,6 +59,7 @@ class TemplateValidationTests(unittest.TestCase):
         self.assertNotIn("missing_anchor_curation_metadata", issue_codes)
         self.assertNotIn("missing_anchor_curation_field", issue_codes)
         self.assertNotIn("missing_anchor_curation_provenance", issue_codes)
+        self.assertNotIn("missing_anchor_failure_case", issue_codes)
         self.assertNotIn("missing_curation_reference_asset", issue_codes)
         self.assertNotIn("missing_claim_rewards_golden_catalog", issue_codes)
         self.assertNotIn("invalid_claim_rewards_golden_catalog_json", issue_codes)
@@ -67,6 +68,11 @@ class TemplateValidationTests(unittest.TestCase):
         self.assertNotIn("missing_anchor_golden_catalog_entry", issue_codes)
         self.assertNotIn("anchor_golden_catalog_live_capture_mismatch", issue_codes)
         self.assertNotIn("anchor_golden_catalog_source_kind_mismatch", issue_codes)
+        self.assertNotIn("anchor_golden_catalog_failure_case_mismatch", issue_codes)
+        self.assertNotIn("missing_claim_rewards_live_capture_coverage", issue_codes)
+        self.assertNotIn("claim_rewards_live_anchor_missing_from_coverage", issue_codes)
+        self.assertNotIn("claim_rewards_stand_in_anchor_missing_from_coverage", issue_codes)
+        self.assertNotIn("claim_rewards_blocked_scene_missing_from_coverage", issue_codes)
 
     def test_validate_template_repository_reports_invalid_anchor_configuration(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -374,8 +380,13 @@ class TemplateValidationTests(unittest.TestCase):
         self.assertEqual(claim_dependency.curation_status.value, "curated")
         self.assertEqual(claim_dependency.provenance_kind, AnchorAssetProvenanceKind.CURATED_STAND_IN)
         self.assertEqual(claim_dependency.curation_reference_count, 1)
+        self.assertEqual(claim_dependency.failure_case, "claim_button_missing_or_not_tappable")
         self.assertIn("locale=zh-TW", claim_dependency.provenance_summary)
         self.assertIn("scene=reward_panel_claimable", claim_dependency.curation_summary)
+        self.assertEqual(
+            report.metadata["claim_rewards_live_capture_coverage"]["stand_in_anchor_ids"],
+            ["daily_ui.claim_reward", "daily_ui.reward_confirm_state"],
+        )
 
         restored = VisionWorkspaceReadinessReport.from_dict(report.to_dict())
         self.assertEqual(restored.inventory_mismatch_count, report.inventory_mismatch_count)
@@ -421,5 +432,6 @@ class TemplateValidationTests(unittest.TestCase):
         self.assertFalse(dependency.inventory_mismatch)
         self.assertEqual(dependency.curation_status.value, "curated")
         self.assertEqual(dependency.provenance_kind, AnchorAssetProvenanceKind.LIVE_CAPTURE)
+        self.assertEqual(dependency.failure_case, "reward_panel_not_open_or_wrong_surface")
         self.assertIn("live_capture", dependency.provenance_summary)
         self.assertIn("scene=reward_panel_open", dependency.curation_summary)
