@@ -718,7 +718,11 @@ class TaskRunner:
         step_telemetry.screenshot_path = result.screenshot_path
         step_telemetry.finished_at = finished_at
         step_telemetry.started_at = step_telemetry.started_at or finished_at
-        step_telemetry.data = dict(result.data)
+        step_telemetry.data = self._project_step_telemetry_data(
+            step_id=step.step_id,
+            result=result,
+            context=context,
+        )
         telemetry.completed_step_count = sum(
             1
             for item in telemetry.steps
@@ -735,6 +739,38 @@ class TaskRunner:
         telemetry.preview_frame = preview_frame if isinstance(preview_frame, PreviewFrame) else telemetry.preview_frame
         telemetry.last_updated_at = finished_at
         context.metadata["task_run_telemetry"] = telemetry
+
+    def _project_step_telemetry_data(
+        self,
+        *,
+        step_id: str,
+        result: TaskStepResult,
+        context: TaskExecutionContext,
+    ) -> dict[str, Any]:
+        data = dict(result.data)
+        projection = self._project_step_spec_runtime_fields(
+            context=context,
+            step_id=step_id,
+        )
+        if not projection:
+            return data
+        step_spec = projection.get("step_spec")
+        if isinstance(step_spec, dict) and step_spec:
+            data.setdefault("runtime_step_spec", dict(step_spec))
+        for key in (
+            "step_display_name",
+            "anchor_id",
+            "expected_anchor_id",
+            "inspection_retry_limit",
+        ):
+            value = projection.get(key)
+            if value not in ("", None):
+                data.setdefault(key, value)
+        for key in ("signal_anchor_ids", "expected_panel_states"):
+            value = projection.get(key)
+            if isinstance(value, list) and value:
+                data.setdefault(key, list(value))
+        return data
 
     def _telemetry_status_for_result(self, result: TaskStepResult) -> TaskStepTelemetryStatus:
         if result.status == StepStatus.SUCCEEDED:
@@ -869,6 +905,8 @@ class TaskRunner:
             metadata=self._build_failure_snapshot_metadata(
                 message=message,
                 context=context,
+                step_id=step_id,
+                screenshot_path=screenshot_path,
                 step_result=step_result,
             ),
         )
@@ -906,14 +944,75 @@ class TaskRunner:
         *,
         message: str,
         context: TaskExecutionContext,
+        step_id: str | None,
+        screenshot_path: str | None,
         step_result: TaskStepResult | None,
     ) -> dict[str, Any]:
         metadata: dict[str, Any] = {
             "message": message,
             "instance_label": context.instance.label,
         }
+        metadata.update(
+            self._project_step_spec_runtime_fields(
+                context=context,
+                step_id=step_id or (step_result.step_id if step_result is not None else None),
+            )
+        )
         metadata.update(self._project_step_failure_metadata(step_result))
+        source_image = self._resolve_failure_source_image(
+            step_result=step_result,
+            screenshot_path=screenshot_path,
+        )
+        if source_image:
+            metadata["source_image"] = source_image
         return metadata
+
+    def _project_step_spec_runtime_fields(
+        self,
+        *,
+        context: TaskExecutionContext,
+        step_id: str | None,
+    ) -> dict[str, Any]:
+        if not step_id:
+            return {}
+        step_spec = self._task_step_spec(context, step_id)
+        if step_spec is None:
+            return {}
+        projected: dict[str, Any] = {
+            "step_spec": dict(step_spec),
+        }
+        display_name = str(step_spec.get("display_name", "")).strip()
+        if display_name:
+            projected["step_display_name"] = display_name
+        anchor_id = str(step_spec.get("anchor_id", "")).strip()
+        if anchor_id:
+            projected["anchor_id"] = anchor_id
+            projected["expected_anchor_id"] = anchor_id
+        expected_panel_states = step_spec.get("expected_panel_states")
+        if isinstance(expected_panel_states, list) and expected_panel_states:
+            projected["expected_panel_states"] = list(expected_panel_states)
+        metadata = step_spec.get("metadata")
+        if isinstance(metadata, dict):
+            signal_anchor_ids = metadata.get("signal_anchor_ids")
+            if isinstance(signal_anchor_ids, list) and signal_anchor_ids:
+                projected["signal_anchor_ids"] = list(signal_anchor_ids)
+            inspection_retry_limit = metadata.get("inspection_retry_limit")
+            if isinstance(inspection_retry_limit, int):
+                projected["inspection_retry_limit"] = inspection_retry_limit
+        return projected
+
+    def _task_step_spec(
+        self,
+        context: TaskExecutionContext,
+        step_id: str,
+    ) -> dict[str, Any] | None:
+        raw_step_specs = context.metadata.get("task_step_specs")
+        if not isinstance(raw_step_specs, dict):
+            return None
+        step_spec = raw_step_specs.get(step_id)
+        if not isinstance(step_spec, dict):
+            return None
+        return step_spec
 
     def _project_step_failure_metadata(
         self,
@@ -928,6 +1027,9 @@ class TaskRunner:
         projected: dict[str, Any] = {
             "step_data": step_data,
         }
+        latest_attempt = self._latest_inspection_attempt(step_data)
+        step_metadata = self._inspection_metadata(step_data)
+        latest_attempt_metadata = self._inspection_metadata(latest_attempt)
         step_outcome = step_data.get("step_outcome")
         if isinstance(step_outcome, dict) and step_outcome:
             projected["step_outcome"] = dict(step_outcome)
@@ -942,6 +1044,8 @@ class TaskRunner:
             inspection = telemetry.get("inspection")
             if isinstance(inspection, dict) and inspection:
                 projected["inspection"] = dict(inspection)
+        else:
+            inspection = None
 
         failure_reason_id = str(step_data.get("failure_reason_id", "")).strip()
         if not failure_reason_id and isinstance(step_outcome, dict):
@@ -952,7 +1056,79 @@ class TaskRunner:
         outcome_code = str(step_data.get("outcome_code", "")).strip()
         if outcome_code:
             projected["outcome_code"] = outcome_code
+        expected_panel_states = step_data.get("expected_panel_states")
+        if isinstance(expected_panel_states, list) and expected_panel_states:
+            projected["expected_panel_states"] = list(expected_panel_states)
+
+        observed_panel_state = str(
+            latest_attempt.get("state")
+            or step_data.get("state")
+            or (step_outcome.get("observed_panel_state") if isinstance(step_outcome, dict) else "")
+        ).strip()
+        if observed_panel_state:
+            projected["observed_panel_state"] = observed_panel_state
+
+        matched_anchor_ids = latest_attempt.get("matched_anchor_ids")
+        if not isinstance(matched_anchor_ids, list) or not matched_anchor_ids:
+            matched_anchor_ids = step_data.get("matched_anchor_ids")
+        if (
+            (not isinstance(matched_anchor_ids, list) or not matched_anchor_ids)
+            and isinstance(inspection, dict)
+            and isinstance(inspection.get("matched_anchor_ids"), list)
+        ):
+            matched_anchor_ids = inspection.get("matched_anchor_ids")
+        if isinstance(matched_anchor_ids, list) and matched_anchor_ids:
+            projected["matched_anchor_ids"] = list(matched_anchor_ids)
+
+        workflow_mode = str(
+            latest_attempt_metadata.get("workflow_mode")
+            or step_metadata.get("workflow_mode")
+            or (inspection.get("workflow_mode") if isinstance(inspection, dict) else "")
+        ).strip()
+        if workflow_mode:
+            projected["workflow_mode"] = workflow_mode
+
+        inspection_reason = str(
+            latest_attempt_metadata.get("reason")
+            or step_metadata.get("reason")
+        ).strip()
+        if inspection_reason:
+            projected["inspection_reason"] = inspection_reason
         return projected
+
+    def _latest_inspection_attempt(self, step_data: dict[str, Any]) -> dict[str, Any]:
+        inspection_attempts = step_data.get("inspection_attempts")
+        if isinstance(inspection_attempts, list):
+            for attempt in reversed(inspection_attempts):
+                if isinstance(attempt, dict):
+                    return attempt
+        return step_data
+
+    def _inspection_metadata(self, payload: dict[str, Any] | None) -> dict[str, Any]:
+        if not isinstance(payload, dict):
+            return {}
+        metadata = payload.get("metadata")
+        if not isinstance(metadata, dict):
+            return {}
+        return dict(metadata)
+
+    def _resolve_failure_source_image(
+        self,
+        *,
+        step_result: TaskStepResult | None,
+        screenshot_path: str | None,
+    ) -> str:
+        if step_result is not None:
+            step_data = to_primitive(step_result.data)
+            if isinstance(step_data, dict):
+                latest_attempt = self._latest_inspection_attempt(step_data)
+                latest_source = str(
+                    latest_attempt.get("screenshot_path")
+                    or step_data.get("screenshot_path")
+                ).strip()
+                if latest_source:
+                    return latest_source
+        return str(screenshot_path or "").strip()
 
     def _resolve_preview_frame(
         self,
@@ -1265,6 +1441,7 @@ class RuntimeCoordinator:
             "queue_id": item.queue_id,
             "profile_binding": context.profile_binding,
             "runtime_context": context,
+            "task_step_specs": self._task_step_specs(item.spec),
             "health_check_ok": context.health_check_ok,
             "health_check_message": context.metadata.get("last_health_check_message", ""),
             "preview_frame": context.preview_frame,
@@ -1300,6 +1477,23 @@ class RuntimeCoordinator:
         if run.failure_snapshot is not None:
             context.last_failure_snapshot = run.failure_snapshot
         return run
+
+    def _task_step_specs(self, spec: TaskSpec) -> dict[str, dict[str, Any]]:
+        runtime_input = spec.metadata.get("runtime_input")
+        if not isinstance(runtime_input, dict):
+            return {}
+        raw_step_specs = runtime_input.get("step_specs")
+        if not isinstance(raw_step_specs, list):
+            return {}
+        projected: dict[str, dict[str, Any]] = {}
+        for raw_step_spec in raw_step_specs:
+            step_spec = to_primitive(raw_step_spec)
+            if not isinstance(step_spec, dict):
+                continue
+            step_id = str(step_spec.get("step_id", "")).strip()
+            if step_id:
+                projected[step_id] = dict(step_spec)
+        return projected
 
     def _refresh_instance(self, instance: InstanceState, command: InstanceCommand) -> dict[str, Any]:
         inspection = self.inspect_instance(

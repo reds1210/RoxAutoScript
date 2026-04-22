@@ -243,6 +243,10 @@ Recommended status values:
 - `failed`
 - `skipped`
 
+Rules:
+
+- runtime-owned `TaskStepTelemetry.data` may add non-destructive diagnostic defaults such as step-spec anchor ids or a nested `runtime_step_spec`, but it should not discard the original task step payload
+
 ### `TaskRunTelemetry`
 
 Minimum fields:
@@ -353,6 +357,11 @@ Minimum fields:
 - `preview_frame` optional
 - `captured_at`
 - `metadata`
+
+Rules:
+
+- for task step failures, `metadata` should preserve machine-readable task payloads and may additionally project runtime-owned diagnostic defaults such as `step_spec`, `anchor_id`, `expected_anchor_id`, `signal_anchor_ids`, `source_image`, or workflow/inspection fields when they can be derived without GUI-owned state
+- reconnect or retry flows should be able to reuse `FailureSnapshotMetadata.metadata` directly without forcing GUI layers to reconstruct anchor or workflow state from free-form messages
 
 ### `CalibrationProfile`
 
@@ -517,7 +526,7 @@ Rules:
 - GUI-facing polling should prefer `LiveRuntimeState` or `LiveRuntimeInstanceSummary` over rebuilding a full `LiveRuntimeSnapshot` on every repaint
 - `refresh_state` should expose whether a background rediscover or runtime refresh is pending or in flight
 - `instances` should be lightweight summaries only; expensive work such as health checks and preview capture must happen in scheduled runtime refreshes, not during state reads
-- selected or per-instance summaries should surface active step ids, last run status, last failure ids, and task-provided `failure_reason_id` / `outcome_code` signals when available without requiring GUI code to replay raw task events or parse fallback message strings
+- selected or per-instance summaries should surface active step ids, last run status, last failure ids, task-provided `failure_reason_id` / `outcome_code` signals, and lightweight anchor ids when available without requiring GUI code to replay raw task events or parse fallback message strings
 
 ### `LiveRuntimeSession`
 
