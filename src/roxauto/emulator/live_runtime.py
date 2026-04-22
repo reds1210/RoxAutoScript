@@ -201,6 +201,7 @@ class LiveRuntimeInstanceSummary:
     failure_snapshot_id: str = ""
     failure_reason: str = ""
     failure_step_id: str = ""
+    failure_anchor_id: str = ""
     failure_reason_id: str = ""
     failure_outcome_code: str = ""
     failure_inspection_attempt_count: int = 0
@@ -211,11 +212,13 @@ class LiveRuntimeInstanceSummary:
     last_completed_step_count: int = 0
     last_step_id: str = ""
     last_step_status: str = ""
+    last_step_anchor_id: str = ""
     last_step_failure_reason_id: str = ""
     last_step_outcome_code: str = ""
     last_failure_snapshot_id: str = ""
     last_failure_reason: str = ""
     last_failure_step_id: str = ""
+    last_failure_anchor_id: str = ""
     last_failure_reason_id: str = ""
     last_failure_outcome_code: str = ""
     last_failure_inspection_attempt_count: int = 0
@@ -226,6 +229,7 @@ class LiveRuntimeInstanceSummary:
     last_failed_completed_step_count: int = 0
     last_failed_step_id: str = ""
     last_failed_step_status: str = ""
+    last_failed_step_anchor_id: str = ""
     last_failed_step_failure_reason_id: str = ""
     last_failed_step_outcome_code: str = ""
 
@@ -1012,12 +1016,14 @@ class LiveRuntimeSession:
         failure_snapshot_id = ""
         failure_reason = ""
         failure_step_id = ""
+        failure_anchor_id = ""
         failure_reason_id = ""
         failure_outcome_code = ""
         failure_inspection_attempt_count = 0
         last_failure_snapshot_id = ""
         last_failure_reason = ""
         last_failure_step_id = ""
+        last_failure_anchor_id = ""
         last_failure_reason_id = ""
         last_failure_outcome_code = ""
         last_failure_inspection_attempt_count = 0
@@ -1028,6 +1034,7 @@ class LiveRuntimeSession:
         last_failed_completed_step_count = 0
         last_failed_step_id = ""
         last_failed_step_status = ""
+        last_failed_step_anchor_id = ""
         last_failed_step_failure_reason_id = ""
         last_failed_step_outcome_code = ""
         queue_depth = 0
@@ -1042,6 +1049,7 @@ class LiveRuntimeSession:
         last_completed_step_count = 0
         last_step_id = ""
         last_step_status = ""
+        last_step_anchor_id = ""
         last_step_failure_reason_id = ""
         last_step_outcome_code = ""
         stop_requested = False
@@ -1067,6 +1075,7 @@ class LiveRuntimeSession:
                 if last_step is not None:
                     last_step_id = last_step.step_id
                     last_step_status = last_step.status.value
+                    last_step_anchor_id = self._read_step_anchor_id(last_step)
                     last_step_failure_reason_id = self._read_step_failure_reason_id(last_step)
                     last_step_outcome_code = self._read_step_outcome_code(last_step)
             if context.profile_binding is not None:
@@ -1078,6 +1087,10 @@ class LiveRuntimeSession:
                 failure_snapshot_id = context.failure_snapshot.snapshot_id
                 failure_reason = context.failure_snapshot.reason.value
                 failure_step_id = context.failure_snapshot.step_id or ""
+                failure_anchor_id = self._read_snapshot_metadata_value(
+                    context.failure_snapshot,
+                    "anchor_id",
+                )
                 failure_reason_id = self._read_snapshot_metadata_value(
                     context.failure_snapshot,
                     "failure_reason_id",
@@ -1093,6 +1106,10 @@ class LiveRuntimeSession:
                 last_failure_snapshot_id = context.last_failure_snapshot.snapshot_id
                 last_failure_reason = context.last_failure_snapshot.reason.value
                 last_failure_step_id = context.last_failure_snapshot.step_id or ""
+                last_failure_anchor_id = self._read_snapshot_metadata_value(
+                    context.last_failure_snapshot,
+                    "anchor_id",
+                )
                 last_failure_reason_id = self._read_snapshot_metadata_value(
                     context.last_failure_snapshot,
                     "failure_reason_id",
@@ -1114,6 +1131,7 @@ class LiveRuntimeSession:
                 if last_failed_step is not None:
                     last_failed_step_id = last_failed_step.step_id
                     last_failed_step_status = last_failed_step.status.value
+                    last_failed_step_anchor_id = self._read_step_anchor_id(last_failed_step)
                     last_failed_step_failure_reason_id = self._read_step_failure_reason_id(
                         last_failed_step
                     )
@@ -1137,6 +1155,7 @@ class LiveRuntimeSession:
             failure_snapshot_id=failure_snapshot_id,
             failure_reason=failure_reason,
             failure_step_id=failure_step_id,
+            failure_anchor_id=failure_anchor_id,
             failure_reason_id=failure_reason_id,
             failure_outcome_code=failure_outcome_code,
             failure_inspection_attempt_count=failure_inspection_attempt_count,
@@ -1147,11 +1166,13 @@ class LiveRuntimeSession:
             last_completed_step_count=last_completed_step_count,
             last_step_id=last_step_id,
             last_step_status=last_step_status,
+            last_step_anchor_id=last_step_anchor_id,
             last_step_failure_reason_id=last_step_failure_reason_id,
             last_step_outcome_code=last_step_outcome_code,
             last_failure_snapshot_id=last_failure_snapshot_id,
             last_failure_reason=last_failure_reason,
             last_failure_step_id=last_failure_step_id,
+            last_failure_anchor_id=last_failure_anchor_id,
             last_failure_reason_id=last_failure_reason_id,
             last_failure_outcome_code=last_failure_outcome_code,
             last_failure_inspection_attempt_count=last_failure_inspection_attempt_count,
@@ -1162,6 +1183,7 @@ class LiveRuntimeSession:
             last_failed_completed_step_count=last_failed_completed_step_count,
             last_failed_step_id=last_failed_step_id,
             last_failed_step_status=last_failed_step_status,
+            last_failed_step_anchor_id=last_failed_step_anchor_id,
             last_failed_step_failure_reason_id=last_failed_step_failure_reason_id,
             last_failed_step_outcome_code=last_failed_step_outcome_code,
         )
@@ -1181,6 +1203,17 @@ class LiveRuntimeSession:
         outcome = step.data.get("step_outcome")
         if isinstance(outcome, dict):
             return str(outcome.get("failure_reason_id", "")).strip()
+        return ""
+
+    def _read_step_anchor_id(self, step: TaskStepTelemetry) -> str:
+        if not isinstance(step.data, dict):
+            return ""
+        value = str(step.data.get("anchor_id", "")).strip()
+        if value:
+            return value
+        runtime_step_spec = step.data.get("runtime_step_spec")
+        if isinstance(runtime_step_spec, dict):
+            return str(runtime_step_spec.get("anchor_id", "")).strip()
         return ""
 
     def _read_step_outcome_code(self, step: TaskStepTelemetry) -> str:

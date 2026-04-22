@@ -112,6 +112,83 @@ class FakePreviewCapture:
         )
 
 
+def _claim_rewards_task_metadata(*step_specs: dict[str, object]) -> dict[str, object]:
+    return {
+        "runtime_input": {
+            "step_specs": list(step_specs),
+        }
+    }
+
+
+def _claim_rewards_step_spec(
+    step_id: str,
+    anchor_id: str,
+    *,
+    expected_panel_states: list[str],
+    signal_anchor_ids: list[str],
+    inspection_retry_limit: int = 2,
+) -> dict[str, object]:
+    return {
+        "step_id": step_id,
+        "display_name": step_id.replace("_", " ").title(),
+        "anchor_id": anchor_id,
+        "expected_panel_states": list(expected_panel_states),
+        "metadata": {
+            "signal_anchor_ids": list(signal_anchor_ids),
+            "inspection_retry_limit": inspection_retry_limit,
+        },
+    }
+
+
+def _claim_rewards_failure_data(
+    *,
+    state: str,
+    workflow_mode: str,
+    reason: str,
+    failure_reason_id: str,
+    outcome_code: str,
+    screenshot_path: str,
+    expected_panel_states: list[str],
+    matched_anchor_ids: list[str],
+) -> dict[str, object]:
+    return {
+        "state": state,
+        "screenshot_path": screenshot_path,
+        "matched_anchor_ids": list(matched_anchor_ids),
+        "metadata": {
+            "workflow_mode": workflow_mode,
+            "reason": reason,
+        },
+        "failure_reason_id": failure_reason_id,
+        "outcome_code": outcome_code,
+        "expected_panel_states": list(expected_panel_states),
+        "inspection_attempts": [
+            {
+                "attempt": 1,
+                "state": state,
+                "screenshot_path": screenshot_path,
+                "matched_anchor_ids": list(matched_anchor_ids),
+                "metadata": {
+                    "workflow_mode": workflow_mode,
+                    "reason": reason,
+                },
+            }
+        ],
+        "step_outcome": {
+            "kind": "verification_failed",
+            "failure_reason_id": failure_reason_id,
+            "observed_panel_state": state,
+        },
+        "telemetry": {
+            "inspection": {
+                "workflow_mode": workflow_mode,
+                "expected_panel_states": list(expected_panel_states),
+                "matched_anchor_ids": list(matched_anchor_ids),
+            }
+        },
+    }
+
+
 class TaskRunnerTests(unittest.TestCase):
     def setUp(self) -> None:
         self.instance = InstanceState(
@@ -366,6 +443,28 @@ class RuntimeCoordinatorTests(unittest.TestCase):
                     name="Daily Reward Claim",
                     version="0.1.0",
                     entry_state="ready",
+                    metadata=_claim_rewards_task_metadata(
+                        _claim_rewards_step_spec(
+                            "open_reward_panel",
+                            "daily_ui.reward_panel",
+                            expected_panel_states=["claimable", "claimed", "confirm_required"],
+                            signal_anchor_ids=[
+                                "daily_ui.reward_panel",
+                                "daily_ui.claim_reward",
+                                "daily_ui.reward_confirm_state",
+                            ],
+                        ),
+                        _claim_rewards_step_spec(
+                            "verify_claim_affordance",
+                            "daily_ui.reward_panel",
+                            expected_panel_states=["claimable", "claimed", "confirm_required"],
+                            signal_anchor_ids=[
+                                "daily_ui.reward_panel",
+                                "daily_ui.claim_reward",
+                                "daily_ui.reward_confirm_state",
+                            ],
+                        ),
+                    ),
                     steps=[
                         TaskStep("open_reward_panel", "Open reward panel", lambda ctx: step_success("open_reward_panel", "opened")),
                         TaskStep(
@@ -376,28 +475,19 @@ class RuntimeCoordinatorTests(unittest.TestCase):
                                 "claim affordance missing",
                                 screenshot_path="captures/failure.png",
                                 data={
-                                    "failure_reason_id": "claim_state_ambiguous",
-                                    "outcome_code": "claim_state_ambiguous",
-                                    "inspection_attempts": [
-                                        {
-                                            "attempt": 1,
-                                            "state": "unavailable",
-                                            "screenshot_path": "captures/failure.png",
-                                        }
-                                    ],
-                                    "step_outcome": {
-                                        "kind": "verification_failed",
-                                        "failure_reason_id": "claim_state_ambiguous",
-                                    },
+                                    **_claim_rewards_failure_data(
+                                        state="unavailable",
+                                        workflow_mode="ambiguous",
+                                        reason="verify_claim_affordance",
+                                        failure_reason_id="claim_state_ambiguous",
+                                        outcome_code="claim_state_ambiguous",
+                                        screenshot_path="captures/failure.png",
+                                        expected_panel_states=["claimable", "claimed"],
+                                        matched_anchor_ids=["daily_ui.reward_panel"],
+                                    ),
                                     "task_action": {
                                         "action": "inspect_reward_panel",
                                         "status": "skipped",
-                                    },
-                                    "telemetry": {
-                                        "inspection": {
-                                            "workflow_mode": "ambiguous",
-                                            "expected_panel_states": ["claimable", "claimed"],
-                                        }
                                     },
                                 },
                             ),
@@ -440,6 +530,50 @@ class RuntimeCoordinatorTests(unittest.TestCase):
             "unavailable",
         )
         self.assertEqual(
+            telemetry.failure_snapshot.metadata["anchor_id"],
+            "daily_ui.reward_panel",
+        )
+        self.assertEqual(
+            telemetry.failure_snapshot.metadata["expected_anchor_id"],
+            "daily_ui.reward_panel",
+        )
+        self.assertEqual(
+            telemetry.failure_snapshot.metadata["signal_anchor_ids"],
+            [
+                "daily_ui.reward_panel",
+                "daily_ui.claim_reward",
+                "daily_ui.reward_confirm_state",
+            ],
+        )
+        self.assertEqual(
+            telemetry.failure_snapshot.metadata["inspection_retry_limit"],
+            2,
+        )
+        self.assertEqual(
+            telemetry.failure_snapshot.metadata["step_display_name"],
+            "Verify Claim Affordance",
+        )
+        self.assertEqual(
+            telemetry.failure_snapshot.metadata["observed_panel_state"],
+            "unavailable",
+        )
+        self.assertEqual(
+            telemetry.failure_snapshot.metadata["workflow_mode"],
+            "ambiguous",
+        )
+        self.assertEqual(
+            telemetry.failure_snapshot.metadata["inspection_reason"],
+            "verify_claim_affordance",
+        )
+        self.assertEqual(
+            telemetry.failure_snapshot.metadata["matched_anchor_ids"],
+            ["daily_ui.reward_panel"],
+        )
+        self.assertEqual(
+            telemetry.failure_snapshot.metadata["source_image"],
+            "captures/failure.png",
+        )
+        self.assertEqual(
             telemetry.failure_snapshot.metadata["step_outcome"]["kind"],
             "verification_failed",
         )
@@ -464,6 +598,14 @@ class RuntimeCoordinatorTests(unittest.TestCase):
             context.last_failed_task_run.steps[1].data["failure_reason_id"],
             "claim_state_ambiguous",
         )
+        self.assertEqual(
+            context.last_failed_task_run.steps[1].data["anchor_id"],
+            "daily_ui.reward_panel",
+        )
+        self.assertEqual(
+            context.last_failed_task_run.steps[1].data["runtime_step_spec"]["anchor_id"],
+            "daily_ui.reward_panel",
+        )
 
     def test_retry_keeps_last_failure_snapshot_stable_after_successful_rerun(self) -> None:
         coordinator = RuntimeCoordinator(
@@ -479,9 +621,45 @@ class RuntimeCoordinatorTests(unittest.TestCase):
             name="Daily Reward Claim",
             version="0.1.0",
             entry_state="ready",
+            metadata=_claim_rewards_task_metadata(
+                _claim_rewards_step_spec(
+                    "open_reward_panel",
+                    "daily_ui.reward_panel",
+                    expected_panel_states=["claimable", "claimed", "confirm_required"],
+                    signal_anchor_ids=["daily_ui.reward_panel", "daily_ui.claim_reward"],
+                ),
+                _claim_rewards_step_spec(
+                    "claim_reward",
+                    "daily_ui.claim_reward",
+                    expected_panel_states=["claimed", "confirm_required"],
+                    signal_anchor_ids=[
+                        "daily_ui.reward_panel",
+                        "daily_ui.claim_reward",
+                        "daily_ui.reward_confirm_state",
+                    ],
+                ),
+            ),
             steps=[
                 TaskStep("open_reward_panel", "Open reward panel", lambda ctx: step_success("open_reward_panel", "opened")),
-                TaskStep("claim_reward", "Claim reward", lambda ctx: step_failure("claim_reward", "tap had no effect")),
+                TaskStep(
+                    "claim_reward",
+                    "Claim reward",
+                    lambda ctx: step_failure(
+                        "claim_reward",
+                        "tap had no effect",
+                        screenshot_path="captures/claim-reward-failure.png",
+                        data=_claim_rewards_failure_data(
+                            state="claimable",
+                            workflow_mode="claimable",
+                            reason="claim_reward",
+                            failure_reason_id="claim_tap_no_effect",
+                            outcome_code="claim_tap_no_effect",
+                            screenshot_path="captures/claim-reward-failure.png",
+                            expected_panel_states=["claimed", "confirm_required"],
+                            matched_anchor_ids=["daily_ui.reward_panel", "daily_ui.claim_reward"],
+                        ),
+                    ),
+                ),
             ],
         )
         success_spec = TaskSpec(
@@ -489,6 +667,24 @@ class RuntimeCoordinatorTests(unittest.TestCase):
             name="Daily Reward Claim",
             version="0.1.0",
             entry_state="ready",
+            metadata=_claim_rewards_task_metadata(
+                _claim_rewards_step_spec(
+                    "open_reward_panel",
+                    "daily_ui.reward_panel",
+                    expected_panel_states=["claimable", "claimed", "confirm_required"],
+                    signal_anchor_ids=["daily_ui.reward_panel", "daily_ui.claim_reward"],
+                ),
+                _claim_rewards_step_spec(
+                    "claim_reward",
+                    "daily_ui.claim_reward",
+                    expected_panel_states=["claimed", "confirm_required"],
+                    signal_anchor_ids=[
+                        "daily_ui.reward_panel",
+                        "daily_ui.claim_reward",
+                        "daily_ui.reward_confirm_state",
+                    ],
+                ),
+            ),
             steps=[
                 TaskStep("open_reward_panel", "Open reward panel", lambda ctx: step_success("open_reward_panel", "opened")),
                 TaskStep("claim_reward", "Claim reward", lambda ctx: step_success("claim_reward", "claimed")),
@@ -522,6 +718,18 @@ class RuntimeCoordinatorTests(unittest.TestCase):
         self.assertEqual(
             recovered_context.last_failed_task_run.steps[-1].step_id,
             "claim_reward",
+        )
+        self.assertEqual(
+            recovered_context.last_failure_snapshot.metadata["anchor_id"],
+            "daily_ui.claim_reward",
+        )
+        self.assertEqual(
+            recovered_context.last_failure_snapshot.metadata["workflow_mode"],
+            "claimable",
+        )
+        self.assertEqual(
+            recovered_context.last_failed_task_run.steps[-1].data["runtime_step_spec"]["anchor_id"],
+            "daily_ui.claim_reward",
         )
 
     def test_dispatch_refresh_updates_runtime_context(self) -> None:

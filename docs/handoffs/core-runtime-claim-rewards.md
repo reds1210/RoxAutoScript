@@ -187,3 +187,47 @@ Verification performed:
 Recommended next step:
 
 - Engine B should consume `context.last_failed_task_run` as the sticky fallback when `last_failure_snapshot.metadata` no longer carries enough claim-rewards diagnostics after a later success.
+
+## 2026-04-22 runtime-owned anchor follow-up
+
+What shipped:
+
+- Runtime now projects claim-rewards step-spec diagnostics into runtime-owned surfaces instead of leaving anchor/workflow reconstruction to GUI draft state.
+- `TaskRunner` reads `TaskSpec.metadata["runtime_input"]["step_specs"]` and promotes step-spec defaults into failed `FailureSnapshotMetadata.metadata`:
+  - `step_spec`
+  - `step_display_name`
+  - `anchor_id`
+  - `expected_anchor_id`
+  - `signal_anchor_ids`
+  - `inspection_retry_limit`
+- Failed snapshots now also flatten additional inspection-facing fields when the step payload carries them:
+  - `expected_panel_states`
+  - `observed_panel_state`
+  - `matched_anchor_ids`
+  - `workflow_mode`
+  - `inspection_reason`
+  - `source_image`
+- Runtime-owned `TaskStepTelemetry.data` now keeps additive step-spec defaults through `runtime_step_spec` plus top-level anchor fields, so `last_failed_task_run.steps[*].data` remains useful after a later retry.
+- `LiveRuntimeInstanceSummary` now exposes lightweight anchor ids for current and sticky history surfaces:
+  - `failure_anchor_id`
+  - `last_step_anchor_id`
+  - `last_failure_anchor_id`
+  - `last_failed_step_anchor_id`
+
+Files changed:
+
+- `docs/architecture-contracts.md`
+- `docs/handoffs/core-runtime-claim-rewards.md`
+- `src/roxauto/core/runtime.py`
+- `src/roxauto/emulator/live_runtime.py`
+- `tests/core/test_runtime.py`
+- `tests/emulator/test_live_runtime.py`
+
+Verification performed:
+
+- `python -m unittest tests.core.test_runtime`
+- `python -m unittest tests.emulator.test_live_runtime`
+
+Recommended next step:
+
+- Engine B should stop backfilling `anchor_id` / `expected_anchor_id` from claim-rewards drafts when runtime snapshots or `last_failed_task_run` already provide them, and treat draft state as viewer/editor state only.

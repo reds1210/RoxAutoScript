@@ -195,6 +195,7 @@ class LiveRuntimeSessionTests(unittest.TestCase):
                     name="Daily Reward Claim",
                     version="0.1.0",
                     entry_state="ready",
+                    metadata=_claim_rewards_task_metadata(),
                     steps=[
                         TaskStep("open_reward_panel", "Open reward panel", lambda ctx: step_success("open_reward_panel", "opened")),
                         TaskStep(
@@ -223,16 +224,19 @@ class LiveRuntimeSessionTests(unittest.TestCase):
         self.assertEqual(state.selected_instance.last_completed_step_count, 2)
         self.assertTrue(state.selected_instance.failure_snapshot_id)
         self.assertEqual(state.selected_instance.failure_step_id, "claim_reward")
+        self.assertEqual(state.selected_instance.failure_anchor_id, "daily_ui.claim_reward")
         self.assertEqual(state.selected_instance.failure_reason_id, "claim_tap_no_effect")
         self.assertEqual(state.selected_instance.failure_outcome_code, "claim_tap_no_effect")
         self.assertEqual(state.selected_instance.failure_inspection_attempt_count, 2)
         self.assertEqual(state.selected_instance.last_step_id, "claim_reward")
         self.assertEqual(state.selected_instance.last_step_status, "failed")
+        self.assertEqual(state.selected_instance.last_step_anchor_id, "daily_ui.claim_reward")
         self.assertEqual(state.selected_instance.last_step_failure_reason_id, "claim_tap_no_effect")
         self.assertEqual(state.selected_instance.last_step_outcome_code, "claim_tap_no_effect")
         self.assertEqual(state.selected_instance.last_failure_snapshot_id, state.selected_instance.failure_snapshot_id)
         self.assertEqual(state.selected_instance.last_failure_reason, "step_failed")
         self.assertEqual(state.selected_instance.last_failure_step_id, "claim_reward")
+        self.assertEqual(state.selected_instance.last_failure_anchor_id, "daily_ui.claim_reward")
         self.assertEqual(state.selected_instance.last_failure_reason_id, "claim_tap_no_effect")
         self.assertEqual(state.selected_instance.last_failure_outcome_code, "claim_tap_no_effect")
         self.assertEqual(state.selected_instance.last_failure_inspection_attempt_count, 2)
@@ -243,6 +247,10 @@ class LiveRuntimeSessionTests(unittest.TestCase):
         self.assertEqual(state.selected_instance.last_failed_step_id, "claim_reward")
         self.assertEqual(state.selected_instance.last_failed_step_status, "failed")
         self.assertEqual(
+            state.selected_instance.last_failed_step_anchor_id,
+            "daily_ui.claim_reward",
+        )
+        self.assertEqual(
             state.selected_instance.last_failed_step_failure_reason_id,
             "claim_tap_no_effect",
         )
@@ -251,6 +259,8 @@ class LiveRuntimeSessionTests(unittest.TestCase):
         self.assertIsNotNone(snapshot)
         self.assertIsNotNone(snapshot.last_failed_task_run)
         self.assertEqual(snapshot.last_failed_task_run.status.value, "failed")
+        self.assertEqual(snapshot.last_failure_snapshot.metadata["anchor_id"], "daily_ui.claim_reward")
+        self.assertEqual(snapshot.last_failure_snapshot.metadata["workflow_mode"], "claimable")
 
     def test_live_state_preserves_last_failure_summary_after_successful_retry(self) -> None:
         adapter = FakeAdapter(healthy=True)
@@ -262,6 +272,7 @@ class LiveRuntimeSessionTests(unittest.TestCase):
             name="Daily Reward Claim",
             version="0.1.0",
             entry_state="ready",
+            metadata=_claim_rewards_task_metadata(),
             steps=[
                 TaskStep("open_reward_panel", "Open reward panel", lambda ctx: step_success("open_reward_panel", "opened")),
                 TaskStep(
@@ -280,6 +291,7 @@ class LiveRuntimeSessionTests(unittest.TestCase):
             name="Daily Reward Claim",
             version="0.1.0",
             entry_state="ready",
+            metadata=_claim_rewards_task_metadata(),
             steps=[
                 TaskStep("open_reward_panel", "Open reward panel", lambda ctx: step_success("open_reward_panel", "opened")),
                 TaskStep("claim_reward", "Claim reward", lambda ctx: step_success("claim_reward", "claimed")),
@@ -305,12 +317,17 @@ class LiveRuntimeSessionTests(unittest.TestCase):
             failed_state.selected_instance.last_failure_snapshot_id,
         )
         self.assertEqual(recovered_state.selected_instance.last_failure_reason, "step_failed")
+        self.assertEqual(recovered_state.selected_instance.last_failure_anchor_id, "daily_ui.claim_reward")
         self.assertEqual(recovered_state.selected_instance.last_failure_reason_id, "claim_tap_no_effect")
         self.assertEqual(recovered_state.selected_instance.last_failure_outcome_code, "claim_tap_no_effect")
         self.assertEqual(recovered_state.selected_instance.last_failure_inspection_attempt_count, 2)
         self.assertEqual(recovered_state.selected_instance.last_failed_task_id, "daily_ui.claim_rewards")
         self.assertEqual(recovered_state.selected_instance.last_failed_run_status, "failed")
         self.assertEqual(recovered_state.selected_instance.last_failed_step_id, "claim_reward")
+        self.assertEqual(
+            recovered_state.selected_instance.last_failed_step_anchor_id,
+            "daily_ui.claim_reward",
+        )
         self.assertEqual(
             recovered_state.selected_instance.last_failed_step_failure_reason_id,
             "claim_tap_no_effect",
@@ -319,6 +336,11 @@ class LiveRuntimeSessionTests(unittest.TestCase):
         self.assertIsNotNone(snapshot)
         self.assertIsNotNone(snapshot.last_failed_task_run)
         self.assertEqual(snapshot.last_failed_task_run.steps[-1].step_id, "claim_reward")
+        self.assertEqual(snapshot.last_failure_snapshot.metadata["anchor_id"], "daily_ui.claim_reward")
+        self.assertEqual(
+            snapshot.last_failed_task_run.steps[-1].data["runtime_step_spec"]["anchor_id"],
+            "daily_ui.claim_reward",
+        )
 
     def test_reconnect_preserves_runtime_authority_for_last_run_and_failure_snapshot(self) -> None:
         adapter = FakeAdapter(healthy=True)
@@ -333,6 +355,7 @@ class LiveRuntimeSessionTests(unittest.TestCase):
                     name="Daily Reward Claim",
                     version="0.1.0",
                     entry_state="ready",
+                    metadata=_claim_rewards_task_metadata(),
                     steps=[
                         TaskStep("open_reward_panel", "Open reward panel", lambda ctx: step_success("open_reward_panel", "opened")),
                         TaskStep(
@@ -372,18 +395,29 @@ class LiveRuntimeSessionTests(unittest.TestCase):
         self.assertIsNotNone(snapshot.last_task_run)
         self.assertEqual(snapshot.last_task_run.status.value, "failed")
         self.assertEqual(snapshot.last_task_run.steps[-1].data["failure_reason_id"], "claim_tap_no_effect")
+        self.assertEqual(snapshot.last_task_run.steps[-1].data["anchor_id"], "daily_ui.claim_reward")
         self.assertIsNotNone(snapshot.last_failure_snapshot)
+        self.assertEqual(snapshot.last_failure_snapshot.metadata["anchor_id"], "daily_ui.claim_reward")
         self.assertEqual(snapshot.last_failure_snapshot.metadata["failure_reason_id"], "claim_tap_no_effect")
         self.assertIsNotNone(snapshot.last_failed_task_run)
         self.assertEqual(snapshot.last_failed_task_run.status.value, "failed")
         self.assertEqual(snapshot.last_failed_task_run.steps[-1].step_id, "claim_reward")
+        self.assertEqual(
+            snapshot.last_failed_task_run.steps[-1].data["runtime_step_spec"]["anchor_id"],
+            "daily_ui.claim_reward",
+        )
         self.assertIsNotNone(state.selected_instance)
         self.assertEqual(state.selected_instance.status, "ready")
         self.assertEqual(state.selected_instance.last_run_status, "failed")
+        self.assertEqual(state.selected_instance.last_failure_anchor_id, "daily_ui.claim_reward")
         self.assertEqual(state.selected_instance.last_failure_reason_id, "claim_tap_no_effect")
         self.assertEqual(state.selected_instance.last_failure_outcome_code, "claim_tap_no_effect")
         self.assertEqual(state.selected_instance.last_failed_run_status, "failed")
         self.assertEqual(state.selected_instance.last_failed_step_id, "claim_reward")
+        self.assertEqual(
+            state.selected_instance.last_failed_step_anchor_id,
+            "daily_ui.claim_reward",
+        )
         self.assertEqual(
             state.selected_instance.last_failed_step_failure_reason_id,
             "claim_tap_no_effect",
@@ -900,25 +934,89 @@ def _result(
     )
 
 
+def _claim_rewards_task_metadata() -> dict[str, object]:
+    return {
+        "runtime_input": {
+            "step_specs": [
+                _claim_rewards_step_spec(
+                    "open_reward_panel",
+                    "daily_ui.reward_panel",
+                    expected_panel_states=["claimable", "claimed", "confirm_required"],
+                    signal_anchor_ids=["daily_ui.reward_panel", "daily_ui.claim_reward"],
+                ),
+                _claim_rewards_step_spec(
+                    "claim_reward",
+                    "daily_ui.claim_reward",
+                    expected_panel_states=["claimed", "confirm_required"],
+                    signal_anchor_ids=[
+                        "daily_ui.reward_panel",
+                        "daily_ui.claim_reward",
+                        "daily_ui.reward_confirm_state",
+                    ],
+                ),
+            ]
+        }
+    }
+
+
+def _claim_rewards_step_spec(
+    step_id: str,
+    anchor_id: str,
+    *,
+    expected_panel_states: list[str],
+    signal_anchor_ids: list[str],
+    inspection_retry_limit: int = 2,
+) -> dict[str, object]:
+    return {
+        "step_id": step_id,
+        "display_name": step_id.replace("_", " ").title(),
+        "anchor_id": anchor_id,
+        "expected_panel_states": list(expected_panel_states),
+        "metadata": {
+            "signal_anchor_ids": list(signal_anchor_ids),
+            "inspection_retry_limit": inspection_retry_limit,
+        },
+    }
+
+
 def _claim_rewards_failure_data() -> dict[str, object]:
     return {
+        "state": "claimable",
+        "screenshot_path": "captures/mumu-0.png",
+        "matched_anchor_ids": ["daily_ui.reward_panel", "daily_ui.claim_reward"],
+        "metadata": {
+            "workflow_mode": "claimable",
+            "reason": "claim_reward",
+        },
         "failure_reason_id": "claim_tap_no_effect",
         "outcome_code": "claim_tap_no_effect",
+        "expected_panel_states": ["claimed", "confirm_required"],
         "inspection_attempts": [
             {
                 "attempt": 1,
                 "state": "claimable",
                 "screenshot_path": "captures/mumu-0.png",
+                "matched_anchor_ids": ["daily_ui.reward_panel", "daily_ui.claim_reward"],
+                "metadata": {
+                    "workflow_mode": "claimable",
+                    "reason": "claim_reward",
+                },
             },
             {
                 "attempt": 2,
                 "state": "claimable",
                 "screenshot_path": "captures/mumu-0.png",
+                "matched_anchor_ids": ["daily_ui.reward_panel", "daily_ui.claim_reward"],
+                "metadata": {
+                    "workflow_mode": "claimable",
+                    "reason": "claim_reward",
+                },
             },
         ],
         "step_outcome": {
             "kind": "verification_failed",
             "failure_reason_id": "claim_tap_no_effect",
+            "observed_panel_state": "claimable",
         },
         "task_action": {
             "action": "tap_claim_reward",
@@ -928,6 +1026,7 @@ def _claim_rewards_failure_data() -> dict[str, object]:
             "inspection": {
                 "workflow_mode": "claimable",
                 "expected_panel_states": ["claimed", "confirm_required"],
+                "matched_anchor_ids": ["daily_ui.reward_panel", "daily_ui.claim_reward"],
             }
         },
     }
