@@ -20,7 +20,7 @@ Every worker must read these files before editing:
 3. `docs/engine-roster.md`
 4. `docs/worktree-playbook.md`
 5. `docs/architecture-contracts.md`
-6. the active round brief, currently `docs/round-7-claim-rewards-live-production.md`
+6. the active round brief, currently `docs/round-8-claim-rewards-four-device-capture.md`
 7. the relevant handoff under `docs/handoffs/`
 
 ## 3. Thread and Worktree Rules
@@ -54,7 +54,7 @@ Model policy:
 
 ## 5. Active Round Branches
 
-Use these existing branches and worktrees for round 7:
+Use these existing branches and worktrees for round 8:
 
 - `codex/core-runtime-step-telemetry`
 - `codex/gui-claim-rewards-production-telemetry`
@@ -133,9 +133,9 @@ Forbidden dependencies:
 
 ## 9. Merge Order
 
-For round 7, merge in this order unless there is a strong reason not to:
+For round 8, merge in this order unless there is a strong reason not to:
 
-1. `Engine E` when used
+1. `Engine E`
 2. `Engine C`
 3. `Engine D`
 4. `Engine A`
@@ -143,7 +143,24 @@ For round 7, merge in this order unless there is a strong reason not to:
 
 Reason:
 
-- live captures and task expectations should settle before runtime and GUI harden around them
+- four-device raw/live evidence should settle before vision promotion
+- promoted asset provenance should settle before task foundations refresh
+- runtime and GUI should harden around the final promoted truth, not around provisional capture notes
+
+## 9a. Device Capture Rule
+
+Round 8 assumes four ADB-visible devices:
+
+- `emulator-5556`
+- `emulator-5560`
+- `127.0.0.1:5559`
+- `127.0.0.1:5563`
+
+When a worker captures evidence:
+
+- record the exact serial in the handoff
+- prefer fixed device roles instead of random screenshot collection
+- do not promote a raw capture to canonical status unless provenance is explicit and the target scene contract is satisfied
 
 ## 10. How To Start A Thread
 
@@ -208,4 +225,4 @@ A track is ready to merge when:
 - do not hide contract changes inside unrelated commits
 - do not edit another track's owned area unless explicitly taking over that track
 - always leave a readable handoff
-- round 7 stays scoped to `daily_ui.claim_rewards`
+- round 8 stays scoped to `daily_ui.claim_rewards`

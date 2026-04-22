@@ -2,14 +2,14 @@
 
 This repo currently uses a fixed 4-engine parallel model plus one optional support engine.
 
-The active wave is `round-7 claim_rewards live production validation`.
+The active wave is `round-8 claim_rewards four-device capture promotion`.
 
 ## Model Policy
 
 - default delegated model: `gpt-5.4`
 - do not use mini variants for engine work unless the user explicitly asks for them
 - each engine keeps a stable specialization
-- for round 7, reuse the existing worktree and branch for the same engine instead of creating a new one
+- for round 8, reuse the existing worktree and branch for the same engine instead of creating a new one
 
 ## Standard Engine Lineup
 
@@ -52,26 +52,37 @@ The active wave is `round-7 claim_rewards live production validation`.
 
 ## Active Order
 
-Default round-7 start order:
+Default round-8 start order:
 
-1. `Engine C`
-2. `Engine D`
-3. `Engine A`
-4. `Engine B`
-5. `Engine E` only when live capture collection is blocking C or D
-
-Default round-7 merge order:
-
-1. `Engine E` when used
+1. `Engine E`
 2. `Engine C`
 3. `Engine D`
 4. `Engine A`
 5. `Engine B`
 
+Default round-8 merge order:
+
+1. `Engine E`
+2. `Engine C`
+3. `Engine D`
+4. `Engine A`
+5. `Engine B`
+
+## Current Device Inventory
+
+Round 8 assumes four ADB-visible devices are available:
+
+- `emulator-5556`
+- `emulator-5560`
+- `127.0.0.1:5559`
+- `127.0.0.1:5563`
+
+When a worker captures live evidence, the handoff should record the exact ADB serial used.
+
 ## Reuse Policy
 
 - do not create a new worktree just because a new round started
-- each engine should continue on its existing round-6/round-7 branch and worktree until the user explicitly asks for a branch rollover
+- each engine should continue on its existing round-6/round-7/round-8 branch and worktree until the user explicitly asks for a branch rollover
 - before starting a new thread on one of these engines, sync that worktree with `main`
 
 ## Non-Negotiable Rules
