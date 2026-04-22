@@ -35,3 +35,5 @@ paste the short pass/fail summary here
 ## Notes
 
 Add ownership exceptions, blockers, or follow-up tasks if needed.
+
+The CI workflow will append and refresh a managed `Latest Codex Handoff` section below this template.
