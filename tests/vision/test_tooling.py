@@ -102,6 +102,22 @@ class VisionToolingTests(unittest.TestCase):
             workspace.readiness.metadata["claim_rewards_post_tap_contract"]["dispatch_recommendation"],
             "direct_result_overlay_is_valid",
         )
+        self.assertEqual(
+            workspace.readiness.metadata["guild_order_scene_contract"]["evidence_state"],
+            "placeholder_only",
+        )
+        self.assertEqual(
+            workspace.readiness.metadata["guild_order_scene_contract"]["decision_surface_state"],
+            "blocked_by_missing_material_evidence",
+        )
+        self.assertEqual(
+            workspace.readiness.metadata["guild_order_scene_contract"]["blocked_scene_ids"],
+            [
+                "guild_order_requirement_material",
+                "guild_order_required_quantity",
+                "guild_order_available_material_count",
+            ],
+        )
 
     def test_build_anchor_inspector_applies_calibration_override_and_validation_issues(self) -> None:
         with TemporaryDirectory() as temp_dir:

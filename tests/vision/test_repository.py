@@ -117,6 +117,64 @@ class AnchorRepositoryTests(unittest.TestCase):
             ],
         )
 
+    def test_daily_ui_repository_exposes_guild_order_scene_contract(self) -> None:
+        repository = AnchorRepository.load(self.templates_root / "daily_ui")
+
+        guild_order_anchor_ids = {
+            "daily_ui.guild_order_hub_entry",
+            "daily_ui.guild_order_list_panel",
+            "daily_ui.guild_order_detail_panel",
+            "daily_ui.guild_order_submit_button",
+            "daily_ui.guild_order_refresh_button",
+            "daily_ui.guild_order_unavailable_state",
+            "daily_ui.guild_order_insufficient_material_feedback",
+            "daily_ui.guild_order_submit_result_state",
+        }
+        self.assertTrue(guild_order_anchor_ids.issubset(set(repository.list_anchor_ids())))
+        self.assertTrue(repository.resolve_asset_path("daily_ui.guild_order_hub_entry").exists())
+        self.assertEqual(
+            repository.get_task_support("daily_ui.guild_order_submit")["required_anchor_roles"],
+            [
+                "guild_hub_entry",
+                "guild_order_list",
+                "guild_order_detail",
+                "submit_affordance",
+                "refresh_affordance",
+                "unavailable_state",
+                "insufficient_material_feedback",
+                "submit_result_state",
+            ],
+        )
+        self.assertEqual(
+            repository.get_guild_order_scene_contract()["evidence_state"],
+            "placeholder_only",
+        )
+        self.assertEqual(
+            repository.get_guild_order_scene_contract()["decision_surface_state"],
+            "blocked_by_missing_material_evidence",
+        )
+        self.assertEqual(
+            repository.get_guild_order_scene_contract()["blocked_scene_ids"],
+            [
+                "guild_order_requirement_material",
+                "guild_order_required_quantity",
+                "guild_order_available_material_count",
+            ],
+        )
+        self.assertEqual(
+            repository.get_guild_order_scene_contract()["placeholder_anchor_ids"],
+            [
+                "daily_ui.guild_order_hub_entry",
+                "daily_ui.guild_order_list_panel",
+                "daily_ui.guild_order_detail_panel",
+                "daily_ui.guild_order_submit_button",
+                "daily_ui.guild_order_refresh_button",
+                "daily_ui.guild_order_unavailable_state",
+                "daily_ui.guild_order_insufficient_material_feedback",
+                "daily_ui.guild_order_submit_result_state",
+            ],
+        )
+
     def test_repository_exposes_manifest_and_search_helpers(self) -> None:
         repository = AnchorRepository.load(self.templates_root / "common")
 

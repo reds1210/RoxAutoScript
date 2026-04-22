@@ -41,6 +41,11 @@ assets/templates/
     manifest.json
     anchors/
       *.svg
+docs/vision/
+  claim_rewards_live/
+    README.md
+  guild_order_material_logic/
+    README.md
 ```
 
 ## Manifest Shape
@@ -93,6 +98,7 @@ Vision-side tooling can now validate template packs before GUI or task code cons
 - claim-rewards task support must also point at a valid `metadata.task_support.daily_ui.claim_rewards.golden_catalog_path`, and every curated anchor must map its `golden_id`, primary reference, and `live_capture` flag back to the matching catalog entry.
 - round-8 claim-rewards support now also validates `metadata.task_support.daily_ui.claim_rewards.live_capture_coverage`, per-anchor `metadata.curation.metadata.failure_case`, and the catalog `sha256` values for both canonical goldens and supporting captures so live-promotion drift stays machine-readable instead of silently diverging from the files on disk.
 - round-8 claim-rewards support now also validates a machine-readable `metadata.task_support.daily_ui.claim_rewards.post_tap_contract` packet, mirrored in `catalog.json`, so the confirm-modal truth gap stays explicit and reviewable instead of hiding in free-form handoff notes.
+- round-9 guild-order support now also validates a machine-readable `metadata.task_support.daily_ui.guild_order_submit.scene_contract` packet so placeholder anchors, blocked material-count surfaces, and future live promotions stay explicit instead of drifting into undocumented assumptions.
 
 Validation only enforces rules that are already part of the documented contracts:
 
@@ -126,6 +132,7 @@ The readiness report is intentionally stricter than raw filesystem validation:
 - `get_primary_curation_reference()` and `resolve_curation_reference_path()` expose the first GUI-facing baseline image for one curated anchor.
 - `resolve_claim_rewards_catalog_path()`, `get_claim_rewards_golden_catalog()`, `get_claim_rewards_anchor_golden()`, and `list_claim_rewards_supporting_captures()` expose the claim-rewards golden catalog and its supporting live evidence without forcing callers to parse raw JSON.
 - `get_claim_rewards_post_tap_contract()` exposes the manifest-level Route-A decision packet for post-tap behavior.
+- `get_guild_order_scene_contract()` exposes the manifest-level placeholder/blocked guild-order scene contract for `daily_ui.guild_order_submit`.
 - `get_task_support()` returns manifest-level `metadata.task_support` without forcing callers to read the raw manifest dict.
 
 ## GUI Panels
@@ -167,6 +174,8 @@ Current sample coverage:
 - `docs/vision/claim_rewards_live/raw/` now keeps the supporting live capture trail for this task only
 - `assets/templates/daily_ui/goldens/claim_rewards/live/` now also carries supporting live negative-case captures for a non-claimable daily-sign-in panel, the wrong reward surface, a non-reward confirmation modal, and one alternate post-tap reward overlay
 - `daily_ui.guild_check_in_button` placeholder template now exists under `assets/templates/daily_ui/`
+- `daily_ui.guild_order_submit` now has a truthful first-cut placeholder-only scene contract covering the guild hub entry, order list/detail, submit/refresh affordances, unavailable state, insufficient-material feedback, and submit-result state
+- material requirement labels, required quantities, and available-count surfaces remain explicitly blocked until reviewed live evidence lands
 - `odin.start_button` placeholder template exists
 - the current asset inventory in this worktree aligns with the shipped claim-rewards anchors, so readiness no longer needs a special-case mismatch note for `daily_ui.claim_reward`
 
@@ -219,6 +228,36 @@ The branch now also ships a minimal golden organization for this task only:
 - `assets/templates/daily_ui/goldens/claim_rewards/live/daily_ui_claim_rewards__post_tap_claimed_result__live_capture__emulator_5560__after_claim_tap.png`
 
 The reward-panel baseline and claim-button baseline are now both promoted to live zh-TW ROX captures. The confirm-state baseline remains a curated stand-in with no approved live modal proof yet, but it now carries four-device live post-tap supporting evidence plus a machine-readable recommendation to broaden the live contract toward direct result overlays instead of the strict modal.
+
+## Guild Order Support
+
+`assets/templates/daily_ui/manifest.json` now also declares a first-cut guild-order support contract:
+
+- task id: `daily_ui.guild_order_submit`
+- workflow: `daily-ui-guild-order-submit`
+- required inspection roles:
+  - `guild_hub_entry`
+  - `guild_order_list`
+  - `guild_order_detail`
+  - `submit_affordance`
+  - `refresh_affordance`
+  - `unavailable_state`
+  - `insufficient_material_feedback`
+  - `submit_result_state`
+
+The current `scene_contract` is intentionally conservative:
+
+- `ready_anchor_ids`: empty
+- `placeholder_anchor_ids`: all eight current guild-order anchors
+- `blocked_anchor_ids`: empty
+- `evidence_state`: `placeholder_only`
+- `decision_surface_state`: `blocked_by_missing_material_evidence`
+- blocked material surfaces:
+  - `guild_order_requirement_material`
+  - `guild_order_required_quantity`
+  - `guild_order_available_material_count`
+
+This lets the vision layer expose the full first-cut state inventory without pretending that live guild-order material evidence already exists in this worktree. The placeholder anchors are valid scaffolding for readiness, inspection, and future GUI/runtime wiring, but they must not be treated as promoted live proof until Engine E lands reviewed guild-order evidence.
 
 `catalog.json` is the machine-readable index for the three shipped claim-rewards baselines. It records:
 
