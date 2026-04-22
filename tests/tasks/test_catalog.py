@@ -76,7 +76,16 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
         )
         self.assertEqual(
             curated.records[0].metadata["claim_rewards_alternate_post_tap_capture_ids"],
-            ["post_tap_reward_overlay_live_capture_emulator_5556_after_day7_claim_tap_2026_04_22"],
+            [
+                "post_tap_reward_overlay_live_capture_emulator_5556_after_day7_claim_tap_2026_04_22",
+                "post_tap_claimed_result_live_capture_127_0_0_1_5559_after_claim_tap",
+                "post_tap_claimed_result_live_capture_127_0_0_1_5563_after_claim_tap",
+                "post_tap_claimed_result_live_capture_emulator_5560_after_claim_tap",
+            ],
+        )
+        self.assertEqual(
+            curated.records[0].metadata["claim_rewards_capture_inventory"]["missing_device_serials"],
+            [],
         )
         self.assertEqual(
             curated.records[0].metadata["runtime_seam"]["runtime_seam_builder"],

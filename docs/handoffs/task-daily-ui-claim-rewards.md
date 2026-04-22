@@ -69,6 +69,10 @@ Contract changes:
   - direct post-tap `claimed` path stays valid
   - explicit confirm modal path still works when present
   - outcome codes and runtime seam builder names stay stable
+- After merging `main`, task-owned inventory/readiness snapshots were refreshed to match the widened round-8 evidence set:
+  - `claim_rewards_alternate_post_tap_capture_ids` now includes the additional landed live captures from `127.0.0.1:5559`, `127.0.0.1:5563`, and `emulator-5560`
+  - `claim_rewards_capture_inventory["missing_device_serials"]` is now empty
+  - task-side tests were updated to assert the merged evidence inventory instead of the older single-overlay expectation
 
 Assumptions:
 
