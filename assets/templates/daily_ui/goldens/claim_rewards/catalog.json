@@ -11,7 +11,7 @@
       "reward_panel_claimable": "curated_stand_in",
       "reward_confirm_modal": "curated_stand_in"
     },
-    "notes": "The canonical reward-panel-open golden is a live zh-TW ROX screenshot. The claim-button baseline remains a curated stand-in but now carries live reward-panel context evidence, and the confirm-modal baseline remains a curated stand-in until an approved live modal capture is available. Negative-case live captures are cataloged separately so visually similar but incorrect scenes are not promoted into positive baselines."
+    "notes": "The canonical reward-panel-open golden is a live zh-TW ROX screenshot. The claim-button baseline remains a curated stand-in but now carries both live reward-panel context evidence and explicit negative-case live evidence, and the confirm-modal baseline remains a curated stand-in until an approved live modal capture is available. Negative-case live captures are cataloged separately so visually similar but incorrect scenes are not promoted into positive baselines."
   },
   "goldens": [
     {
@@ -31,7 +31,7 @@
       "failure_case": "reward_panel_not_open_or_wrong_surface",
       "proves": "Shows the opened daily-sign-in reward panel on live zh-TW ROX UI and serves as the canonical panel-open golden for anchor verification.",
       "supporting_capture_ids": [
-        "reward_panel_live_capture_emulator_5560_daily_signin",
+        "reward_panel_open_emulator_5560_daily_signin_v1",
         "entry_context_live_capture_emulator_5556_after_fuli_tap",
         "wrong_reward_surface_live_capture_emulator_5560_kingdom_pass_rewards"
       ],
@@ -57,6 +57,7 @@
       "failure_case": "claim_button_missing_or_not_tappable",
       "proves": "Shows the claimable reward panel state with an enabled claim button for pre-tap verification.",
       "supporting_capture_ids": [
+        "claim_button_context_reward_panel_open_v1",
         "non_claimable_daily_signin_live_capture_emulator_5556_after_daily_tab_attempt_2"
       ],
       "limitations": [
@@ -104,6 +105,7 @@
       "source_kind": "live_zh_tw_rox_capture",
       "live_capture": true,
       "evidence_role": "scene_context_only",
+      "failure_case": "Use when the claim button still relies on a stand-in baseline but the operator needs real reward-panel chrome for comparison.",
       "notes": "Reuses the approved live reward-panel baseline as scene-context evidence for the claim button. The button lane is visible in real zh-TW ROX UI, but the enabled claimable state is still not directly proven by a live capture."
     },
     {
@@ -117,6 +119,7 @@
       "sha256": "82a48f798b8d3cae294f0ffdf8eced1e1cd53031a8918672f64fc02099c3103a",
       "source_kind": "live_zh_tw_rox_capture",
       "live_capture": true,
+      "evidence_role": "descriptive_copy",
       "proves": "Keeps a descriptive live-capture filename for the canonical panel-open screenshot so downstream tooling and manual review can refer to the raw evidence directly.",
       "failure_case": "Use when inspecting why the reward panel did not open or why the wrong reward page was captured."
     },
@@ -131,6 +134,7 @@
       "sha256": "a7831d4abab2d7b82bb6cf4d2b0560b3d10fd8dd0e3711a6c1bc7688259da57a",
       "source_kind": "live_zh_tw_rox_capture",
       "live_capture": true,
+      "evidence_role": "scene_context_only",
       "proves": "Shows the live zh-TW ROX entry context immediately after tapping the Fu Li menu and before the daily sign-in reward panel opens.",
       "failure_case": "Use when navigation reaches Fu Li but never advances to the reward-panel-open anchor."
     },
@@ -145,6 +149,7 @@
       "sha256": "3eb1a7256eb88bb6ad5038cf17ac093de8e0f51ce49263229a8e75facfda7a62",
       "source_kind": "live_zh_tw_rox_capture",
       "live_capture": true,
+      "evidence_role": "negative_case",
       "proves": "Shows the live zh-TW daily-sign-in panel with greyed controls and no enabled claim affordance, so panel-open success is not mistaken for a claimable state.",
       "failure_case": "Use when the flow opens daily sign-in but the claim button is missing, disabled, or already consumed."
     },
@@ -159,6 +164,7 @@
       "sha256": "5f99da0cac1eac9a15a26fd6f257b3148e7554f0a6d2128e5691b4e7e3574c46",
       "source_kind": "live_zh_tw_rox_capture",
       "live_capture": true,
+      "evidence_role": "negative_case",
       "proves": "Shows the Kingdom Pass rewards page, a reward-like surface that should not satisfy the daily sign-in reward panel success check.",
       "failure_case": "Use when Fu Li navigation lands on a reward surface that looks plausible but is not the daily sign-in panel."
     },
@@ -173,6 +179,7 @@
       "sha256": "184dbbcb9d362315718888619726fcdb5923fecc06b35c6797e0f46c50101d76",
       "source_kind": "live_zh_tw_rox_capture",
       "live_capture": true,
+      "evidence_role": "negative_case",
       "proves": "Shows a generic exit-game confirmation dialog captured during reward exploration; this modal must not be treated as the reward claim confirmation state.",
       "failure_case": "Use when a generic confirmation dialog interrupts reward navigation or claim attempts and the expected reward confirmation modal never appears."
     }

@@ -157,6 +157,9 @@ class TemplateDependencyReadiness:
     asset_exists: bool = False
     source_path: str = ""
     resolved_template_path: str = ""
+    golden_catalog_path: str = ""
+    selected_golden_id: str = ""
+    selected_golden_image_path: str = ""
     inventory_mismatch: bool = False
     curation_status: AnchorCurationStatus | None = None
     curation_reference_count: int = 0
@@ -167,6 +170,13 @@ class TemplateDependencyReadiness:
     live_reference_count: int = 0
     live_reference_ids: list[str] = field(default_factory=list)
     live_reference_image_paths: list[str] = field(default_factory=list)
+    supporting_capture_count: int = 0
+    supporting_capture_ids: list[str] = field(default_factory=list)
+    supporting_capture_image_paths: list[str] = field(default_factory=list)
+    supporting_capture_evidence_roles: list[str] = field(default_factory=list)
+    supporting_capture_failure_cases: list[str] = field(default_factory=list)
+    live_supporting_capture_count: int = 0
+    live_supporting_capture_ids: list[str] = field(default_factory=list)
     provenance_kind: AnchorAssetProvenanceKind | None = None
     provenance_summary: str = ""
     curation_summary: str = ""
@@ -211,6 +221,9 @@ class TemplateDependencyReadiness:
             asset_exists=bool(data.get("asset_exists", False)),
             source_path=str(data.get("source_path", "")),
             resolved_template_path=str(data.get("resolved_template_path", "")),
+            golden_catalog_path=str(data.get("golden_catalog_path", "")),
+            selected_golden_id=str(data.get("selected_golden_id", "")),
+            selected_golden_image_path=str(data.get("selected_golden_image_path", "")),
             inventory_mismatch=bool(data.get("inventory_mismatch", False)),
             curation_status=curation_status,
             curation_reference_count=int(data.get("curation_reference_count", 0)),
@@ -226,6 +239,23 @@ class TemplateDependencyReadiness:
             ],
             live_reference_image_paths=[
                 str(image_path) for image_path in data.get("live_reference_image_paths", [])
+            ],
+            supporting_capture_count=int(data.get("supporting_capture_count", 0)),
+            supporting_capture_ids=[
+                str(capture_id) for capture_id in data.get("supporting_capture_ids", [])
+            ],
+            supporting_capture_image_paths=[
+                str(image_path) for image_path in data.get("supporting_capture_image_paths", [])
+            ],
+            supporting_capture_evidence_roles=[
+                str(role) for role in data.get("supporting_capture_evidence_roles", [])
+            ],
+            supporting_capture_failure_cases=[
+                str(case) for case in data.get("supporting_capture_failure_cases", [])
+            ],
+            live_supporting_capture_count=int(data.get("live_supporting_capture_count", 0)),
+            live_supporting_capture_ids=[
+                str(capture_id) for capture_id in data.get("live_supporting_capture_ids", [])
             ],
             provenance_kind=provenance_kind,
             provenance_summary=str(data.get("provenance_summary", "")),
@@ -605,10 +635,18 @@ def build_vision_workspace_readiness_report(
             asset_exists = Path(resolved_template_path).exists()
             metadata.setdefault("placeholder", bool(anchor.metadata.get("placeholder", False)))
             curation = repository.get_anchor_curation(anchor_id)
+        golden_catalog_path = _golden_catalog_path(repository)
+        selected_golden_id = _selected_golden_id(repository, anchor_id)
+        selected_golden_image_path = _selected_golden_image_path(repository, anchor_id)
         reference_ids = _reference_ids(curation)
         reference_image_paths = _reference_image_paths(repository, anchor_id)
         live_reference_ids = _live_reference_ids(curation)
         live_reference_image_paths = _live_reference_image_paths(repository, anchor_id)
+        supporting_capture_ids = _supporting_capture_ids(repository, anchor_id)
+        supporting_capture_image_paths = _supporting_capture_image_paths(repository, anchor_id)
+        supporting_capture_evidence_roles = _supporting_capture_evidence_roles(repository, anchor_id)
+        supporting_capture_failure_cases = _supporting_capture_failure_cases(repository, anchor_id)
+        live_supporting_capture_ids = _live_supporting_capture_ids(repository, anchor_id)
 
         readiness_status, message = _resolve_template_readiness_status(
             repository_present=repository_present,
@@ -647,6 +685,9 @@ def build_vision_workspace_readiness_report(
                 asset_exists=asset_exists,
                 source_path=source_path,
                 resolved_template_path=resolved_template_path,
+                golden_catalog_path=golden_catalog_path,
+                selected_golden_id=selected_golden_id,
+                selected_golden_image_path=selected_golden_image_path,
                 inventory_mismatch=inventory_mismatch,
                 curation_status=curation.status if curation is not None else None,
                 curation_reference_count=curation.reference_count if curation is not None else 0,
@@ -657,6 +698,13 @@ def build_vision_workspace_readiness_report(
                 live_reference_count=len(live_reference_ids),
                 live_reference_ids=live_reference_ids,
                 live_reference_image_paths=live_reference_image_paths,
+                supporting_capture_count=len(supporting_capture_ids),
+                supporting_capture_ids=supporting_capture_ids,
+                supporting_capture_image_paths=supporting_capture_image_paths,
+                supporting_capture_evidence_roles=supporting_capture_evidence_roles,
+                supporting_capture_failure_cases=supporting_capture_failure_cases,
+                live_supporting_capture_count=len(live_supporting_capture_ids),
+                live_supporting_capture_ids=live_supporting_capture_ids,
                 provenance_kind=curation.provenance_kind if curation is not None else None,
                 provenance_summary=_provenance_summary(curation),
                 curation_summary=_curation_summary(curation),
@@ -923,7 +971,26 @@ def _validate_claim_rewards_golden_catalog(
             )
         ]
 
+    supporting_capture_entries = catalog.get("supporting_captures", [])
+    if not isinstance(supporting_capture_entries, list):
+        return [
+            TemplateValidationIssue(
+                code="invalid_claim_rewards_supporting_capture_entries",
+                severity=TemplateValidationSeverity.ERROR,
+                message="Claim-rewards golden catalog must define a 'supporting_captures' list.",
+                path=str(resolved_catalog_path),
+                metadata={"task_id": "daily_ui.claim_rewards"},
+            )
+        ]
+
+    claim_rewards_anchor_ids = {
+        anchor.anchor_id
+        for anchor in repository.list_anchors()
+        if "daily_ui.claim_rewards" in _anchor_task_ids(dict(anchor.metadata))
+    }
+    catalog_root = resolved_catalog_path.parent
     goldens_by_id: dict[str, dict[str, Any]] = {}
+    supporting_captures_by_id: dict[str, dict[str, Any]] = {}
     issues: list[TemplateValidationIssue] = []
     for entry in golden_entries:
         if not isinstance(entry, dict):
@@ -950,6 +1017,114 @@ def _validate_claim_rewards_golden_catalog(
             )
             continue
         goldens_by_id[golden_id] = entry
+
+    for entry in supporting_capture_entries:
+        if not isinstance(entry, dict):
+            issues.append(
+                TemplateValidationIssue(
+                    code="invalid_claim_rewards_supporting_capture_entry",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message="Claim-rewards supporting capture entries must be objects.",
+                    path=str(resolved_catalog_path),
+                    metadata={"task_id": "daily_ui.claim_rewards"},
+                )
+            )
+            continue
+        capture_id = str(entry.get("capture_id", "")).strip()
+        if not capture_id:
+            issues.append(
+                TemplateValidationIssue(
+                    code="missing_claim_rewards_supporting_capture_id",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message="Each claim-rewards supporting capture entry must define capture_id.",
+                    path=str(resolved_catalog_path),
+                    metadata={"task_id": "daily_ui.claim_rewards"},
+                )
+            )
+            continue
+        supporting_captures_by_id[capture_id] = entry
+
+        file_name = str(entry.get("file_name", "")).strip()
+        if not file_name:
+            issues.append(
+                TemplateValidationIssue(
+                    code="missing_claim_rewards_supporting_capture_file_name",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=f"Supporting capture '{capture_id}' must define file_name.",
+                    path=str(resolved_catalog_path),
+                    metadata={"task_id": "daily_ui.claim_rewards", "capture_id": capture_id},
+                )
+            )
+        else:
+            supporting_path = (catalog_root / Path(file_name)).resolve()
+            try:
+                supporting_path.relative_to(repository.root.resolve())
+            except ValueError:
+                issues.append(
+                    TemplateValidationIssue(
+                        code="invalid_claim_rewards_supporting_capture_path",
+                        severity=TemplateValidationSeverity.ERROR,
+                        message=(
+                            f"Supporting capture '{capture_id}' cannot resolve outside the repository root."
+                        ),
+                        path=str(supporting_path),
+                        metadata={"task_id": "daily_ui.claim_rewards", "capture_id": capture_id},
+                    )
+                )
+            else:
+                if not supporting_path.exists():
+                    issues.append(
+                        TemplateValidationIssue(
+                            code="missing_claim_rewards_supporting_capture_asset",
+                            severity=TemplateValidationSeverity.ERROR,
+                            message=f"Supporting capture '{capture_id}' file is missing.",
+                            path=str(supporting_path),
+                            metadata={"task_id": "daily_ui.claim_rewards", "capture_id": capture_id},
+                        )
+                    )
+
+        anchor_id = str(entry.get("anchor_id", "")).strip()
+        if anchor_id and anchor_id not in claim_rewards_anchor_ids:
+            issues.append(
+                TemplateValidationIssue(
+                    code="unknown_claim_rewards_supporting_capture_anchor",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=(
+                        f"Supporting capture '{capture_id}' must point at an anchor assigned "
+                        "to daily_ui.claim_rewards."
+                    ),
+                    path=str(resolved_catalog_path),
+                    metadata={"task_id": "daily_ui.claim_rewards", "capture_id": capture_id, "anchor_id": anchor_id},
+                )
+            )
+
+        if not str(entry.get("failure_case", "")).strip():
+            issues.append(
+                TemplateValidationIssue(
+                    code="missing_claim_rewards_supporting_capture_failure_case",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=(
+                        f"Supporting capture '{capture_id}' must define failure_case so GUI "
+                        "and diagnostics stay machine-readable."
+                    ),
+                    path=str(resolved_catalog_path),
+                    metadata={"task_id": "daily_ui.claim_rewards", "capture_id": capture_id},
+                )
+            )
+
+        if not str(entry.get("evidence_role", "")).strip():
+            issues.append(
+                TemplateValidationIssue(
+                    code="missing_claim_rewards_supporting_capture_evidence_role",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=(
+                        f"Supporting capture '{capture_id}' must define evidence_role so "
+                        "supporting provenance does not depend on free-form notes."
+                    ),
+                    path=str(resolved_catalog_path),
+                    metadata={"task_id": "daily_ui.claim_rewards", "capture_id": capture_id},
+                )
+            )
 
     for anchor in repository.list_anchors():
         metadata = dict(anchor.metadata)
@@ -1103,6 +1278,52 @@ def _validate_claim_rewards_golden_catalog(
                     path=str(resolved_catalog_path),
                 )
             )
+
+        raw_supporting_capture_ids = catalog_entry.get("supporting_capture_ids", [])
+        if not isinstance(raw_supporting_capture_ids, list):
+            issues.append(
+                TemplateValidationIssue(
+                    code="invalid_claim_rewards_golden_supporting_capture_ids",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=(
+                        f"Golden catalog entry '{golden_id}' must define supporting_capture_ids as a list."
+                    ),
+                    anchor_id=anchor.anchor_id,
+                    path=str(resolved_catalog_path),
+                )
+            )
+            continue
+
+        for capture_id in [str(entry).strip() for entry in raw_supporting_capture_ids if str(entry).strip()]:
+            supporting_capture = supporting_captures_by_id.get(capture_id)
+            if supporting_capture is None:
+                issues.append(
+                    TemplateValidationIssue(
+                        code="missing_claim_rewards_golden_supporting_capture_entry",
+                        severity=TemplateValidationSeverity.ERROR,
+                        message=(
+                            f"Golden catalog entry '{golden_id}' references supporting capture "
+                            f"'{capture_id}', but that entry is missing."
+                        ),
+                        anchor_id=anchor.anchor_id,
+                        path=str(resolved_catalog_path),
+                    )
+                )
+                continue
+            supporting_anchor_id = str(supporting_capture.get("anchor_id", "")).strip()
+            if supporting_anchor_id and supporting_anchor_id != anchor.anchor_id:
+                issues.append(
+                    TemplateValidationIssue(
+                        code="claim_rewards_supporting_capture_anchor_mismatch",
+                        severity=TemplateValidationSeverity.ERROR,
+                        message=(
+                            f"Supporting capture '{capture_id}' points at anchor '{supporting_anchor_id}', "
+                            f"but golden '{golden_id}' belongs to '{anchor.anchor_id}'."
+                        ),
+                        anchor_id=anchor.anchor_id,
+                        path=str(resolved_catalog_path),
+                    )
+                )
 
     return issues
 
@@ -1462,6 +1683,27 @@ def _selected_reference_kind(curation: AnchorCurationProfile | None) -> str:
     return str(curation.references[0].kind)
 
 
+def _golden_catalog_path(repository: AnchorRepository | None) -> str:
+    if repository is None:
+        return ""
+    resolved_path = repository.resolve_claim_rewards_catalog_path()
+    return str(resolved_path) if resolved_path is not None else ""
+
+
+def _selected_golden_id(repository: AnchorRepository | None, anchor_id: str) -> str:
+    if repository is None or not anchor_id:
+        return ""
+    golden = repository.get_claim_rewards_anchor_golden(anchor_id)
+    return golden.golden_id if golden is not None else ""
+
+
+def _selected_golden_image_path(repository: AnchorRepository | None, anchor_id: str) -> str:
+    if repository is None or not anchor_id:
+        return ""
+    path = repository.resolve_claim_rewards_golden_image_path(anchor_id)
+    return str(path) if path is not None else ""
+
+
 def _reference_ids(curation: AnchorCurationProfile | None) -> list[str]:
     if curation is None:
         return []
@@ -1506,6 +1748,49 @@ def _live_reference_image_paths(repository: AnchorRepository | None, anchor_id: 
             continue
         live_reference_paths.append(str(repository.resolve_repository_path(reference.image_path)))
     return live_reference_paths
+
+
+def _supporting_captures(repository: AnchorRepository | None, anchor_id: str) -> list[Any]:
+    if repository is None or not anchor_id:
+        return []
+    return list(repository.list_claim_rewards_supporting_captures(anchor_id))
+
+
+def _supporting_capture_ids(repository: AnchorRepository | None, anchor_id: str) -> list[str]:
+    return [capture.capture_id for capture in _supporting_captures(repository, anchor_id) if capture.capture_id]
+
+
+def _supporting_capture_image_paths(repository: AnchorRepository | None, anchor_id: str) -> list[str]:
+    if repository is None or not anchor_id:
+        return []
+    return [
+        str(path)
+        for path in repository.resolve_claim_rewards_supporting_capture_paths(anchor_id)
+    ]
+
+
+def _supporting_capture_evidence_roles(repository: AnchorRepository | None, anchor_id: str) -> list[str]:
+    return [
+        capture.evidence_role
+        for capture in _supporting_captures(repository, anchor_id)
+        if capture.evidence_role
+    ]
+
+
+def _supporting_capture_failure_cases(repository: AnchorRepository | None, anchor_id: str) -> list[str]:
+    return [
+        capture.failure_case
+        for capture in _supporting_captures(repository, anchor_id)
+        if capture.failure_case
+    ]
+
+
+def _live_supporting_capture_ids(repository: AnchorRepository | None, anchor_id: str) -> list[str]:
+    return [
+        capture.capture_id
+        for capture in _supporting_captures(repository, anchor_id)
+        if capture.capture_id and bool(capture.live_capture)
+    ]
 
 
 def _claim_rewards_live_capture_coverage(repository: AnchorRepository | None) -> dict[str, Any]:

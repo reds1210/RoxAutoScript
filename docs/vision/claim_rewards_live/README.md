@@ -16,8 +16,14 @@ Promoted supporting evidence:
 
 What was intentionally not promoted to canonical baseline:
 
-- no reviewed raw capture shows an enabled live claim button for `daily_ui.claim_reward`
+- a newer raw capture from Engine E, `raw/emulator-5556-after-fuli-tap-2026-04-22.png`, does show a plausible live claimable day-7 panel for `daily_ui.claim_reward`, but it was not promoted in this run because the canonical template/golden asset import itself has not landed in this worktree
 - no reviewed raw capture shows the real post-claim reward confirmation modal for `daily_ui.reward_confirm_state`
+
+Additional reviewed evidence not promoted in this run:
+
+- `raw/emulator-5556-after-day7-claim-tap-2026-04-22.png`
+  - useful as post-tap overlay provenance for the claim flow
+  - not a like-for-like replacement for `daily_ui.reward_confirm_state`, because it shows the reward-acquired overlay rather than the expected confirm-button modal state
 
 Promotion rule for this track:
 

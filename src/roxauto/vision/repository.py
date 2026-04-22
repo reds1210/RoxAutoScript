@@ -9,6 +9,9 @@ from roxauto.vision.models import (
     AnchorCurationProfile,
     AnchorCurationReference,
     AnchorSpec,
+    ClaimRewardsGoldenCatalog,
+    ClaimRewardsGoldenCatalogEntry,
+    ClaimRewardsSupportingCapture,
     TemplateRepositoryManifest,
 )
 
@@ -132,6 +135,85 @@ class AnchorRepository:
             if not reference.image_path:
                 continue
             paths.append(self.resolve_repository_path(reference.image_path))
+        return paths
+
+    def resolve_claim_rewards_catalog_path(self) -> Path | None:
+        catalog_path = str(
+            self.get_task_support("daily_ui.claim_rewards").get("golden_catalog_path", "")
+        ).strip()
+        if not catalog_path:
+            return None
+        path = Path(catalog_path)
+        if path.is_absolute() or ".." in path.parts:
+            return None
+        resolved = (self.root / path).resolve()
+        try:
+            resolved.relative_to(self.root.resolve())
+        except ValueError:
+            return None
+        return resolved
+
+    def get_claim_rewards_golden_catalog(self) -> ClaimRewardsGoldenCatalog | None:
+        catalog_path = self.resolve_claim_rewards_catalog_path()
+        if catalog_path is None or not catalog_path.exists():
+            return None
+        data = loads(catalog_path.read_text(encoding="utf-8"))
+        return ClaimRewardsGoldenCatalog.from_dict(data)
+
+    def get_claim_rewards_anchor_golden(
+        self,
+        anchor_id: str,
+    ) -> ClaimRewardsGoldenCatalogEntry | None:
+        catalog = self.get_claim_rewards_golden_catalog()
+        if catalog is None:
+            return None
+        curation = self.get_anchor_curation(anchor_id)
+        golden_id = ""
+        if curation is not None:
+            golden_id = str(curation.metadata.get("golden_id", "")).strip()
+        if golden_id:
+            return catalog.get_golden(golden_id)
+        for golden in catalog.goldens:
+            if golden.anchor_id == anchor_id:
+                return golden
+        return None
+
+    def resolve_claim_rewards_golden_image_path(self, anchor_id: str) -> Path | None:
+        catalog_path = self.resolve_claim_rewards_catalog_path()
+        golden = self.get_claim_rewards_anchor_golden(anchor_id)
+        if catalog_path is None or golden is None or not golden.file_name:
+            return None
+        return catalog_path.parent / Path(golden.file_name)
+
+    def list_claim_rewards_supporting_captures(
+        self,
+        anchor_id: str,
+    ) -> list[ClaimRewardsSupportingCapture]:
+        catalog = self.get_claim_rewards_golden_catalog()
+        golden = self.get_claim_rewards_anchor_golden(anchor_id)
+        if catalog is None or golden is None:
+            return []
+        captures: list[ClaimRewardsSupportingCapture] = []
+        seen_capture_ids: set[str] = set()
+        for capture_id in golden.supporting_capture_ids:
+            if capture_id in seen_capture_ids:
+                continue
+            capture = catalog.get_supporting_capture(capture_id)
+            if capture is None:
+                continue
+            captures.append(capture)
+            seen_capture_ids.add(capture_id)
+        return captures
+
+    def resolve_claim_rewards_supporting_capture_paths(self, anchor_id: str) -> list[Path]:
+        catalog_path = self.resolve_claim_rewards_catalog_path()
+        if catalog_path is None:
+            return []
+        paths: list[Path] = []
+        for capture in self.list_claim_rewards_supporting_captures(anchor_id):
+            if not capture.file_name:
+                continue
+            paths.append(catalog_path.parent / Path(capture.file_name))
         return paths
 
     def get_task_support(self, task_id: str) -> dict[str, Any]:

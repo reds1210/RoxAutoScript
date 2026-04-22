@@ -65,6 +65,19 @@ class AnchorRepositoryTests(unittest.TestCase):
             reward_panel_curation.metadata["failure_case"],
             "reward_panel_not_open_or_wrong_surface",
         )
+        claim_rewards_catalog = repository.get_claim_rewards_golden_catalog()
+        self.assertIsNotNone(claim_rewards_catalog)
+        self.assertEqual(claim_rewards_catalog.task_id, "daily_ui.claim_rewards")
+        self.assertEqual(len(claim_rewards_catalog.goldens), 3)
+        self.assertEqual(len(claim_rewards_catalog.supporting_captures), 6)
+        reward_panel_golden = repository.get_claim_rewards_anchor_golden("daily_ui.reward_panel")
+        self.assertIsNotNone(reward_panel_golden)
+        self.assertEqual(reward_panel_golden.golden_id, "reward_panel_open_baseline_v1")
+        self.assertTrue(
+            str(repository.resolve_claim_rewards_golden_image_path("daily_ui.reward_panel")).endswith(
+                "daily_ui_claim_rewards__reward_panel__baseline__v1.png"
+            )
+        )
         claim_button_curation = repository.get_anchor_curation("daily_ui.claim_reward")
         self.assertIsNotNone(claim_button_curation)
         self.assertEqual(claim_button_curation.reference_count, 2)
@@ -76,6 +89,25 @@ class AnchorRepositoryTests(unittest.TestCase):
             str(repository.resolve_curation_reference_paths("daily_ui.claim_reward")[1]).endswith(
                 "daily_ui_claim_rewards__reward_panel__baseline__v1.png"
             )
+        )
+        claim_button_supporting_captures = repository.list_claim_rewards_supporting_captures("daily_ui.claim_reward")
+        self.assertEqual(
+            [capture.capture_id for capture in claim_button_supporting_captures],
+            [
+                "claim_button_context_reward_panel_open_v1",
+                "non_claimable_daily_signin_live_capture_emulator_5556_after_daily_tab_attempt_2",
+            ],
+        )
+        self.assertEqual(
+            [capture.evidence_role for capture in claim_button_supporting_captures],
+            ["scene_context_only", "negative_case"],
+        )
+        self.assertEqual(
+            [path.name for path in repository.resolve_claim_rewards_supporting_capture_paths("daily_ui.claim_reward")],
+            [
+                "daily_ui_claim_rewards__reward_panel__baseline__v1.png",
+                "daily_ui_claim_rewards__non_claimable_daily_signin__live_capture__emulator_5556__after_daily_tab_attempt_2.png",
+            ],
         )
 
     def test_repository_exposes_manifest_and_search_helpers(self) -> None:

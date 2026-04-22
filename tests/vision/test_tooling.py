@@ -65,12 +65,26 @@ class VisionToolingTests(unittest.TestCase):
         self.assertEqual(claim_dependency.readiness_status, TemplateReadinessStatus.READY)
         self.assertEqual(claim_dependency.curation_status.value, "curated")
         self.assertEqual(claim_dependency.provenance_kind, AnchorAssetProvenanceKind.CURATED_STAND_IN)
+        self.assertTrue(claim_dependency.golden_catalog_path.endswith("goldens\\claim_rewards\\catalog.json"))
+        self.assertEqual(claim_dependency.selected_golden_id, "reward_panel_claimable_baseline_v1")
         self.assertEqual(claim_dependency.selected_reference_id, "claim_button_baseline_v1")
         self.assertEqual(claim_dependency.selected_reference_kind, "curated_stand_in")
         self.assertEqual(claim_dependency.live_reference_count, 1)
         self.assertEqual(
             claim_dependency.live_reference_ids,
             ["claim_button_live_context_reward_panel_open_v1"],
+        )
+        self.assertEqual(claim_dependency.supporting_capture_count, 2)
+        self.assertEqual(
+            claim_dependency.supporting_capture_ids,
+            [
+                "claim_button_context_reward_panel_open_v1",
+                "non_claimable_daily_signin_live_capture_emulator_5556_after_daily_tab_attempt_2",
+            ],
+        )
+        self.assertEqual(
+            claim_dependency.supporting_capture_evidence_roles,
+            ["scene_context_only", "negative_case"],
         )
         self.assertEqual(claim_dependency.failure_case, "claim_button_missing_or_not_tappable")
         self.assertTrue(
@@ -379,6 +393,13 @@ class VisionToolingTests(unittest.TestCase):
         self.assertEqual(failure.claim_rewards.selected_image_path, "captures/reward-preview.png")
         self.assertEqual(failure.claim_rewards.selected_source_image, "captures/reward-preview.png")
         self.assertEqual(failure.claim_rewards.selected_anchor_label, "Reward Confirm State")
+        self.assertTrue(failure.claim_rewards.golden_catalog_path.endswith("goldens\\claim_rewards\\catalog.json"))
+        self.assertEqual(failure.claim_rewards.selected_golden_id, "reward_confirm_modal_baseline_v1")
+        self.assertTrue(
+            failure.claim_rewards.selected_golden_image_path.endswith(
+                "daily_ui_claim_rewards__confirm_state__baseline__v1.png"
+            )
+        )
         self.assertTrue(failure.claim_rewards.selected_template_path.endswith("daily_reward_confirm_state.png"))
         self.assertEqual(failure.claim_rewards.selected_reference_id, "confirm_state_baseline_v1")
         self.assertEqual(failure.claim_rewards.selected_reference_kind, "curated_stand_in")
@@ -397,6 +418,10 @@ class VisionToolingTests(unittest.TestCase):
         self.assertEqual(failure.claim_rewards.selected_check.selected_region.to_tuple(), (520, 220, 880, 520))
         self.assertEqual(failure.claim_rewards.selected_check.selected_region_summary, "520,220,880,520")
         self.assertTrue(failure.claim_rewards.selected_check.selected_template_path.endswith("daily_reward_confirm_state.png"))
+        self.assertEqual(
+            failure.claim_rewards.selected_check.selected_golden_id,
+            "reward_confirm_modal_baseline_v1",
+        )
         self.assertEqual(failure.claim_rewards.selected_check.selected_reference_id, "confirm_state_baseline_v1")
         self.assertEqual(failure.claim_rewards.selected_check.selected_reference_kind, "curated_stand_in")
         self.assertTrue(
@@ -405,6 +430,15 @@ class VisionToolingTests(unittest.TestCase):
             )
         )
         self.assertEqual(failure.claim_rewards.selected_check.live_reference_count, 0)
+        self.assertEqual(failure.claim_rewards.selected_check.supporting_capture_count, 1)
+        self.assertEqual(
+            failure.claim_rewards.selected_check.supporting_capture_ids,
+            ["non_reward_confirm_modal_live_capture_emulator_5560_exit_game_prompt"],
+        )
+        self.assertEqual(
+            failure.claim_rewards.selected_check.supporting_capture_evidence_roles,
+            ["negative_case"],
+        )
         self.assertEqual(failure.claim_rewards.selected_check.curation_status.value, "curated")
         self.assertEqual(
             failure.claim_rewards.selected_check.provenance_kind,
@@ -430,6 +464,7 @@ class VisionToolingTests(unittest.TestCase):
         self.assertIn("threshold=0.920", failure.claim_rewards.selected_check_summary)
         self.assertIn("image=captures/reward-preview.png", failure.claim_rewards.selected_check_summary)
         self.assertIn("region=520,220,880,520", failure.claim_rewards.selected_check_summary)
+        self.assertIn("golden_id=reward_confirm_modal_baseline_v1", failure.claim_rewards.selected_check_summary)
         self.assertIn("failure_case=confirm_modal_missing_after_claim_tap", failure.claim_rewards.selected_check_summary)
         self.assertIn("provenance=curated_stand_in", failure.claim_rewards.selected_check_summary)
         self.assertIn("below threshold 0.920", failure.claim_rewards.failure_explanation)
@@ -450,6 +485,7 @@ class VisionToolingTests(unittest.TestCase):
                 "daily_ui_claim_rewards__reward_panel__baseline__v1.png"
             )
         )
+        self.assertEqual(reward_panel_check.selected_golden_id, "reward_panel_open_baseline_v1")
         self.assertEqual(reward_panel_check.selected_reference_id, "reward_panel_baseline_v1")
         self.assertEqual(reward_panel_check.selected_reference_kind, "live_capture")
         self.assertEqual(reward_panel_check.live_reference_count, 3)
@@ -460,6 +496,11 @@ class VisionToolingTests(unittest.TestCase):
                 "reward_panel_live_5560_daily_signin_v1",
                 "reward_panel_entry_context_live_v1",
             ],
+        )
+        self.assertEqual(reward_panel_check.supporting_capture_count, 3)
+        self.assertEqual(
+            reward_panel_check.supporting_capture_evidence_roles,
+            ["descriptive_copy", "scene_context_only", "negative_case"],
         )
         self.assertEqual(
             reward_panel_check.failure_case,
@@ -481,6 +522,19 @@ class VisionToolingTests(unittest.TestCase):
             claim_button_check.live_reference_ids,
             ["claim_button_live_context_reward_panel_open_v1"],
         )
+        self.assertEqual(claim_button_check.selected_golden_id, "reward_panel_claimable_baseline_v1")
+        self.assertEqual(claim_button_check.supporting_capture_count, 2)
+        self.assertEqual(
+            claim_button_check.supporting_capture_ids,
+            [
+                "claim_button_context_reward_panel_open_v1",
+                "non_claimable_daily_signin_live_capture_emulator_5556_after_daily_tab_attempt_2",
+            ],
+        )
+        self.assertEqual(
+            claim_button_check.supporting_capture_evidence_roles,
+            ["scene_context_only", "negative_case"],
+        )
         self.assertTrue(
             claim_button_check.live_reference_image_paths[0].endswith(
                 "daily_ui_claim_rewards__reward_panel__baseline__v1.png"
@@ -499,6 +553,8 @@ class VisionToolingTests(unittest.TestCase):
         self.assertEqual(failure.selected_region.to_tuple(), (520, 220, 880, 520))
         self.assertEqual(failure.selected_region_summary, "520,220,880,520")
         self.assertEqual(failure.selected_anchor_label, "Reward Confirm State")
+        self.assertTrue(failure.golden_catalog_path.endswith("goldens\\claim_rewards\\catalog.json"))
+        self.assertEqual(failure.selected_golden_id, "reward_confirm_modal_baseline_v1")
         self.assertTrue(failure.selected_template_path.endswith("daily_reward_confirm_state.png"))
         self.assertEqual(failure.selected_reference_id, "confirm_state_baseline_v1")
         self.assertEqual(failure.selected_reference_kind, "curated_stand_in")
@@ -508,6 +564,11 @@ class VisionToolingTests(unittest.TestCase):
             )
         )
         self.assertEqual(failure.live_reference_count, 0)
+        self.assertEqual(failure.supporting_capture_count, 1)
+        self.assertEqual(
+            failure.supporting_capture_ids,
+            ["non_reward_confirm_modal_live_capture_emulator_5560_exit_game_prompt"],
+        )
         self.assertEqual(failure.curation_status.value, "curated")
         self.assertEqual(failure.provenance_kind, AnchorAssetProvenanceKind.CURATED_STAND_IN)
         self.assertIn("locale=zh-TW", failure.provenance_summary)

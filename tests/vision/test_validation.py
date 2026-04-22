@@ -69,6 +69,11 @@ class TemplateValidationTests(unittest.TestCase):
         self.assertNotIn("anchor_golden_catalog_live_capture_mismatch", issue_codes)
         self.assertNotIn("anchor_golden_catalog_source_kind_mismatch", issue_codes)
         self.assertNotIn("anchor_golden_catalog_failure_case_mismatch", issue_codes)
+        self.assertNotIn("invalid_claim_rewards_supporting_capture_entries", issue_codes)
+        self.assertNotIn("missing_claim_rewards_supporting_capture_failure_case", issue_codes)
+        self.assertNotIn("missing_claim_rewards_supporting_capture_evidence_role", issue_codes)
+        self.assertNotIn("missing_claim_rewards_golden_supporting_capture_entry", issue_codes)
+        self.assertNotIn("claim_rewards_supporting_capture_anchor_mismatch", issue_codes)
         self.assertNotIn("missing_claim_rewards_live_capture_coverage", issue_codes)
         self.assertNotIn("claim_rewards_live_anchor_missing_from_coverage", issue_codes)
         self.assertNotIn("claim_rewards_stand_in_anchor_missing_from_coverage", issue_codes)
@@ -384,6 +389,13 @@ class TemplateValidationTests(unittest.TestCase):
         self.assertEqual(claim_dependency.curation_status.value, "curated")
         self.assertEqual(claim_dependency.provenance_kind, AnchorAssetProvenanceKind.CURATED_STAND_IN)
         self.assertEqual(claim_dependency.curation_reference_count, 2)
+        self.assertTrue(claim_dependency.golden_catalog_path.endswith("goldens\\claim_rewards\\catalog.json"))
+        self.assertEqual(claim_dependency.selected_golden_id, "reward_panel_claimable_baseline_v1")
+        self.assertTrue(
+            claim_dependency.selected_golden_image_path.endswith(
+                "daily_ui_claim_rewards__claim_button__baseline__v1.png"
+            )
+        )
         self.assertEqual(claim_dependency.selected_reference_id, "claim_button_baseline_v1")
         self.assertEqual(claim_dependency.selected_reference_kind, "curated_stand_in")
         self.assertEqual(
@@ -395,11 +407,38 @@ class TemplateValidationTests(unittest.TestCase):
             claim_dependency.live_reference_ids,
             ["claim_button_live_context_reward_panel_open_v1"],
         )
+        self.assertEqual(claim_dependency.supporting_capture_count, 2)
+        self.assertEqual(
+            claim_dependency.supporting_capture_ids,
+            [
+                "claim_button_context_reward_panel_open_v1",
+                "non_claimable_daily_signin_live_capture_emulator_5556_after_daily_tab_attempt_2",
+            ],
+        )
+        self.assertEqual(
+            claim_dependency.supporting_capture_evidence_roles,
+            ["scene_context_only", "negative_case"],
+        )
+        self.assertEqual(claim_dependency.live_supporting_capture_count, 2)
+        self.assertEqual(
+            claim_dependency.live_supporting_capture_ids,
+            [
+                "claim_button_context_reward_panel_open_v1",
+                "non_claimable_daily_signin_live_capture_emulator_5556_after_daily_tab_attempt_2",
+            ],
+        )
         self.assertEqual(claim_dependency.failure_case, "claim_button_missing_or_not_tappable")
         self.assertTrue(
             claim_dependency.live_reference_image_paths[0].endswith(
                 "daily_ui_claim_rewards__reward_panel__baseline__v1.png"
             )
+        )
+        self.assertEqual(
+            [Path(path).name for path in claim_dependency.supporting_capture_image_paths],
+            [
+                "daily_ui_claim_rewards__reward_panel__baseline__v1.png",
+                "daily_ui_claim_rewards__non_claimable_daily_signin__live_capture__emulator_5556__after_daily_tab_attempt_2.png",
+            ],
         )
         self.assertIn("locale=zh-TW", claim_dependency.provenance_summary)
         self.assertIn("scene=reward_panel_claimable", claim_dependency.curation_summary)
