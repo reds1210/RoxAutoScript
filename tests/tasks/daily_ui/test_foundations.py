@@ -19,10 +19,13 @@ class DailyUiFoundationsTests(unittest.TestCase):
             [
                 "daily_ui.reward_panel",
                 "daily_ui.claim_reward",
-                "daily_ui.reward_confirm_state",
                 "common.confirm_button",
                 "common.close_button",
             ],
+        )
+        self.assertEqual(
+            catalog.entries[0].metadata["supporting_anchor_ids"],
+            ["daily_ui.reward_confirm_state"],
         )
         self.assertEqual(
             catalog.entries[0].metadata["runtime_seam"]["task_spec_builder"],
@@ -41,10 +44,13 @@ class DailyUiFoundationsTests(unittest.TestCase):
             [
                 "daily_ui.reward_panel",
                 "daily_ui.claim_reward",
-                "daily_ui.reward_confirm_state",
                 "common.confirm_button",
                 "common.close_button",
             ],
+        )
+        self.assertEqual(
+            blueprints[0].metadata["supporting_anchor_ids"],
+            ["daily_ui.reward_confirm_state"],
         )
         self.assertEqual(
             [case.screen_slug for case in blueprints[0].golden_cases],
@@ -60,5 +66,9 @@ class DailyUiFoundationsTests(unittest.TestCase):
         self.assertEqual(
             [item.metadata["anchor_id"] for item in reports["daily_ui.claim_rewards"].warning_requirements],
             ["daily_ui.reward_confirm_state"],
+        )
+        self.assertEqual(
+            [item.metadata["requirement_level"] for item in reports["daily_ui.claim_rewards"].warning_requirements],
+            ["supporting"],
         )
         self.assertEqual(reports["daily_ui.guild_check_in"].builder_readiness_state.value, "blocked_by_asset")

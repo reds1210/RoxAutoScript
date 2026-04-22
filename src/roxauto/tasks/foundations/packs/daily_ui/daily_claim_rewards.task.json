@@ -91,7 +91,7 @@
       "step_id": "confirm_reward_claim",
       "action": "tap_anchor",
       "success_condition": "A confirmation modal is accepted when the client presents one.",
-      "failure_condition": "Confirmation modal cannot be verified or resolved after the claim tap.",
+      "failure_condition": "An optional confirmation modal cannot be verified or resolved after the claim tap enters the confirm-required path.",
       "metadata": {
         "display_name": "確認領獎",
         "failure_reason_id": "confirm_tap_no_effect",
@@ -220,11 +220,26 @@
         "required_anchor_ids": [
           "daily_ui.reward_panel",
           "daily_ui.claim_reward",
-          "daily_ui.reward_confirm_state",
           "common.confirm_button",
           "common.close_button"
         ],
-        "signal_contract_version": "claim_rewards.v2"
+        "supporting_anchor_ids": [
+          "daily_ui.reward_confirm_state"
+        ],
+        "signal_contract_version": "claim_rewards.v2",
+        "post_claim_resolution": {
+          "decision": "direct_result_overlay_is_valid",
+          "accepted_post_tap_panel_states": [
+            "claimed",
+            "confirm_required"
+          ],
+          "terminal_success_panel_states": [
+            "claimed"
+          ],
+          "supporting_anchor_ids": [
+            "daily_ui.reward_confirm_state"
+          ]
+        }
       }
     },
     "runtime_requirement_ids": [
@@ -248,6 +263,29 @@
         "task_action"
       ]
     },
+    "supporting_anchor_ids": [
+      "daily_ui.reward_confirm_state"
+    ],
+    "supporting_golden_screen_slugs": [
+      "confirm_state"
+    ],
+    "post_claim_resolution": {
+      "decision": "direct_result_overlay_is_valid",
+      "accepted_post_tap_panel_states": [
+        "claimed",
+        "confirm_required"
+      ],
+      "terminal_success_panel_states": [
+        "claimed"
+      ],
+      "supporting_anchor_ids": [
+        "daily_ui.reward_confirm_state"
+      ],
+      "supporting_golden_screen_slugs": [
+        "confirm_state"
+      ],
+      "notes": "The task now treats a direct post-tap claimed/result-overlay path as a valid success transition while keeping the explicit confirm modal as an optional supporting path when it appears."
+    },
     "golden_asset_sources": {
       "reward_panel": {
         "source_path": "assets/templates/daily_ui/goldens/claim_rewards/daily_ui_claim_rewards__reward_panel__baseline__v1.png",
@@ -270,13 +308,12 @@
   "required_anchors": [
     "daily_ui.reward_panel",
     "daily_ui.claim_reward",
-    "daily_ui.reward_confirm_state",
     "common.confirm_button",
     "common.close_button"
   ],
   "task_manifest": {
     "entry_condition": "Home HUD is visible and the fixed reward panel can be opened through deterministic UI navigation.",
-    "failure_condition": "The reward panel, claim button, or confirmation modal cannot be verified within retry budget.",
+    "failure_condition": "The reward panel, claim affordance, or accepted post-claim resolution path cannot be verified within retry budget.",
     "metadata": {
       "description_zh_tw": "開啟每日獎勵面板、領取獎勵並完成必要的確認步驟。",
       "display_name_zh_tw": "每日領獎",
@@ -289,7 +326,6 @@
     "requires": [
       "daily_ui.reward_panel",
       "daily_ui.claim_reward",
-      "daily_ui.reward_confirm_state",
       "common.confirm_button",
       "common.close_button"
     ],

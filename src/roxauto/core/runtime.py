@@ -1147,6 +1147,189 @@ class TaskRunner:
                     return latest_source
         return str(screenshot_path or "").strip()
 
+    def _build_run_outcome_summary(
+        self,
+        *,
+        run: TaskRun,
+        telemetry: TaskRunTelemetry | None,
+        context: TaskExecutionContext | None,
+    ) -> dict[str, Any]:
+        attempt = 0
+        if telemetry is not None:
+            attempt = telemetry.attempt
+        elif context is not None:
+            attempt = int(context.metadata.get("task_attempt") or 0)
+        summary: dict[str, Any] = {
+            "task_id": run.task_id,
+            "instance_id": run.instance_id,
+            "instance_label": context.instance.label if context is not None else "",
+            "adb_serial": context.instance.adb_serial if context is not None else "",
+            "run_id": run.run_id,
+            "status": run.status.value,
+            "queue_id": telemetry.queue_id if telemetry is not None else "",
+            "attempt": attempt,
+            "step_count": telemetry.step_count if telemetry is not None else len(run.step_results),
+            "completed_step_count": (
+                telemetry.completed_step_count if telemetry is not None else len(run.step_results)
+            ),
+            "started_at": telemetry.started_at if telemetry is not None else run.started_at,
+            "finished_at": telemetry.finished_at if telemetry is not None else run.finished_at,
+            "final_step_id": "",
+            "final_step_status": "",
+            "failure_snapshot_id": run.failure_snapshot.snapshot_id if run.failure_snapshot is not None else "",
+            "stop_condition_kind": run.stop_condition.kind.value if run.stop_condition is not None else "",
+            "failure_reason_id": "",
+            "outcome_code": "",
+            "last_observed_state": "",
+            "workflow_mode": "",
+            "inspection_reason": "",
+            "anchor_id": "",
+            "expected_anchor_id": "",
+            "signal_anchor_ids": [],
+            "matched_anchor_ids": [],
+            "preview_image_path": run.preview_frame.image_path if run.preview_frame is not None else "",
+            "source_image": "",
+        }
+        final_step = self._latest_telemetry_step(telemetry)
+        if final_step is not None:
+            summary["final_step_id"] = final_step.step_id
+            summary["final_step_status"] = final_step.status.value
+            summary.update(self._build_run_outcome_step_projection(final_step))
+        if run.failure_snapshot is not None:
+            self._merge_run_outcome_defaults(
+                summary,
+                self._build_run_outcome_snapshot_projection(run.failure_snapshot),
+            )
+        return summary
+
+    def _build_run_outcome_step_projection(
+        self,
+        step: TaskStepTelemetry,
+    ) -> dict[str, Any]:
+        if not isinstance(step.data, dict) or not step.data:
+            return {}
+        step_data = to_primitive(step.data)
+        if not isinstance(step_data, dict):
+            return {}
+        latest_attempt = self._latest_inspection_attempt(step_data)
+        step_metadata = self._inspection_metadata(step_data)
+        latest_attempt_metadata = self._inspection_metadata(latest_attempt)
+        step_outcome = step_data.get("step_outcome")
+        telemetry_payload = step_data.get("telemetry")
+        inspection = (
+            telemetry_payload.get("inspection")
+            if isinstance(telemetry_payload, dict)
+            and isinstance(telemetry_payload.get("inspection"), dict)
+            else {}
+        )
+        runtime_step_spec = step_data.get("runtime_step_spec")
+        runtime_step_spec_metadata = (
+            runtime_step_spec.get("metadata")
+            if isinstance(runtime_step_spec, dict)
+            and isinstance(runtime_step_spec.get("metadata"), dict)
+            else {}
+        )
+        failure_reason_id = str(step_data.get("failure_reason_id", "")).strip()
+        if not failure_reason_id and isinstance(step_outcome, dict):
+            failure_reason_id = str(step_outcome.get("failure_reason_id", "")).strip()
+        anchor_id = str(step_data.get("anchor_id", "")).strip()
+        if not anchor_id and isinstance(runtime_step_spec, dict):
+            anchor_id = str(runtime_step_spec.get("anchor_id", "")).strip()
+        expected_anchor_id = str(step_data.get("expected_anchor_id", "")).strip()
+        if not expected_anchor_id:
+            expected_anchor_id = anchor_id
+        signal_anchor_ids = step_data.get("signal_anchor_ids")
+        if not isinstance(signal_anchor_ids, list) or not signal_anchor_ids:
+            signal_anchor_ids = runtime_step_spec_metadata.get("signal_anchor_ids")
+        matched_anchor_ids = latest_attempt.get("matched_anchor_ids")
+        if not isinstance(matched_anchor_ids, list) or not matched_anchor_ids:
+            matched_anchor_ids = step_data.get("matched_anchor_ids")
+        if (
+            (not isinstance(matched_anchor_ids, list) or not matched_anchor_ids)
+            and isinstance(inspection, dict)
+            and isinstance(inspection.get("matched_anchor_ids"), list)
+        ):
+            matched_anchor_ids = inspection.get("matched_anchor_ids")
+        last_observed_state = str(
+            step_data.get("observed_panel_state")
+            or latest_attempt.get("state")
+            or step_data.get("state")
+            or (step_outcome.get("observed_panel_state") if isinstance(step_outcome, dict) else "")
+        ).strip()
+        workflow_mode = str(
+            step_data.get("workflow_mode")
+            or latest_attempt_metadata.get("workflow_mode")
+            or step_metadata.get("workflow_mode")
+            or (inspection.get("workflow_mode") if isinstance(inspection, dict) else "")
+        ).strip()
+        inspection_reason = str(
+            step_data.get("inspection_reason")
+            or latest_attempt_metadata.get("reason")
+            or step_metadata.get("reason")
+        ).strip()
+        source_image = str(
+            step_data.get("source_image")
+            or latest_attempt.get("screenshot_path")
+            or step_data.get("screenshot_path")
+        ).strip()
+        return {
+            "failure_reason_id": failure_reason_id,
+            "outcome_code": str(step_data.get("outcome_code", "")).strip(),
+            "last_observed_state": last_observed_state,
+            "workflow_mode": workflow_mode,
+            "inspection_reason": inspection_reason,
+            "anchor_id": anchor_id,
+            "expected_anchor_id": expected_anchor_id,
+            "signal_anchor_ids": list(signal_anchor_ids) if isinstance(signal_anchor_ids, list) else [],
+            "matched_anchor_ids": list(matched_anchor_ids) if isinstance(matched_anchor_ids, list) else [],
+            "source_image": source_image,
+        }
+
+    def _build_run_outcome_snapshot_projection(
+        self,
+        snapshot: FailureSnapshotMetadata,
+    ) -> dict[str, Any]:
+        metadata = snapshot.metadata if isinstance(snapshot.metadata, dict) else {}
+        signal_anchor_ids = metadata.get("signal_anchor_ids")
+        matched_anchor_ids = metadata.get("matched_anchor_ids")
+        return {
+            "failure_reason_id": str(metadata.get("failure_reason_id", "")).strip(),
+            "outcome_code": str(metadata.get("outcome_code", "")).strip(),
+            "last_observed_state": str(metadata.get("observed_panel_state", "")).strip(),
+            "workflow_mode": str(metadata.get("workflow_mode", "")).strip(),
+            "inspection_reason": str(metadata.get("inspection_reason", "")).strip(),
+            "anchor_id": str(metadata.get("anchor_id", "")).strip(),
+            "expected_anchor_id": str(metadata.get("expected_anchor_id", "")).strip(),
+            "signal_anchor_ids": list(signal_anchor_ids) if isinstance(signal_anchor_ids, list) else [],
+            "matched_anchor_ids": list(matched_anchor_ids) if isinstance(matched_anchor_ids, list) else [],
+            "source_image": str(metadata.get("source_image", "")).strip(),
+        }
+
+    def _merge_run_outcome_defaults(
+        self,
+        target: dict[str, Any],
+        defaults: dict[str, Any],
+    ) -> None:
+        for key, value in defaults.items():
+            current = target.get(key)
+            if isinstance(current, list):
+                if not current and isinstance(value, list) and value:
+                    target[key] = list(value)
+                continue
+            if current in ("", None) and value not in ("", None, []):
+                target[key] = value
+
+    def _latest_telemetry_step(
+        self,
+        telemetry: TaskRunTelemetry | None,
+    ) -> TaskStepTelemetry | None:
+        if telemetry is None:
+            return None
+        for step in reversed(telemetry.steps):
+            if step.status != TaskStepTelemetryStatus.PENDING:
+                return step
+        return None
+
     def _resolve_preview_frame(
         self,
         context: TaskExecutionContext,
@@ -1169,6 +1352,21 @@ class TaskRunner:
     def _finish_run(self, run: TaskRun, *, context: TaskExecutionContext | None = None) -> None:
         runtime_context = self._runtime_context(context) if context is not None else None
         telemetry = runtime_context.last_task_run if runtime_context is not None else None
+        if telemetry is None and context is not None:
+            candidate = context.metadata.get("last_task_run")
+            if isinstance(candidate, TaskRunTelemetry):
+                telemetry = candidate
+        summary = self._build_run_outcome_summary(
+            run=run,
+            telemetry=telemetry,
+            context=context,
+        )
+        if context is not None:
+            context.metadata["last_task_outcome_summary"] = summary
+        if runtime_context is not None:
+            runtime_context.metadata["last_task_outcome_summary"] = dict(summary)
+            if self._should_preserve_failed_run_telemetry(run):
+                runtime_context.metadata["last_failed_task_outcome_summary"] = dict(summary)
         self._event_bus.publish(
             EVENT_TASK_FINISHED,
             {
@@ -1185,6 +1383,7 @@ class TaskRunner:
                 "failure_snapshot_id": (
                     run.failure_snapshot.snapshot_id if run.failure_snapshot is not None else ""
                 ),
+                "summary": summary,
             },
         )
         self._write_audit(
@@ -1197,6 +1396,7 @@ class TaskRunner:
                 "stop_condition": run.stop_condition,
                 "failure_snapshot": run.failure_snapshot,
                 "telemetry": telemetry,
+                "summary": summary,
             },
         )
 

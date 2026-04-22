@@ -121,3 +121,41 @@ class AgentPacketTests(unittest.TestCase):
         )
         self.assertEqual(packet["git"]["policy_files_touched"], ["docs/autonomy-loop.md"])
 
+    @patch.dict(
+        os.environ,
+        {
+            "GITHUB_EVENT_NAME": "pull_request",
+            "GITHUB_HEAD_REF": "codex/ui-redesign",
+        },
+        clear=False,
+    )
+    @patch("roxauto.autonomy.agent_packet._run_git")
+    def test_build_agent_packet_pr_context_filters_untracked_artifacts(self, run_git) -> None:
+        responses = {
+            ("diff", "--name-only", "HEAD^1", "HEAD^2"): "src/roxauto/app/shell.py\nassets/ui/operator_console.qss\n",
+            ("diff", "--no-color", "--unified=1", "HEAD^1", "HEAD^2"): "diff --git a/a.py b/a.py\n+print('x')\n",
+            ("status", "--short"): "?? artifacts/quality-gate.json\n",
+            ("diff", "--cached", "--name-only"): "",
+            ("diff", "--name-only"): "artifacts/quality-gate.json\n",
+            ("ls-files", "--others", "--exclude-standard"): "artifacts/quality-gate.json\n",
+            ("rev-parse", "--abbrev-ref", "HEAD"): "HEAD",
+            ("rev-parse", "HEAD"): "def456",
+            ("log", "-5", "--pretty=format:%H%x1f%s%x1f%cI"): "def456\x1fImprove handoff packet\x1f2026-04-22T12:00:00+00:00",
+        }
+
+        def fake_run_git(repo_root: Path, *args: str) -> str:
+            return responses.get(args, "")
+
+        run_git.side_effect = fake_run_git
+
+        packet = build_agent_packet(Path.cwd(), quality_gate_path=None)
+
+        self.assertEqual(packet["git"]["branch"], "codex/ui-redesign")
+        self.assertFalse(packet["git"]["working_tree_dirty"])
+        self.assertEqual(
+            packet["git"]["changed_files"],
+            ["src/roxauto/app/shell.py", "assets/ui/operator_console.qss"],
+        )
+        self.assertEqual(packet["git"]["untracked_files"], [])
+        self.assertIn("diff --git", packet["git"]["diff_excerpt"])
+

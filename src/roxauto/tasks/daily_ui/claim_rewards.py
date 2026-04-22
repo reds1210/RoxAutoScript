@@ -321,6 +321,7 @@ class ClaimRewardsRuntimeInput:
     fixture_profile: TaskFixtureProfile
     display_metadata: ClaimRewardsDisplayMetadata
     required_anchor_ids: list[str] = field(default_factory=list)
+    supporting_anchor_ids: list[str] = field(default_factory=list)
     anchor_specs: dict[str, AnchorSpec] = field(default_factory=dict)
     step_specs: list[ClaimRewardsRuntimeStepSpec] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -334,6 +335,7 @@ class ClaimRewardsRuntimeInput:
             "fixture_id": self.fixture_profile.fixture_id,
             "display_metadata": self.display_metadata.to_dict(),
             "required_anchor_ids": list(self.required_anchor_ids),
+            "supporting_anchor_ids": list(self.supporting_anchor_ids),
             "step_specs": [step.to_dict() for step in self.step_specs],
             "builder_input": self.builder_input.to_dict(),
             "implementation_readiness_state": self.readiness_report.implementation_readiness_state.value,
@@ -427,7 +429,7 @@ class TemplateMatcherClaimRewardsVisionGateway:
         match_results = {
             anchor_id: self._match_anchor(
                 screenshot_path=screenshot_path,
-                anchor=anchor_specs[anchor_id],
+                anchor=anchor_specs.get(anchor_id),
                 instance=instance,
                 metadata=metadata,
             )
@@ -457,10 +459,16 @@ class TemplateMatcherClaimRewardsVisionGateway:
         self,
         *,
         screenshot_path: Path,
-        anchor: AnchorSpec,
+        anchor: AnchorSpec | None,
         instance: InstanceState,
         metadata: dict[str, Any] | None,
     ) -> TemplateMatchResult:
+        if anchor is None:
+            return build_match_result(
+                source_image=str(screenshot_path),
+                candidates=[],
+                message="anchor is not configured for this claim-rewards contract",
+            )
         return build_match_result(
             source_image=str(screenshot_path),
             candidates=self._matcher.match(
@@ -1179,6 +1187,33 @@ def _resolve_runtime_seam_metadata(
     return metadata
 
 
+def _metadata_string_list(metadata: dict[str, Any], key: str) -> list[str]:
+    raw_value = metadata.get(key, [])
+    if not isinstance(raw_value, list):
+        return []
+    values: list[str] = []
+    for item in raw_value:
+        value = str(item).strip()
+        if value and value not in values:
+            values.append(value)
+    return values
+
+
+def _metadata_dict(metadata: dict[str, Any], key: str) -> dict[str, Any]:
+    raw_value = metadata.get(key, {})
+    return dict(raw_value) if isinstance(raw_value, dict) else {}
+
+
+def _merge_anchor_ids(*anchor_groups: Iterable[str]) -> list[str]:
+    merged_anchor_ids: list[str] = []
+    for anchor_group in anchor_groups:
+        for raw_anchor_id in anchor_group:
+            anchor_id = str(raw_anchor_id).strip()
+            if anchor_id and anchor_id not in merged_anchor_ids:
+                merged_anchor_ids.append(anchor_id)
+    return merged_anchor_ids
+
+
 def load_claim_rewards_blueprint(
     repository: TaskFoundationRepository | None = None,
 ) -> TaskBlueprint:
@@ -1240,9 +1275,17 @@ def build_claim_rewards_runtime_input(
     fixture_profile_path = _select_fixture_profile_path(resolved_builder_input)
     fixture_profile = repo.load_fixture_profile(repo.root / fixture_profile_path)
     discovered_anchor_specs = load_claim_rewards_anchor_specs(templates_root)
+    supporting_anchor_ids = _metadata_string_list(
+        resolved_builder_input.metadata,
+        "supporting_anchor_ids",
+    )
+    tracked_anchor_ids = _merge_anchor_ids(
+        resolved_builder_input.required_anchors,
+        supporting_anchor_ids,
+    )
     anchor_specs = {
         anchor_id: discovered_anchor_specs[anchor_id]
-        for anchor_id in resolved_builder_input.required_anchors
+        for anchor_id in tracked_anchor_ids
     }
     step_specs = _build_runtime_step_specs(blueprint.steps)
 
@@ -1258,12 +1301,18 @@ def build_claim_rewards_runtime_input(
         fixture_profile=fixture_profile,
         display_metadata=display_metadata,
         required_anchor_ids=list(resolved_builder_input.required_anchors),
+        supporting_anchor_ids=supporting_anchor_ids,
         anchor_specs=anchor_specs,
         step_specs=step_specs,
         metadata={
             "implementation_state": blueprint.implementation_state.value,
             "runtime_bridge": "roxauto.tasks.daily_ui.claim_rewards",
             "golden_screen_slugs": [case.screen_slug for case in blueprint.golden_cases],
+            "supporting_anchor_ids": supporting_anchor_ids,
+            "supporting_golden_screen_slugs": _metadata_string_list(
+                resolved_builder_input.metadata,
+                "supporting_golden_screen_slugs",
+            ),
             "display_name": display_metadata.display_name,
             "preset_id": display_metadata.preset_id,
             "asset_state": str(blueprint.metadata.get("asset_state", "")),
@@ -1272,6 +1321,22 @@ def build_claim_rewards_runtime_input(
             ),
             "result_signal_keys": list(runtime_seam_metadata.get("result_signal_keys", list(_RESULT_SIGNAL_KEYS))),
             "runtime_seam": dict(runtime_seam_metadata),
+            "post_claim_resolution": _metadata_dict(
+                resolved_builder_input.metadata,
+                "post_claim_resolution",
+            ),
+            "claim_rewards_live_capture_coverage": _metadata_dict(
+                resolved_builder_input.metadata,
+                "claim_rewards_live_capture_coverage",
+            ),
+            "claim_rewards_capture_inventory": _metadata_dict(
+                resolved_builder_input.metadata,
+                "claim_rewards_capture_inventory",
+            ),
+            "claim_rewards_alternate_post_tap_capture_ids": _metadata_string_list(
+                resolved_builder_input.metadata,
+                "claim_rewards_alternate_post_tap_capture_ids",
+            ),
         },
     )
 
@@ -1311,6 +1376,7 @@ def build_claim_rewards_runtime_seam(
             "asset_state": str(resolved_runtime_input.metadata.get("asset_state", "")),
             "implementation_state": str(resolved_runtime_input.metadata.get("implementation_state", "")),
             "required_anchor_ids": list(resolved_runtime_input.required_anchor_ids),
+            "supporting_anchor_ids": list(resolved_runtime_input.supporting_anchor_ids),
         },
     )
 
@@ -1502,6 +1568,7 @@ def build_claim_rewards_task_spec(
             "implementation_state": "fixtured",
             "navigation_plan": navigation_plan.to_dict(),
             "required_anchor_ids": list(resolved_runtime_input.required_anchor_ids),
+            "supporting_anchor_ids": list(resolved_runtime_input.supporting_anchor_ids),
             "runtime_bridge": "roxauto.tasks.daily_ui.claim_rewards",
             "builder_input": resolved_runtime_input.builder_input.to_dict(),
             "runtime_input": resolved_runtime_input.to_dict(),

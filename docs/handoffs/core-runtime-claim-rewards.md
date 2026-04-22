@@ -273,3 +273,94 @@ Verification performed:
 Recommended next step:
 
 - Engine B should prefer `selected_instance.active_step_anchor_id` for current focus while a claim-rewards step is running, and reserve deeper reads of `active_task_run.steps[*].data` for drill-down views only.
+
+## 2026-04-22 task outcome report follow-up
+
+What shipped:
+
+- Runtime now emits one machine-readable finished-run outcome summary for every task completion instead of leaving later consumers to reconstruct claim-rewards smoke results from free-form messages or full task telemetry dumps.
+- `TaskRunner._finish_run()` now publishes and audits `task.finished` with a normalized `summary` payload that preserves:
+  - `instance_id`
+  - `adb_serial`
+  - `run_id`
+  - final `status`
+  - `failure_reason_id`
+  - `outcome_code`
+  - `last_observed_state`
+  - `workflow_mode`
+  - `anchor_id`
+  - `expected_anchor_id`
+  - `signal_anchor_ids`
+  - `matched_anchor_ids`
+  - `source_image`
+  - `preview_image_path`
+- Runtime context metadata now keeps the latest finished-run summary under:
+  - `last_task_outcome_summary`
+  - `last_failed_task_outcome_summary` when the run failed or aborted for a non-manual reason
+- `LiveRuntimeSession` now exposes runtime-owned reporting helpers for smoke and handoff consumers:
+  - `list_task_run_summaries(task_id=None, instance_id=None)`
+  - `build_task_outcome_report(task_id, instance_id=None)`
+- The new report surface uses recent runtime `task.finished` events first and falls back to context-owned sticky summaries, so later GUI or PR-handoff code can compare the latest claim-rewards runs across devices without reading task-local draft state.
+- One repo-level gate unblock outside normal Engine A ownership was required so the autonomy loop could evaluate this branch at all:
+  - renamed a duplicate test function in `tests/autonomy/test_agent_packet.py`
+  - no autonomy behavior changed; this only cleared an existing `ruff` `F811` failure from duplicated test names on `main`
+
+Files changed:
+
+- `docs/architecture-contracts.md`
+- `docs/handoffs/core-runtime-claim-rewards.md`
+- `src/roxauto/core/runtime.py`
+- `src/roxauto/emulator/live_runtime.py`
+- `tests/autonomy/test_agent_packet.py`
+- `tests/core/test_runtime.py`
+- `tests/emulator/test_live_runtime.py`
+
+Public APIs added or changed:
+
+- `LiveRuntimeSession.list_task_run_summaries(task_id=None, instance_id=None)`
+- `LiveRuntimeSession.build_task_outcome_report(task_id, instance_id=None)`
+- `task.finished` event and audit payloads now carry `summary`, a runtime-owned `TaskRunOutcomeSummary`-shaped dict
+
+Assumptions:
+
+- Claim-rewards success steps will supply structured `outcome_code` or `state` fields when operators want successful runs to carry richer smoke-report detail than just `status=succeeded`.
+- Later consumers should treat `task.finished.summary` as the lightweight comparison surface and keep full `telemetry` / `failure_snapshot` reads for drill-down only.
+
+Known limitations:
+
+- The session report is backed by in-memory recent events plus sticky context summaries, not a multi-process history store.
+- The summary shape is generic, but some task-specific fields remain empty for tasks that do not emit structured runtime step data.
+
+Verification performed:
+
+- `python -m unittest tests.core.test_runtime`
+- `python -m unittest tests.emulator.test_live_runtime`
+- `python -m unittest discover -s tests/core -t .`
+- `python -m unittest discover -s tests/emulator -t .`
+
+Recommended next step:
+
+- Engine B should consume `build_task_outcome_report("daily_ui.claim_rewards")` or `list_task_run_summaries(task_id="daily_ui.claim_rewards")` for operator-facing multi-device smoke comparison instead of rebuilding the same summary from raw task telemetry or app-local draft records.
+
+## 2026-04-22 per-instance fallback follow-up
+
+What shipped:
+
+- `LiveRuntimeSession.build_task_outcome_report(...)` no longer treats context fallback as all-or-nothing.
+- The report now merges context-owned sticky summaries per missing instance after reading recent `task.finished` events, so one device's surviving event-buffer entry no longer causes other devices to disappear from the report when their latest run still exists under runtime context metadata.
+- Coverage now simulates the review-case shape directly by keeping only one instance's `task.finished` event in the recent-event buffer and proving the report still backfills the missing instance from context.
+
+Files changed:
+
+- `docs/handoffs/core-runtime-claim-rewards.md`
+- `src/roxauto/emulator/live_runtime.py`
+- `tests/emulator/test_live_runtime.py`
+
+Verification performed:
+
+- `python -m unittest tests.emulator.test_live_runtime`
+- `python -m ruff check src tests`
+
+Recommended next step:
+
+- Once this lands, Engine B can rely on `build_task_outcome_report("daily_ui.claim_rewards")` for mixed event-buffer / sticky-context situations without needing its own per-instance fallback merge logic.

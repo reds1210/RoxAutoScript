@@ -2,6 +2,25 @@
 
 This folder keeps the raw live screenshots reviewed for `daily_ui.claim_rewards`.
 
+## Route A Confirm-State Audit
+
+Machine-readable decision packet:
+
+- `reward_confirm_state_decision_packet.json`
+
+Current answer for dispatch:
+
+- no, there is still no true live `reward_confirm_modal` capture
+- all four reviewed devices reached a live claimable panel
+- zero reviewed devices produced a like-for-like live confirm-button modal
+- three reviewed devices resolved directly to a claimed/result state after the claim tap
+- one reviewed device (`emulator-5556`) resolved to a live reward-acquired overlay after the claim tap
+
+Current workspace probe:
+
+- `adb devices` returned no visible devices during this pass, so no new screenshots were captured
+- this pass strengthens the evidence packet from the existing four-device sweep instead of claiming fresh live capture work
+
 Round-8 capture inventory:
 
 - confirmed ADB-visible devices:

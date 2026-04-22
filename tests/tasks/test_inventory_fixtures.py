@@ -57,6 +57,10 @@ class TaskFixtureExamplesTests(unittest.TestCase):
         self.assertTrue(
             records["daily_ui.claim_rewards:template:daily_ui.reward_panel"].metadata["live_capture"]
         )
+        self.assertEqual(
+            records["daily_ui.claim_rewards:template:daily_ui.reward_confirm_state"].metadata["requirement_level"],
+            "supporting",
+        )
 
     def test_curated_readiness_report_matches_expected_states(self) -> None:
         repository = TaskFoundationRepository.load_default()
@@ -68,6 +72,10 @@ class TaskFixtureExamplesTests(unittest.TestCase):
         self.assertEqual(
             [item.metadata["anchor_id"] for item in by_task["daily_ui.claim_rewards"].warning_requirements],
             ["daily_ui.reward_confirm_state"],
+        )
+        self.assertEqual(
+            [item.metadata["requirement_level"] for item in by_task["daily_ui.claim_rewards"].warning_requirements],
+            ["supporting"],
         )
         self.assertIn(
             "runtime_seam_builder=roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_seam",
