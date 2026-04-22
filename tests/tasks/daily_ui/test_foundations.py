@@ -59,6 +59,6 @@ class DailyUiFoundationsTests(unittest.TestCase):
         self.assertEqual(reports["daily_ui.claim_rewards"].implementation_readiness_state.value, "ready")
         self.assertEqual(
             [item.metadata["anchor_id"] for item in reports["daily_ui.claim_rewards"].warning_requirements],
-            ["daily_ui.claim_reward", "daily_ui.reward_confirm_state"],
+            ["daily_ui.reward_confirm_state"],
         )
         self.assertEqual(reports["daily_ui.guild_check_in"].builder_readiness_state.value, "blocked_by_asset")

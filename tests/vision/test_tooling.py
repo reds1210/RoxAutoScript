@@ -64,37 +64,40 @@ class VisionToolingTests(unittest.TestCase):
         )
         self.assertEqual(claim_dependency.readiness_status, TemplateReadinessStatus.READY)
         self.assertEqual(claim_dependency.curation_status.value, "curated")
-        self.assertEqual(claim_dependency.provenance_kind, AnchorAssetProvenanceKind.CURATED_STAND_IN)
+        self.assertEqual(claim_dependency.provenance_kind, AnchorAssetProvenanceKind.LIVE_CAPTURE)
         self.assertTrue(claim_dependency.golden_catalog_path.endswith("goldens\\claim_rewards\\catalog.json"))
         self.assertEqual(claim_dependency.selected_golden_id, "reward_panel_claimable_baseline_v1")
         self.assertEqual(claim_dependency.selected_reference_id, "claim_button_baseline_v1")
-        self.assertEqual(claim_dependency.selected_reference_kind, "curated_stand_in")
+        self.assertEqual(claim_dependency.selected_reference_kind, "live_capture")
         self.assertEqual(claim_dependency.live_reference_count, 1)
         self.assertEqual(
             claim_dependency.live_reference_ids,
-            ["claim_button_live_context_reward_panel_open_v1"],
+            ["claim_button_baseline_v1"],
         )
-        self.assertEqual(claim_dependency.supporting_capture_count, 2)
+        self.assertEqual(claim_dependency.supporting_capture_count, 1)
         self.assertEqual(
             claim_dependency.supporting_capture_ids,
             [
-                "claim_button_context_reward_panel_open_v1",
                 "non_claimable_daily_signin_live_capture_emulator_5556_after_daily_tab_attempt_2",
             ],
         )
         self.assertEqual(
             claim_dependency.supporting_capture_evidence_roles,
-            ["scene_context_only", "negative_case"],
+            ["negative_case"],
         )
         self.assertEqual(claim_dependency.failure_case, "claim_button_missing_or_not_tappable")
         self.assertTrue(
             claim_dependency.live_reference_image_paths[0].endswith(
-                "daily_ui_claim_rewards__reward_panel__baseline__v1.png"
+                "daily_ui_claim_rewards__claim_button__baseline__v1.png"
             )
         )
         self.assertIn("locale=zh-TW", claim_dependency.provenance_summary)
         self.assertIn("intent=claim_rewards_claim_button", claim_dependency.curation_summary)
         self.assertIn("live_refs=1", claim_dependency.curation_summary)
+        self.assertEqual(
+            workspace.readiness.metadata["claim_rewards_capture_inventory"]["landed_device_serials"],
+            ["emulator-5556", "emulator-5560"],
+        )
 
     def test_build_anchor_inspector_applies_calibration_override_and_validation_issues(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -430,14 +433,17 @@ class VisionToolingTests(unittest.TestCase):
             )
         )
         self.assertEqual(failure.claim_rewards.selected_check.live_reference_count, 0)
-        self.assertEqual(failure.claim_rewards.selected_check.supporting_capture_count, 1)
+        self.assertEqual(failure.claim_rewards.selected_check.supporting_capture_count, 2)
         self.assertEqual(
             failure.claim_rewards.selected_check.supporting_capture_ids,
-            ["non_reward_confirm_modal_live_capture_emulator_5560_exit_game_prompt"],
+            [
+                "non_reward_confirm_modal_live_capture_emulator_5560_exit_game_prompt",
+                "post_tap_reward_overlay_live_capture_emulator_5556_after_day7_claim_tap_2026_04_22",
+            ],
         )
         self.assertEqual(
             failure.claim_rewards.selected_check.supporting_capture_evidence_roles,
-            ["negative_case"],
+            ["negative_case", "alternate_post_tap_outcome"],
         )
         self.assertEqual(failure.claim_rewards.selected_check.curation_status.value, "curated")
         self.assertEqual(
@@ -512,32 +518,31 @@ class VisionToolingTests(unittest.TestCase):
         )
         self.assertEqual(claim_button_check.anchor_id, "daily_ui.claim_reward")
         self.assertEqual(claim_button_check.selected_reference_id, "claim_button_baseline_v1")
-        self.assertEqual(claim_button_check.selected_reference_kind, "curated_stand_in")
+        self.assertEqual(claim_button_check.selected_reference_kind, "live_capture")
         self.assertEqual(
             claim_button_check.reference_ids,
-            ["claim_button_baseline_v1", "claim_button_live_context_reward_panel_open_v1"],
+            ["claim_button_baseline_v1"],
         )
         self.assertEqual(claim_button_check.live_reference_count, 1)
         self.assertEqual(
             claim_button_check.live_reference_ids,
-            ["claim_button_live_context_reward_panel_open_v1"],
+            ["claim_button_baseline_v1"],
         )
         self.assertEqual(claim_button_check.selected_golden_id, "reward_panel_claimable_baseline_v1")
-        self.assertEqual(claim_button_check.supporting_capture_count, 2)
+        self.assertEqual(claim_button_check.supporting_capture_count, 1)
         self.assertEqual(
             claim_button_check.supporting_capture_ids,
             [
-                "claim_button_context_reward_panel_open_v1",
                 "non_claimable_daily_signin_live_capture_emulator_5556_after_daily_tab_attempt_2",
             ],
         )
         self.assertEqual(
             claim_button_check.supporting_capture_evidence_roles,
-            ["scene_context_only", "negative_case"],
+            ["negative_case"],
         )
         self.assertTrue(
             claim_button_check.live_reference_image_paths[0].endswith(
-                "daily_ui_claim_rewards__reward_panel__baseline__v1.png"
+                "daily_ui_claim_rewards__claim_button__baseline__v1.png"
             )
         )
         self.assertEqual(failure.best_candidate.anchor_id, "daily_ui.reward_confirm_state")
@@ -564,10 +569,13 @@ class VisionToolingTests(unittest.TestCase):
             )
         )
         self.assertEqual(failure.live_reference_count, 0)
-        self.assertEqual(failure.supporting_capture_count, 1)
+        self.assertEqual(failure.supporting_capture_count, 2)
         self.assertEqual(
             failure.supporting_capture_ids,
-            ["non_reward_confirm_modal_live_capture_emulator_5560_exit_game_prompt"],
+            [
+                "non_reward_confirm_modal_live_capture_emulator_5560_exit_game_prompt",
+                "post_tap_reward_overlay_live_capture_emulator_5556_after_day7_claim_tap_2026_04_22",
+            ],
         )
         self.assertEqual(failure.curation_status.value, "curated")
         self.assertEqual(failure.provenance_kind, AnchorAssetProvenanceKind.CURATED_STAND_IN)

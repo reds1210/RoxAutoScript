@@ -16,17 +16,14 @@
         "golden_catalog_path": "goldens/claim_rewards/catalog.json",
         "live_capture_coverage": {
           "live_anchor_ids": [
+            "daily_ui.claim_reward",
             "daily_ui.reward_panel"
           ],
           "stand_in_anchor_ids": [
-            "daily_ui.claim_reward",
             "daily_ui.reward_confirm_state"
           ],
-          "live_context_anchor_ids": [
-            "daily_ui.claim_reward"
-          ],
+          "live_context_anchor_ids": [],
           "blocked_scene_ids": [
-            "reward_panel_claimable",
             "reward_confirm_modal"
           ]
         }
@@ -100,7 +97,7 @@
       "template_path": "anchors/daily_claim_button.png",
       "confidence_threshold": 0.91,
       "match_region": [720, 720, 480, 220],
-      "description": "Curated raster crop for the enabled claim-reward button in the claimable reward panel state.",
+      "description": "Live zh-TW ROX crop for the enabled day-7 claim-reward button in the claimable reward panel state.",
       "tags": ["daily", "reward", "button", "claim_rewards"],
       "metadata": {
         "workflow": "daily-ui",
@@ -112,30 +109,30 @@
           "status": "curated",
           "intent_id": "claim_rewards_claim_button",
           "scene_id": "reward_panel_claimable",
-          "variant_id": "tw_baseline",
+          "variant_id": "zh_tw_live_emulator_5556_day7_claimable_2026_04_22",
           "provenance": {
-            "kind": "curated_stand_in",
-            "source": "repo_curated_baseline",
+            "kind": "live_capture",
+            "source": "mumu_emulator_5556",
             "locale": "zh-TW",
-            "notes": "This anchor is still backed by a repo-curated screenshot-style baseline, not a live ROX capture."
+            "notes": "Promoted from the approved live zh-TW ROX claimable day-7 panel captured on emulator-5556 during round-8 review.",
+            "metadata": {
+              "adb_serial": "emulator-5556",
+              "capture_round": "round-8",
+              "raw_capture_path": "docs/vision/claim_rewards_live/raw/emulator-5556-after-fuli-tap-2026-04-22.png"
+            }
           },
-          "notes": "Curated from the claimable panel screenshot so the tappable button state uses a raster template and a named baseline scene.",
+          "notes": "Promoted from the approved live claimable panel so the tappable reward-button state no longer depends on the earlier curated stand-in.",
           "references": [
             {
               "reference_id": "claim_button_baseline_v1",
               "image_path": "goldens/claim_rewards/daily_ui_claim_rewards__claim_button__baseline__v1.png",
-              "kind": "curated_stand_in",
-              "notes": "Baseline claimable panel used to crop the enabled claim button."
-            },
-            {
-              "reference_id": "claim_button_live_context_reward_panel_open_v1",
-              "image_path": "goldens/claim_rewards/daily_ui_claim_rewards__reward_panel__baseline__v1.png",
-              "kind": "live_capture_context",
-              "notes": "Live zh-TW ROX daily-signin panel context from the opened reward panel. This constrains the real button lane and surrounding chrome, but it does not prove the enabled claimable state.",
+              "kind": "live_capture",
+              "notes": "Primary live day-7 claimable-panel baseline captured on emulator-5556 before the claim tap.",
               "metadata": {
-                "live_capture": true,
-                "context_only": true,
-                "scene_id": "reward_panel_open"
+                "adb_serial": "emulator-5556",
+                "capture_round": "round-8",
+                "raw_capture_path": "docs/vision/claim_rewards_live/raw/emulator-5556-after-fuli-tap-2026-04-22.png",
+                "scene_id": "reward_panel_claimable"
               }
             }
           ],
@@ -144,13 +141,13 @@
             "source_image_role": "reward_panel_claimable",
             "golden_catalog_path": "goldens/claim_rewards/catalog.json",
             "golden_id": "reward_panel_claimable_baseline_v1",
-            "source_kind": "repo_curated_screenshot_style",
-            "live_capture": false,
-            "live_context_reference_ids": [
-              "claim_button_live_context_reward_panel_open_v1"
-            ],
-            "replacement_target": "approved_live_zh_tw_capture",
-            "proof_summary": "Primary baseline still shows the claimable stand-in state, while a supplemental live reward-panel capture constrains the real zh-TW button lane and surrounding chrome.",
+            "source_kind": "live_zh_tw_rox_capture",
+            "live_capture": true,
+            "replacement_target": "",
+            "proof_summary": "Shows the live claimable day-7 reward panel with the enabled orange reward button before the claim tap.",
+            "adb_serial": "emulator-5556",
+            "capture_round": "round-8",
+            "raw_capture_path": "docs/vision/claim_rewards_live/raw/emulator-5556-after-fuli-tap-2026-04-22.png",
             "failure_case": "claim_button_missing_or_not_tappable"
           }
         }

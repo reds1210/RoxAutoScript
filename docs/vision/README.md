@@ -91,7 +91,7 @@ Vision-side tooling can now validate template packs before GUI or task code cons
 - `TemplateDependencyReadiness` carries task/pack/anchor-level readiness, placeholder state, and inventory-mismatch information.
 - claim-rewards anchors now also validate their curation contract: they must declare `metadata.curation`, `metadata.curation.provenance`, and a `curated` anchor must carry at least one reference plus a raster template asset.
 - claim-rewards task support must also point at a valid `metadata.task_support.daily_ui.claim_rewards.golden_catalog_path`, and every curated anchor must map its `golden_id`, primary reference, and `live_capture` flag back to the matching catalog entry.
-- round-7 claim-rewards support now also validates `metadata.task_support.daily_ui.claim_rewards.live_capture_coverage`, including `live_context_anchor_ids`, plus per-anchor `metadata.curation.metadata.failure_case`, so missing live captures, live-context evidence, and expected failure cases stay machine-readable.
+- round-8 claim-rewards support now also validates `metadata.task_support.daily_ui.claim_rewards.live_capture_coverage`, per-anchor `metadata.curation.metadata.failure_case`, and the catalog `sha256` values for both canonical goldens and supporting captures so live-promotion drift stays machine-readable instead of silently diverging from the files on disk.
 
 Validation only enforces rules that are already part of the documented contracts:
 
@@ -160,10 +160,10 @@ These builders stay inside the vision layer and do not depend on `app`, `core` r
 Current sample coverage:
 
 - `daily_ui.reward_panel` now ships as a curated PNG crop plus one live zh-TW ROX baseline image for the opened reward panel scene
-- `daily_ui.claim_reward` now ships as a curated PNG crop plus one curated screenshot-style baseline image for the tappable claim button scene, with both live context and live negative-case supporting captures tracked in the golden catalog
+- `daily_ui.claim_reward` now ships as a curated PNG crop plus one approved live zh-TW ROX baseline image for the tappable claim button scene, with live negative-case supporting evidence tracked in the golden catalog
 - `daily_ui.reward_confirm_state` now ships as a curated PNG crop plus one curated screenshot-style baseline image for the confirmation modal scene
 - `docs/vision/claim_rewards_live/raw/` now keeps the supporting live capture trail for this task only
-- `assets/templates/daily_ui/goldens/claim_rewards/live/` now also carries supporting live negative-case captures for a non-claimable daily-sign-in panel, the wrong reward surface, and a non-reward confirmation modal
+- `assets/templates/daily_ui/goldens/claim_rewards/live/` now also carries supporting live negative-case captures for a non-claimable daily-sign-in panel, the wrong reward surface, a non-reward confirmation modal, and one alternate post-tap reward overlay
 - `daily_ui.guild_check_in_button` placeholder template now exists under `assets/templates/daily_ui/`
 - `odin.start_button` placeholder template exists
 - the current asset inventory in this worktree aligns with the shipped claim-rewards anchors, so readiness no longer needs a special-case mismatch note for `daily_ui.claim_reward`
@@ -210,8 +210,9 @@ The branch now also ships a minimal golden organization for this task only:
 - `assets/templates/daily_ui/goldens/claim_rewards/daily_ui_claim_rewards__confirm_state__baseline__v1.png`
 - `assets/templates/daily_ui/goldens/claim_rewards/live/daily_ui_claim_rewards__reward_panel__live_capture__emulator_5560__daily_signin.png`
 - `assets/templates/daily_ui/goldens/claim_rewards/live/daily_ui_claim_rewards__entry_context__live_capture__emulator_5556__after_fuli_tap.png`
+- `assets/templates/daily_ui/goldens/claim_rewards/live/daily_ui_claim_rewards__post_tap_reward_overlay__live_capture__emulator_5556__after_day7_claim_tap_2026_04_22.png`
 
-The reward-panel baseline is now promoted to a live zh-TW ROX capture. The claim-button baseline remains a repo-curated screenshot-style stand-in, but it now carries a supplemental live reward-panel context reference so failure panes can point at real zh-TW ROX chrome without pretending the enabled claimable state is already live. The confirm-state baseline remains a curated stand-in with no approved live modal proof yet.
+The reward-panel baseline and claim-button baseline are now both promoted to live zh-TW ROX captures. The confirm-state baseline remains a curated stand-in with no approved live modal proof yet, but it now also carries a live post-tap overlay capture as alternate supporting evidence.
 
 `catalog.json` is the machine-readable index for the three shipped claim-rewards baselines. It records:
 
@@ -219,22 +220,22 @@ The reward-panel baseline is now promoted to a live zh-TW ROX capture. The claim
 - which scene and stage the image proves
 - whether the file is a live capture or a curated stand-in
 - the current file hash and resolution so later live replacements stay traceable
+- the round-8 capture inventory so confirmed-vs-landed device coverage stays explicit
 - which step or failure case each image is meant to explain during claim-rewards inspection
 
 Current claim-rewards golden coverage:
 
 - `daily_ui_claim_rewards__reward_panel__baseline__v1.png`: live zh-TW ROX daily sign-in panel-open golden for `daily_ui.reward_panel`
-- `daily_ui_claim_rewards__claim_button__baseline__v1.png`: curated stand-in for the claimable panel state used by `daily_ui.claim_reward`
+- `daily_ui_claim_rewards__claim_button__baseline__v1.png`: live zh-TW ROX day-7 claimable-panel golden for `daily_ui.claim_reward`
 - `daily_ui_claim_rewards__confirm_state__baseline__v1.png`: curated stand-in for the confirmation modal used by `daily_ui.reward_confirm_state`
 - `live/daily_ui_claim_rewards__reward_panel__live_capture__emulator_5560__daily_signin.png`: descriptive copy of the canonical live panel-open screenshot for manual review and downstream tooling
 - `live/daily_ui_claim_rewards__entry_context__live_capture__emulator_5556__after_fuli_tap.png`: live pre-panel navigation evidence after the Fu Li tap, used to debug failures before the panel-open anchor appears
-- the claim-button golden now explicitly references both `claim_button_context_reward_panel_open_v1` and `non_claimable_daily_signin_live_capture_emulator_5556_after_daily_tab_attempt_2` so GUI can render context-vs-negative evidence without inferring it from prose
 - `live/daily_ui_claim_rewards__non_claimable_daily_signin__live_capture__emulator_5556__after_daily_tab_attempt_2.png`: live negative-case evidence that the opened daily sign-in panel may still have no enabled claim affordance
 - `live/daily_ui_claim_rewards__wrong_reward_surface__live_capture__emulator_5560__kingdom_pass_rewards.png`: live negative-case evidence for landing on Kingdom Pass rewards instead of the daily sign-in panel
 - `live/daily_ui_claim_rewards__non_reward_confirm_modal__live_capture__emulator_5560__exit_game_prompt.png`: live negative-case evidence for a generic confirmation dialog that must not be mistaken for the reward confirmation modal
+- `live/daily_ui_claim_rewards__post_tap_reward_overlay__live_capture__emulator_5556__after_day7_claim_tap_2026_04_22.png`: live alternate post-tap evidence showing a reward-acquired overlay instead of the explicit confirmation modal
 
-`daily_ui.reward_panel` is now backed by a live capture. `daily_ui.claim_reward` and `daily_ui.reward_confirm_state` still rely on curated stand-ins because the available accounts did not expose approved live claimable or confirmation-modal states during this round. The manifest and golden catalog now also ship live negative-case evidence so downstream consumers can distinguish canonical success scenes from visually similar but incorrect live states without promoting those failures into positive baselines.
-Supporting raw screenshots used during this curation pass are tracked under `docs/vision/claim_rewards_live/raw/` so future replacements can verify which files were true live captures versus upstream context only. Some round-7 raw captures are traceability-only and should not be treated as canonical claim-rewards baselines unless they are explicitly promoted into `catalog.json`. A newer raw candidate for a live claimable panel exists outside this worktree (`emulator-5556-after-fuli-tap-2026-04-22.png`), but it is not promoted here until the canonical template/golden asset import lands in this repository state.
+`daily_ui.reward_panel` and `daily_ui.claim_reward` are now backed by live captures. `daily_ui.reward_confirm_state` remains a curated stand-in because no approved live confirmation-modal capture is available in this worktree. Supporting raw screenshots used during this curation pass are tracked under `docs/vision/claim_rewards_live/raw/` so future replacements can verify which files were true live captures versus upstream context only, and the catalog/readiness metadata now explicitly record that round-8 confirmed four devices but only landed approved evidence from two of them.
 
 ## GUI Consumption
 

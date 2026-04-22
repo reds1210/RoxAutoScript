@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -74,6 +75,10 @@ class TemplateValidationTests(unittest.TestCase):
         self.assertNotIn("missing_claim_rewards_supporting_capture_evidence_role", issue_codes)
         self.assertNotIn("missing_claim_rewards_golden_supporting_capture_entry", issue_codes)
         self.assertNotIn("claim_rewards_supporting_capture_anchor_mismatch", issue_codes)
+        self.assertNotIn("missing_claim_rewards_golden_sha256", issue_codes)
+        self.assertNotIn("claim_rewards_golden_sha256_mismatch", issue_codes)
+        self.assertNotIn("missing_claim_rewards_supporting_capture_sha256", issue_codes)
+        self.assertNotIn("claim_rewards_supporting_capture_sha256_mismatch", issue_codes)
         self.assertNotIn("missing_claim_rewards_live_capture_coverage", issue_codes)
         self.assertNotIn("claim_rewards_live_anchor_missing_from_coverage", issue_codes)
         self.assertNotIn("claim_rewards_stand_in_anchor_missing_from_coverage", issue_codes)
@@ -82,6 +87,23 @@ class TemplateValidationTests(unittest.TestCase):
         self.assertNotIn("claim_rewards_live_context_anchor_missing_from_coverage", issue_codes)
         self.assertNotIn("claim_rewards_live_context_anchor_missing_live_reference", issue_codes)
         self.assertNotIn("claim_rewards_blocked_scene_missing_from_coverage", issue_codes)
+
+    def test_validate_template_repository_rejects_claim_rewards_catalog_hash_drift(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            repository_root = Path(temp_dir) / "daily_ui"
+            shutil.copytree(self.templates_root / "daily_ui", repository_root)
+            catalog_path = repository_root / "goldens" / "claim_rewards" / "catalog.json"
+            catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+            catalog["goldens"][0]["sha256"] = "0" * 64
+            catalog["supporting_captures"][0]["sha256"] = "f" * 64
+            catalog_path.write_text(json.dumps(catalog, indent=2), encoding="utf-8")
+
+            report = validate_template_repository(AnchorRepository.load(repository_root))
+
+        issue_codes = {issue.code for issue in report.issues}
+        self.assertFalse(report.is_valid)
+        self.assertIn("claim_rewards_golden_sha256_mismatch", issue_codes)
+        self.assertIn("claim_rewards_supporting_capture_sha256_mismatch", issue_codes)
 
     def test_validate_template_repository_reports_invalid_anchor_configuration(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -387,8 +409,8 @@ class TemplateValidationTests(unittest.TestCase):
         self.assertEqual(claim_dependency.readiness_status, TemplateReadinessStatus.READY)
         self.assertFalse(claim_dependency.inventory_mismatch)
         self.assertEqual(claim_dependency.curation_status.value, "curated")
-        self.assertEqual(claim_dependency.provenance_kind, AnchorAssetProvenanceKind.CURATED_STAND_IN)
-        self.assertEqual(claim_dependency.curation_reference_count, 2)
+        self.assertEqual(claim_dependency.provenance_kind, AnchorAssetProvenanceKind.LIVE_CAPTURE)
+        self.assertEqual(claim_dependency.curation_reference_count, 1)
         self.assertTrue(claim_dependency.golden_catalog_path.endswith("goldens\\claim_rewards\\catalog.json"))
         self.assertEqual(claim_dependency.selected_golden_id, "reward_panel_claimable_baseline_v1")
         self.assertTrue(
@@ -397,46 +419,43 @@ class TemplateValidationTests(unittest.TestCase):
             )
         )
         self.assertEqual(claim_dependency.selected_reference_id, "claim_button_baseline_v1")
-        self.assertEqual(claim_dependency.selected_reference_kind, "curated_stand_in")
+        self.assertEqual(claim_dependency.selected_reference_kind, "live_capture")
         self.assertEqual(
             claim_dependency.reference_ids,
-            ["claim_button_baseline_v1", "claim_button_live_context_reward_panel_open_v1"],
+            ["claim_button_baseline_v1"],
         )
         self.assertEqual(claim_dependency.live_reference_count, 1)
         self.assertEqual(
             claim_dependency.live_reference_ids,
-            ["claim_button_live_context_reward_panel_open_v1"],
+            ["claim_button_baseline_v1"],
         )
-        self.assertEqual(claim_dependency.supporting_capture_count, 2)
+        self.assertEqual(claim_dependency.supporting_capture_count, 1)
         self.assertEqual(
             claim_dependency.supporting_capture_ids,
             [
-                "claim_button_context_reward_panel_open_v1",
                 "non_claimable_daily_signin_live_capture_emulator_5556_after_daily_tab_attempt_2",
             ],
         )
         self.assertEqual(
             claim_dependency.supporting_capture_evidence_roles,
-            ["scene_context_only", "negative_case"],
+            ["negative_case"],
         )
-        self.assertEqual(claim_dependency.live_supporting_capture_count, 2)
+        self.assertEqual(claim_dependency.live_supporting_capture_count, 1)
         self.assertEqual(
             claim_dependency.live_supporting_capture_ids,
             [
-                "claim_button_context_reward_panel_open_v1",
                 "non_claimable_daily_signin_live_capture_emulator_5556_after_daily_tab_attempt_2",
             ],
         )
         self.assertEqual(claim_dependency.failure_case, "claim_button_missing_or_not_tappable")
         self.assertTrue(
             claim_dependency.live_reference_image_paths[0].endswith(
-                "daily_ui_claim_rewards__reward_panel__baseline__v1.png"
+                "daily_ui_claim_rewards__claim_button__baseline__v1.png"
             )
         )
         self.assertEqual(
             [Path(path).name for path in claim_dependency.supporting_capture_image_paths],
             [
-                "daily_ui_claim_rewards__reward_panel__baseline__v1.png",
                 "daily_ui_claim_rewards__non_claimable_daily_signin__live_capture__emulator_5556__after_daily_tab_attempt_2.png",
             ],
         )
@@ -445,11 +464,19 @@ class TemplateValidationTests(unittest.TestCase):
         self.assertIn("live_refs=1", claim_dependency.curation_summary)
         self.assertEqual(
             report.metadata["claim_rewards_live_capture_coverage"]["stand_in_anchor_ids"],
-            ["daily_ui.claim_reward", "daily_ui.reward_confirm_state"],
+            ["daily_ui.reward_confirm_state"],
         )
         self.assertEqual(
             report.metadata["claim_rewards_live_capture_coverage"]["live_context_anchor_ids"],
-            ["daily_ui.claim_reward"],
+            [],
+        )
+        self.assertEqual(
+            report.metadata["claim_rewards_capture_inventory"]["landed_device_serials"],
+            ["emulator-5556", "emulator-5560"],
+        )
+        self.assertEqual(
+            report.metadata["claim_rewards_capture_inventory"]["missing_device_serials"],
+            ["127.0.0.1:5559", "127.0.0.1:5563"],
         )
 
         restored = VisionWorkspaceReadinessReport.from_dict(report.to_dict())
