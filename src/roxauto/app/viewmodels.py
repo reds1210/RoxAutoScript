@@ -227,6 +227,9 @@ class ClaimRewardsPaneView:
     preview_summary: str = ""
     selected_anchor_summary: str = ""
     selected_scope_summary: str = ""
+    selected_provenance_summary: str = ""
+    selected_curation_summary: str = ""
+    failure_explanation: str = ""
     can_queue: bool = False
     can_run_now: bool = False
     is_queued: bool = False

@@ -7,6 +7,7 @@ from pathlib import Path
 from queue import Empty, Queue
 import threading
 import time
+from types import SimpleNamespace
 from typing import Callable
 from uuid import uuid4
 
@@ -709,6 +710,7 @@ class OperatorConsoleRuntimeBridge:
         priority: int = _CLAIM_REWARDS_PRIORITY,
     ) -> QueuedTask:
         with self._lock:
+            self._assert_claim_rewards_dispatch_ready()
             existing = self._queued_claim_rewards_item(instance_id)
             if existing is not None:
                 record = self._claim_rewards_record(instance_id)
@@ -767,8 +769,10 @@ class OperatorConsoleRuntimeBridge:
         vision_state: VisionToolingState | None = None,
     ) -> ClaimRewardsPaneView:
         with self._lock:
-            runtime_input = self._claim_rewards_runtime_input_spec()
             readiness = self._task_foundations.evaluate_task_readiness(_CLAIM_REWARDS_TASK_ID)
+            runtime_blockers = self._claim_rewards_runtime_blockers(readiness)
+            runtime_input = self._claim_rewards_runtime_input_spec() if not runtime_blockers else self._claim_rewards_runtime_input
+            builder_input = self._claim_rewards_builder_input()
             snapshot = runtime_snapshot or self.snapshot()
             selected_snapshot = snapshot.get_instance_snapshot(instance_id) if instance_id else None
             inspection_result = self.selected_inspection_result(instance_id) if instance_id else None
@@ -828,31 +832,38 @@ class OperatorConsoleRuntimeBridge:
                     else _CLAIM_REWARDS_ANCHOR_ID
                 )
             )
-            runtime_blockers = [
-                requirement.summary
-                for requirement in readiness.implementation_requirements
-                if requirement.blocking and not requirement.satisfied
-            ]
-            display_model = build_claim_rewards_task_display_model(
-                run=display_run,
-                runtime_input=runtime_input,
-            )
-            step_rows = self._claim_rewards_step_rows(
-                runtime_input,
-                display_run,
-                active_step_id=(
-                    selected_snapshot.active_task_run.current_step_id
-                    if selected_snapshot is not None
-                    and selected_snapshot.active_task_run is not None
-                    and selected_snapshot.active_task_run.task_id == _CLAIM_REWARDS_TASK_ID
-                    else ""
-                ),
-                display_model=display_model,
-            )
+            if runtime_input is not None:
+                display_model = build_claim_rewards_task_display_model(
+                    run=display_run,
+                    runtime_input=runtime_input,
+                )
+                step_rows = self._claim_rewards_step_rows(
+                    runtime_input,
+                    display_run,
+                    active_step_id=(
+                        selected_snapshot.active_task_run.current_step_id
+                        if selected_snapshot is not None
+                        and selected_snapshot.active_task_run is not None
+                        and selected_snapshot.active_task_run.task_id == _CLAIM_REWARDS_TASK_ID
+                        else ""
+                    ),
+                    display_model=display_model,
+                )
+                task_id = runtime_input.task_id
+                manifest_path = runtime_input.manifest_path
+            else:
+                display_model = self._claim_rewards_blocked_display_model(runtime_blockers)
+                step_rows = []
+                task_id = builder_input.task_id if builder_input is not None else _CLAIM_REWARDS_TASK_ID
+                manifest_path = builder_input.manifest_path if builder_input is not None else ""
             completed_count = sum(1 for row in step_rows if row.status == "succeeded")
             current_step_title = self._claim_rewards_current_step_title(
                 workflow_status,
                 step_rows=step_rows,
+            )
+            can_dispatch = self._claim_rewards_can_dispatch(
+                selected_snapshot,
+                runtime_blockers=runtime_blockers,
             )
             editor = ClaimRewardsEditorView(
                 workflow_mode=(draft.workflow_mode.value if draft is not None else _ClaimRewardsWorkflowMode.CLAIMABLE.value),
@@ -903,10 +914,10 @@ class OperatorConsoleRuntimeBridge:
                 ),
             )
             return ClaimRewardsPaneView(
-                task_id=runtime_input.task_id,
+                task_id=task_id,
                 task_name=display_model.display_name,
                 task_label=display_model.display_name,
-                manifest_path=runtime_input.manifest_path,
+                manifest_path=manifest_path,
                 workflow_status=workflow_status,
                 workflow_banner=self._claim_rewards_banner(
                     selected_snapshot,
@@ -974,8 +985,11 @@ class OperatorConsoleRuntimeBridge:
                     selected_snapshot,
                     queued_items=queued_items,
                 ),
-                can_queue=bool(selected_snapshot is not None),
-                can_run_now=bool(selected_snapshot is not None),
+                selected_provenance_summary=self._claim_rewards_selected_provenance_summary(claim_failure),
+                selected_curation_summary=self._claim_rewards_selected_curation_summary(claim_failure),
+                failure_explanation=self._claim_rewards_failure_explanation(claim_failure),
+                can_queue=can_dispatch and not queued_items and workflow_status != "running",
+                can_run_now=can_dispatch and workflow_status != "running",
                 is_queued=bool(queued_items),
                 queue_depth=selected_snapshot.queue_depth if selected_snapshot is not None else 0,
                 last_run_id=last_run.run_id if last_run is not None else "",
@@ -1900,6 +1914,53 @@ class OperatorConsoleRuntimeBridge:
         ]
         return " | ".join(part for part in parts if part)
 
+    def _claim_rewards_runtime_blockers(self, readiness: TaskReadinessReport) -> list[str]:
+        return [
+            requirement.summary
+            for requirement in readiness.implementation_requirements
+            if requirement.blocking and not requirement.satisfied
+        ]
+
+    def _assert_claim_rewards_dispatch_ready(self) -> None:
+        readiness = self._task_foundations.evaluate_task_readiness(_CLAIM_REWARDS_TASK_ID)
+        runtime_blockers = self._claim_rewards_runtime_blockers(readiness)
+        if runtime_blockers:
+            raise ValueError(f"daily_ui.claim_rewards is blocked: {'; '.join(runtime_blockers)}")
+
+    def _claim_rewards_builder_input(self) -> TaskRuntimeBuilderInput | None:
+        for builder_input in self._task_foundations.build_runtime_builder_inputs():
+            if builder_input.task_id == _CLAIM_REWARDS_TASK_ID:
+                return builder_input
+        return None
+
+    def _claim_rewards_blocked_display_model(self, runtime_blockers: list[str]):
+        blocker_summary = "；".join(runtime_blockers) if runtime_blockers else "目前尚未就緒。"
+        preset = SimpleNamespace(
+            category_label="每日領獎",
+            status_text="尚未就緒",
+            description=blocker_summary,
+        )
+        return SimpleNamespace(
+            display_name="每日領獎",
+            status_text="尚未就緒",
+            status_summary=f"每日領獎目前尚未就緒：{blocker_summary}",
+            failure_reason=None,
+            preset=preset,
+        )
+
+    def _claim_rewards_can_dispatch(
+        self,
+        selected_snapshot,
+        *,
+        runtime_blockers: list[str],
+    ) -> bool:
+        if selected_snapshot is None or runtime_blockers:
+            return False
+        return not (
+            selected_snapshot.context is not None
+            and selected_snapshot.context.stop_requested
+        )
+
     def _claim_rewards_banner(
         self,
         selected_snapshot,
@@ -1908,11 +1969,7 @@ class OperatorConsoleRuntimeBridge:
         workflow_status: str,
         queued_items: list[QueuedTask],
     ) -> str:
-        runtime_blockers = [
-            requirement.requirement_id
-            for requirement in readiness.implementation_requirements
-            if requirement.blocking and not requirement.satisfied
-        ]
+        runtime_blockers = self._claim_rewards_runtime_blockers(readiness)
         if selected_snapshot is None:
             return "請先選擇模擬器，再排入或執行每日領獎。"
         banner = "每日領獎操作流程已就緒。"
@@ -2116,6 +2173,30 @@ class OperatorConsoleRuntimeBridge:
         if selected_snapshot.profile_binding is not None:
             scope_parts.append(f"設定檔：{selected_snapshot.profile_binding.display_name}")
         return " | ".join(scope_parts)
+
+    def _claim_rewards_selected_provenance_summary(self, claim_failure) -> str:
+        if claim_failure is None:
+            return ""
+        selected_check = claim_failure.selected_check
+        if selected_check is not None and selected_check.provenance_summary:
+            return selected_check.provenance_summary
+        return str(claim_failure.selected_provenance_summary or "")
+
+    def _claim_rewards_selected_curation_summary(self, claim_failure) -> str:
+        if claim_failure is None:
+            return ""
+        selected_check = claim_failure.selected_check
+        if selected_check is not None and selected_check.curation_summary:
+            return selected_check.curation_summary
+        return str(claim_failure.selected_curation_summary or "")
+
+    def _claim_rewards_failure_explanation(self, claim_failure) -> str:
+        if claim_failure is None:
+            return ""
+        selected_check = claim_failure.selected_check
+        if selected_check is not None and selected_check.failure_explanation:
+            return selected_check.failure_explanation
+        return str(claim_failure.failure_explanation or "")
 
     def _claim_rewards_current_step_title(
         self,

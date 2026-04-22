@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -20,6 +21,7 @@ from roxauto.core.models import (
 from roxauto.core.queue import QueuedTask
 from roxauto.core.runtime import TaskStep, step_success
 from roxauto.profiles import JsonProfileStore
+from roxauto.tasks import TaskGapDomain, TaskReadinessRequirement, TaskReadinessState
 
 
 class FakeAdapter:
@@ -199,6 +201,8 @@ class OperatorConsoleRuntimeBridgeTests(unittest.TestCase):
             self.assertEqual(captured, str((Path(temp_dir) / "mumu-0.png")))
             self.assertEqual(queued.task_id, "daily_ui.claim_rewards")
             self.assertEqual(queued_pane.workflow_status, "queued")
+            self.assertFalse(queued_pane.can_queue)
+            self.assertTrue(queued_pane.can_run_now)
             self.assertTrue(queued_pane.is_queued)
             self.assertEqual(queued_pane.preset_summary, "每日任務 | 可執行 | 固定介面的每日獎勵領取流程。")
             self.assertEqual(queued_pane.active_step_summary, "已排入佇列，等待「開啟每日獎勵」。")
@@ -220,6 +224,8 @@ class OperatorConsoleRuntimeBridgeTests(unittest.TestCase):
             self.assertEqual(dispatch.command_type.value, "start_queue")
             self.assertEqual(pane.workflow_status, "succeeded")
             self.assertEqual(pane.last_run_status, "succeeded")
+            self.assertTrue(pane.can_queue)
+            self.assertTrue(pane.can_run_now)
             self.assertEqual(pane.active_step_summary, "每日領獎已完成。")
             self.assertEqual(pane.failure_summary, "每日領獎已完成。")
             self.assertEqual(
@@ -274,6 +280,11 @@ class OperatorConsoleRuntimeBridgeTests(unittest.TestCase):
             self.assertIn("比對區域", pane.next_action_summary)
             self.assertIn("daily_ui.reward_confirm_state", pane.next_action_summary)
             self.assertIn("daily_ui.reward_confirm_state", pane.selected_anchor_summary)
+            self.assertIn("curated_stand_in", pane.selected_provenance_summary)
+            self.assertIn("repo_curated_baseline", pane.selected_provenance_summary)
+            self.assertIn("provenance=curated_stand_in", pane.selected_curation_summary)
+            self.assertIn("Confirmation modal detected.", pane.failure_explanation)
+            self.assertIn("curated stand-in", pane.failure_explanation)
             self.assertIn("門檻=", pane.selected_anchor_summary)
             self.assertIn("區域=", pane.selected_anchor_summary)
             self.assertEqual(pane.step_rows[0].status, "succeeded")
@@ -290,6 +301,50 @@ class OperatorConsoleRuntimeBridgeTests(unittest.TestCase):
             self.assertIsNotNone(vision.failure.claim_rewards)
             self.assertEqual(vision.failure.claim_rewards.selected_check_id, "confirm_state")
             self.assertIn("current=confirm_state", vision.failure.claim_rewards.workflow_summary)
+
+    def test_claim_rewards_pane_disables_actions_when_runtime_readiness_is_blocked(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            adapter = FakeAdapter(Path(temp_dir), healthy=True)
+            bridge = OperatorConsoleRuntimeBridge(
+                workspace_root=Path(__file__).resolve().parents[2],
+                doctor_report_provider=_doctor_report,
+                adapter=adapter,
+                discovery=lambda: [_instance("mumu-0")],
+                profile_resolver=lambda instance: _profile_binding(instance.instance_id),
+            )
+            bridge.refresh()
+            readiness = bridge._task_foundations.evaluate_task_readiness("daily_ui.claim_rewards")
+            blocked_requirement = TaskReadinessRequirement(
+                requirement_id="runtime.daily_ui.dispatch_bridge",
+                domain=TaskGapDomain.RUNTIME,
+                summary="Daily UI fixed-flow tasks require a production runtime action-dispatch bridge.",
+                satisfied=False,
+                blocking=True,
+            )
+            blocked_readiness = replace(
+                readiness,
+                implementation_readiness_state=TaskReadinessState.BLOCKED_BY_RUNTIME,
+                implementation_requirements=[blocked_requirement],
+            )
+            bridge._task_foundations.evaluate_task_readiness = lambda task_id: blocked_readiness
+
+            pane = bridge.claim_rewards_pane("mumu-0")
+            state = bridge.get_live_state("mumu-0")
+
+            self.assertFalse(pane.can_queue)
+            self.assertFalse(pane.can_run_now)
+            self.assertEqual(pane.task_id, "daily_ui.claim_rewards")
+            self.assertEqual(pane.task_name, "每日領獎")
+            self.assertIn("production runtime action-dispatch bridge", pane.runtime_gate_summary)
+            self.assertIn("production runtime action-dispatch bridge", pane.workflow_banner)
+            self.assertEqual(
+                pane.active_step_summary,
+                "每日領獎目前尚未就緒：Daily UI fixed-flow tasks require a production runtime action-dispatch bridge.",
+            )
+            self.assertFalse(state.claim_rewards.can_queue)
+            self.assertFalse(state.claim_rewards.can_run_now)
+            with self.assertRaisesRegex(ValueError, "production runtime action-dispatch bridge"):
+                bridge.queue_claim_rewards("mumu-0")
 
     def test_get_live_state_projects_cached_state_without_refreshing_runtime(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -402,6 +457,9 @@ class OperatorConsoleRuntimeBridgeTests(unittest.TestCase):
             self.assertEqual(pane.workflow_status, "failed")
             self.assertEqual(pane.failure_step_id, "verify_claim_affordance")
             self.assertIn("daily_ui.reward_confirm_state", pane.selected_anchor_summary)
+            self.assertIn("curated_stand_in", pane.selected_provenance_summary)
+            self.assertIn("provenance=curated_stand_in", pane.selected_curation_summary)
+            self.assertIn("Confirmation modal detected.", pane.failure_explanation)
             self.assertIn("門檻=", pane.selected_anchor_summary)
             self.assertIn("區域=", pane.selected_anchor_summary)
             self.assertIn("門檻", pane.next_action_summary)
