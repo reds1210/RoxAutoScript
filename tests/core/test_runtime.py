@@ -4,6 +4,7 @@ import unittest
 
 import tests._bootstrap  # noqa: F401
 from roxauto.core.commands import CommandDispatchStatus, InstanceCommand, InstanceCommandType
+from roxauto.core.events import EVENT_TASK_FINISHED, EventBus
 from roxauto.core.models import (
     FailureSnapshotReason,
     InstanceState,
@@ -606,6 +607,118 @@ class RuntimeCoordinatorTests(unittest.TestCase):
             context.last_failed_task_run.steps[1].data["runtime_step_spec"]["anchor_id"],
             "daily_ui.reward_panel",
         )
+
+    def test_task_finished_summary_preserves_machine_readable_claim_rewards_outcome(self) -> None:
+        sink = RecordingAuditSink()
+        event_bus = EventBus()
+        finished_payloads: list[dict[str, object]] = []
+        event_bus.subscribe(EVENT_TASK_FINISHED, lambda event: finished_payloads.append(dict(event.payload)))
+        coordinator = RuntimeCoordinator(
+            queue=TaskQueue(),
+            task_runner=TaskRunner(event_bus=event_bus, audit_sink=sink),
+            health_checker=FakeHealthChecker(healthy=True),
+            preview_capture=FakePreviewCapture(),
+            event_bus=event_bus,
+            audit_sink=sink,
+        )
+        coordinator.sync_instances([self.instance])
+        coordinator.enqueue(
+            QueuedTask(
+                instance_id="mumu-0",
+                spec=TaskSpec(
+                    task_id="daily_ui.claim_rewards",
+                    name="Daily Reward Claim",
+                    version="0.1.0",
+                    entry_state="ready",
+                    metadata=_claim_rewards_task_metadata(
+                        _claim_rewards_step_spec(
+                            "open_reward_panel",
+                            "daily_ui.reward_panel",
+                            expected_panel_states=["claimable", "claimed", "confirm_required"],
+                            signal_anchor_ids=["daily_ui.reward_panel", "daily_ui.claim_reward"],
+                        ),
+                        _claim_rewards_step_spec(
+                            "claim_reward",
+                            "daily_ui.claim_reward",
+                            expected_panel_states=["claimed", "confirm_required"],
+                            signal_anchor_ids=[
+                                "daily_ui.reward_panel",
+                                "daily_ui.claim_reward",
+                                "daily_ui.reward_confirm_state",
+                            ],
+                        ),
+                    ),
+                    steps=[
+                        TaskStep("open_reward_panel", "Open reward panel", lambda ctx: step_success("open_reward_panel", "opened")),
+                        TaskStep(
+                            "claim_reward",
+                            "Claim reward",
+                            lambda ctx: step_failure(
+                                "claim_reward",
+                                "tap had no effect",
+                                screenshot_path="captures/claim-reward-failure.png",
+                                data=_claim_rewards_failure_data(
+                                    state="claimable",
+                                    workflow_mode="claimable",
+                                    reason="claim_reward",
+                                    failure_reason_id="claim_tap_no_effect",
+                                    outcome_code="claim_tap_no_effect",
+                                    screenshot_path="captures/claim-reward-failure.png",
+                                    expected_panel_states=["claimed", "confirm_required"],
+                                    matched_anchor_ids=["daily_ui.reward_panel", "daily_ui.claim_reward"],
+                                ),
+                            ),
+                        ),
+                    ],
+                ),
+                priority=100,
+            )
+        )
+
+        result = coordinator.start_queue("mumu-0")
+        context = coordinator.get_runtime_context("mumu-0")
+        finish_audits = [payload for name, payload in sink.records if name == "task.finished"]
+
+        self.assertEqual(result.runs[0].status, TaskRunStatus.FAILED)
+        self.assertEqual(len(finished_payloads), 1)
+        self.assertEqual(len(finish_audits), 1)
+        self.assertIn("last_task_outcome_summary", context.metadata)
+        summary = finish_audits[0]["summary"]
+        self.assertEqual(summary["task_id"], "daily_ui.claim_rewards")
+        self.assertEqual(summary["instance_id"], "mumu-0")
+        self.assertEqual(summary["adb_serial"], "127.0.0.1:16384")
+        self.assertEqual(summary["run_id"], result.runs[0].run_id)
+        self.assertEqual(summary["status"], "failed")
+        self.assertEqual(summary["final_step_id"], "claim_reward")
+        self.assertEqual(summary["final_step_status"], "failed")
+        self.assertEqual(summary["failure_reason_id"], "claim_tap_no_effect")
+        self.assertEqual(summary["outcome_code"], "claim_tap_no_effect")
+        self.assertEqual(summary["last_observed_state"], "claimable")
+        self.assertEqual(summary["workflow_mode"], "claimable")
+        self.assertEqual(summary["inspection_reason"], "claim_reward")
+        self.assertEqual(summary["anchor_id"], "daily_ui.claim_reward")
+        self.assertEqual(summary["expected_anchor_id"], "daily_ui.claim_reward")
+        self.assertEqual(
+            summary["signal_anchor_ids"],
+            [
+                "daily_ui.reward_panel",
+                "daily_ui.claim_reward",
+                "daily_ui.reward_confirm_state",
+            ],
+        )
+        self.assertEqual(
+            summary["matched_anchor_ids"],
+            ["daily_ui.reward_panel", "daily_ui.claim_reward"],
+        )
+        self.assertEqual(summary["source_image"], "captures/claim-reward-failure.png")
+        self.assertEqual(summary["preview_image_path"], "captures/mumu-0.png")
+        self.assertEqual(
+            summary["failure_snapshot_id"],
+            result.runs[0].failure_snapshot.snapshot_id,
+        )
+        self.assertEqual(finished_payloads[0]["summary"], summary)
+        self.assertEqual(context.metadata["last_task_outcome_summary"], summary)
+        self.assertEqual(context.metadata["last_failed_task_outcome_summary"], summary)
 
     def test_running_step_telemetry_projects_step_spec_defaults_before_completion(self) -> None:
         observed: dict[str, object] = {}
