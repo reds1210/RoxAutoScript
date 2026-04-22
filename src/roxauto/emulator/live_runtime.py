@@ -238,6 +238,49 @@ class LiveRuntimeInstanceSummary:
 
 
 @dataclass(slots=True, frozen=True)
+class LiveRuntimeTaskOutcomeSummary:
+    task_id: str
+    instance_id: str
+    label: str = ""
+    adb_serial: str = ""
+    run_id: str = ""
+    status: str = ""
+    queue_id: str = ""
+    attempt: int = 0
+    step_count: int = 0
+    completed_step_count: int = 0
+    started_at: object | None = None
+    finished_at: object | None = None
+    final_step_id: str = ""
+    final_step_status: str = ""
+    failure_snapshot_id: str = ""
+    stop_condition_kind: str = ""
+    failure_reason_id: str = ""
+    outcome_code: str = ""
+    last_observed_state: str = ""
+    workflow_mode: str = ""
+    inspection_reason: str = ""
+    anchor_id: str = ""
+    expected_anchor_id: str = ""
+    signal_anchor_ids: tuple[str, ...] = field(default_factory=tuple)
+    matched_anchor_ids: tuple[str, ...] = field(default_factory=tuple)
+    preview_image_path: str = ""
+    source_image: str = ""
+
+
+@dataclass(slots=True, frozen=True)
+class LiveRuntimeTaskOutcomeReport:
+    captured_at: object = field(default_factory=utc_now)
+    task_id: str = ""
+    instance_count: int = 0
+    run_count: int = 0
+    succeeded_count: int = 0
+    failed_count: int = 0
+    aborted_count: int = 0
+    runs: tuple[LiveRuntimeTaskOutcomeSummary, ...] = field(default_factory=tuple)
+
+
+@dataclass(slots=True, frozen=True)
 class LiveRuntimeRefreshState:
     operation: str = "idle"
     instance_id: str = ""
@@ -685,6 +728,57 @@ class LiveRuntimeSession:
 
     def get_instance_summary(self, instance_id: str) -> LiveRuntimeInstanceSummary | None:
         return self.get_live_state(instance_id=instance_id).selected_instance
+
+    def list_task_run_summaries(
+        self,
+        task_id: str | None = None,
+        *,
+        instance_id: str | None = None,
+    ) -> list[LiveRuntimeTaskOutcomeSummary]:
+        with self._operation_lock:
+            return self._list_task_run_summaries_locked(
+                task_id=task_id,
+                instance_id=instance_id,
+            )
+
+    def build_task_outcome_report(
+        self,
+        task_id: str,
+        *,
+        instance_id: str | None = None,
+    ) -> LiveRuntimeTaskOutcomeReport:
+        normalized_task_id = str(task_id).strip()
+        if not normalized_task_id:
+            raise ValueError("task_id is required")
+        with self._operation_lock:
+            latest_by_instance: dict[str, LiveRuntimeTaskOutcomeSummary] = {}
+            for summary in self._list_task_run_summaries_locked(
+                task_id=normalized_task_id,
+                instance_id=instance_id,
+            ):
+                latest_by_instance[summary.instance_id] = summary
+            if not latest_by_instance:
+                for summary in self._list_context_task_outcome_summaries_locked(
+                    task_id=normalized_task_id,
+                    instance_id=instance_id,
+                ):
+                    latest_by_instance[summary.instance_id] = summary
+            runs = tuple(
+                sorted(
+                    latest_by_instance.values(),
+                    key=lambda item: item.instance_id,
+                )
+            )
+            return LiveRuntimeTaskOutcomeReport(
+                captured_at=utc_now(),
+                task_id=normalized_task_id,
+                instance_count=len(runs),
+                run_count=len(runs),
+                succeeded_count=sum(1 for item in runs if item.status == "succeeded"),
+                failed_count=sum(1 for item in runs if item.status == "failed"),
+                aborted_count=sum(1 for item in runs if item.status == "aborted"),
+                runs=runs,
+            )
 
     def connect_instance(
         self,
@@ -1248,6 +1342,98 @@ class LiveRuntimeSession:
         if not isinstance(attempts, list):
             return 0
         return len(attempts)
+
+    def _list_task_run_summaries_locked(
+        self,
+        *,
+        task_id: str | None,
+        instance_id: str | None,
+    ) -> list[LiveRuntimeTaskOutcomeSummary]:
+        summaries: list[LiveRuntimeTaskOutcomeSummary] = []
+        for event in self._list_recent_events(instance_id=instance_id):
+            if event.name != EVENT_TASK_FINISHED:
+                continue
+            summary = self._task_outcome_summary_from_payload(event.payload.get("summary"))
+            if summary is None:
+                continue
+            if task_id is not None and summary.task_id != str(task_id).strip():
+                continue
+            summaries.append(summary)
+        return summaries
+
+    def _list_context_task_outcome_summaries_locked(
+        self,
+        *,
+        task_id: str,
+        instance_id: str | None,
+    ) -> list[LiveRuntimeTaskOutcomeSummary]:
+        summaries: list[LiveRuntimeTaskOutcomeSummary] = []
+        for context in self._coordinator.list_runtime_contexts():
+            if instance_id is not None and context.instance_id != instance_id:
+                continue
+            candidates = (
+                context.metadata.get("last_task_outcome_summary"),
+                context.metadata.get("last_failed_task_outcome_summary"),
+            )
+            for candidate in candidates:
+                summary = self._task_outcome_summary_from_payload(candidate)
+                if summary is None or summary.task_id != task_id:
+                    continue
+                summaries.append(summary)
+                break
+        return summaries
+
+    def _task_outcome_summary_from_payload(
+        self,
+        payload: Any,
+    ) -> LiveRuntimeTaskOutcomeSummary | None:
+        if not isinstance(payload, dict):
+            return None
+        task_id = str(payload.get("task_id", "")).strip()
+        instance_id = str(payload.get("instance_id", "")).strip()
+        if not task_id or not instance_id:
+            return None
+        return LiveRuntimeTaskOutcomeSummary(
+            task_id=task_id,
+            instance_id=instance_id,
+            label=str(payload.get("instance_label", "")).strip(),
+            adb_serial=str(payload.get("adb_serial", "")).strip(),
+            run_id=str(payload.get("run_id", "")).strip(),
+            status=str(payload.get("status", "")).strip(),
+            queue_id=str(payload.get("queue_id", "")).strip(),
+            attempt=self._int_or_zero(payload.get("attempt")),
+            step_count=self._int_or_zero(payload.get("step_count")),
+            completed_step_count=self._int_or_zero(payload.get("completed_step_count")),
+            started_at=payload.get("started_at"),
+            finished_at=payload.get("finished_at"),
+            final_step_id=str(payload.get("final_step_id", "")).strip(),
+            final_step_status=str(payload.get("final_step_status", "")).strip(),
+            failure_snapshot_id=str(payload.get("failure_snapshot_id", "")).strip(),
+            stop_condition_kind=str(payload.get("stop_condition_kind", "")).strip(),
+            failure_reason_id=str(payload.get("failure_reason_id", "")).strip(),
+            outcome_code=str(payload.get("outcome_code", "")).strip(),
+            last_observed_state=str(payload.get("last_observed_state", "")).strip(),
+            workflow_mode=str(payload.get("workflow_mode", "")).strip(),
+            inspection_reason=str(payload.get("inspection_reason", "")).strip(),
+            anchor_id=str(payload.get("anchor_id", "")).strip(),
+            expected_anchor_id=str(payload.get("expected_anchor_id", "")).strip(),
+            signal_anchor_ids=self._string_tuple(payload.get("signal_anchor_ids")),
+            matched_anchor_ids=self._string_tuple(payload.get("matched_anchor_ids")),
+            preview_image_path=str(payload.get("preview_image_path", "")).strip(),
+            source_image=str(payload.get("source_image", "")).strip(),
+        )
+
+    def _string_tuple(self, value: Any) -> tuple[str, ...]:
+        if not isinstance(value, list):
+            return ()
+        normalized = [str(item).strip() for item in value if str(item).strip()]
+        return tuple(normalized)
+
+    def _int_or_zero(self, value: Any) -> int:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return 0
 
     def _merge_instance_states_locked(self, updated: InstanceState) -> list[InstanceState]:
         merged: list[InstanceState] = []

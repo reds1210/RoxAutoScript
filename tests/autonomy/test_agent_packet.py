@@ -130,7 +130,7 @@ class AgentPacketTests(unittest.TestCase):
         clear=False,
     )
     @patch("roxauto.autonomy.agent_packet._run_git")
-    def test_build_agent_packet_prefers_pr_context_for_detached_head(self, run_git) -> None:
+    def test_build_agent_packet_pr_context_filters_untracked_artifacts(self, run_git) -> None:
         responses = {
             ("diff", "--name-only", "HEAD^1", "HEAD^2"): "src/roxauto/app/shell.py\nassets/ui/operator_console.qss\n",
             ("diff", "--no-color", "--unified=1", "HEAD^1", "HEAD^2"): "diff --git a/a.py b/a.py\n+print('x')\n",

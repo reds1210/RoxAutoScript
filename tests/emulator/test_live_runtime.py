@@ -397,6 +397,172 @@ class LiveRuntimeSessionTests(unittest.TestCase):
             "daily_ui.claim_reward",
         )
 
+    def test_list_task_run_summaries_returns_runtime_owned_claim_rewards_outcomes(self) -> None:
+        adapter = FakeAdapter(healthy=True)
+        second = InstanceState(
+            instance_id="mumu-1",
+            label="MuMu 1",
+            adb_serial="127.0.0.1:16448",
+            status=InstanceStatus.READY,
+        )
+        session = LiveRuntimeSession(adapter, discovery=lambda: [self.instance, second])
+        session.sync_instances()
+
+        failure_spec = TaskSpec(
+            task_id="daily_ui.claim_rewards",
+            name="Daily Reward Claim",
+            version="0.1.0",
+            entry_state="ready",
+            metadata=_claim_rewards_task_metadata(),
+            steps=[
+                TaskStep("open_reward_panel", "Open reward panel", lambda ctx: step_success("open_reward_panel", "opened")),
+                TaskStep(
+                    "claim_reward",
+                    "Claim reward",
+                    lambda ctx: step_failure(
+                        "claim_reward",
+                        "tap had no effect",
+                        data=_claim_rewards_failure_data(),
+                    ),
+                ),
+            ],
+        )
+        success_spec = TaskSpec(
+            task_id="daily_ui.claim_rewards",
+            name="Daily Reward Claim",
+            version="0.1.0",
+            entry_state="ready",
+            metadata=_claim_rewards_task_metadata(),
+            steps=[
+                TaskStep("open_reward_panel", "Open reward panel", lambda ctx: step_success("open_reward_panel", "opened")),
+                TaskStep(
+                    "claim_reward",
+                    "Claim reward",
+                    lambda ctx: step_success(
+                        "claim_reward",
+                        "claimed",
+                        data=_claim_rewards_success_data(),
+                    ),
+                ),
+            ],
+        )
+
+        session.enqueue(QueuedTask(instance_id="mumu-0", spec=failure_spec, priority=100))
+        session.enqueue(QueuedTask(instance_id="mumu-1", spec=success_spec, priority=100))
+        session.start_queue("mumu-0")
+        session.start_queue("mumu-1")
+
+        summaries = session.list_task_run_summaries(task_id="daily_ui.claim_rewards")
+
+        self.assertEqual(len(summaries), 2)
+        self.assertEqual([item.instance_id for item in summaries], ["mumu-0", "mumu-1"])
+        self.assertEqual(summaries[0].status, "failed")
+        self.assertEqual(summaries[0].failure_reason_id, "claim_tap_no_effect")
+        self.assertEqual(summaries[0].outcome_code, "claim_tap_no_effect")
+        self.assertEqual(summaries[0].last_observed_state, "claimable")
+        self.assertEqual(summaries[0].workflow_mode, "claimable")
+        self.assertEqual(summaries[0].anchor_id, "daily_ui.claim_reward")
+        self.assertEqual(
+            summaries[0].matched_anchor_ids,
+            ("daily_ui.reward_panel", "daily_ui.claim_reward"),
+        )
+        self.assertEqual(summaries[1].status, "succeeded")
+        self.assertEqual(summaries[1].outcome_code, "claim_success")
+        self.assertEqual(summaries[1].last_observed_state, "claimed")
+        self.assertEqual(summaries[1].workflow_mode, "claimable")
+        self.assertEqual(summaries[1].anchor_id, "daily_ui.claim_reward")
+        self.assertEqual(
+            summaries[1].signal_anchor_ids,
+            (
+                "daily_ui.reward_panel",
+                "daily_ui.claim_reward",
+                "daily_ui.reward_confirm_state",
+            ),
+        )
+
+    def test_build_task_outcome_report_compares_latest_claim_rewards_runs_per_instance(self) -> None:
+        adapter = FakeAdapter(healthy=True)
+        second = InstanceState(
+            instance_id="mumu-1",
+            label="MuMu 1",
+            adb_serial="127.0.0.1:16448",
+            status=InstanceStatus.READY,
+        )
+        session = LiveRuntimeSession(adapter, discovery=lambda: [self.instance, second])
+        session.sync_instances()
+
+        session.enqueue(
+            QueuedTask(
+                instance_id="mumu-0",
+                spec=TaskSpec(
+                    task_id="daily_ui.claim_rewards",
+                    name="Daily Reward Claim",
+                    version="0.1.0",
+                    entry_state="ready",
+                    metadata=_claim_rewards_task_metadata(),
+                    steps=[
+                        TaskStep("open_reward_panel", "Open reward panel", lambda ctx: step_success("open_reward_panel", "opened")),
+                        TaskStep(
+                            "claim_reward",
+                            "Claim reward",
+                            lambda ctx: step_failure(
+                                "claim_reward",
+                                "tap had no effect",
+                                data=_claim_rewards_failure_data(),
+                            ),
+                        ),
+                    ],
+                ),
+                priority=100,
+            )
+        )
+        session.enqueue(
+            QueuedTask(
+                instance_id="mumu-1",
+                spec=TaskSpec(
+                    task_id="daily_ui.claim_rewards",
+                    name="Daily Reward Claim",
+                    version="0.1.0",
+                    entry_state="ready",
+                    metadata=_claim_rewards_task_metadata(),
+                    steps=[
+                        TaskStep("open_reward_panel", "Open reward panel", lambda ctx: step_success("open_reward_panel", "opened")),
+                        TaskStep(
+                            "claim_reward",
+                            "Claim reward",
+                            lambda ctx: step_success(
+                                "claim_reward",
+                                "claimed",
+                                data=_claim_rewards_success_data(),
+                            ),
+                        ),
+                    ],
+                ),
+                priority=100,
+            )
+        )
+
+        session.start_queue("mumu-0")
+        session.start_queue("mumu-1")
+        report = session.build_task_outcome_report("daily_ui.claim_rewards")
+
+        self.assertEqual(report.task_id, "daily_ui.claim_rewards")
+        self.assertEqual(report.instance_count, 2)
+        self.assertEqual(report.run_count, 2)
+        self.assertEqual(report.failed_count, 1)
+        self.assertEqual(report.succeeded_count, 1)
+        self.assertEqual(report.aborted_count, 0)
+        self.assertEqual([item.instance_id for item in report.runs], ["mumu-0", "mumu-1"])
+        self.assertEqual(report.runs[0].label, "MuMu 0")
+        self.assertEqual(report.runs[0].adb_serial, "127.0.0.1:16384")
+        self.assertEqual(report.runs[0].failure_reason_id, "claim_tap_no_effect")
+        self.assertEqual(report.runs[0].source_image, "captures/mumu-0.png")
+        self.assertEqual(report.runs[1].label, "MuMu 1")
+        self.assertEqual(report.runs[1].adb_serial, "127.0.0.1:16448")
+        self.assertEqual(report.runs[1].outcome_code, "claim_success")
+        self.assertEqual(report.runs[1].last_observed_state, "claimed")
+        self.assertEqual(report.runs[1].source_image, "captures/mumu-1.png")
+
     def test_reconnect_preserves_runtime_authority_for_last_run_and_failure_snapshot(self) -> None:
         adapter = FakeAdapter(healthy=True)
         discovered: dict[str, list[InstanceState]] = {"states": [self.instance]}
@@ -1081,6 +1247,25 @@ def _claim_rewards_failure_data() -> dict[str, object]:
             "inspection": {
                 "workflow_mode": "claimable",
                 "expected_panel_states": ["claimed", "confirm_required"],
+                "matched_anchor_ids": ["daily_ui.reward_panel", "daily_ui.claim_reward"],
+            }
+        },
+    }
+
+
+def _claim_rewards_success_data() -> dict[str, object]:
+    return {
+        "state": "claimed",
+        "screenshot_path": "captures/mumu-1.png",
+        "matched_anchor_ids": ["daily_ui.reward_panel", "daily_ui.claim_reward"],
+        "metadata": {
+            "workflow_mode": "claimable",
+            "reason": "claim_reward",
+        },
+        "outcome_code": "claim_success",
+        "telemetry": {
+            "inspection": {
+                "workflow_mode": "claimable",
                 "matched_anchor_ids": ["daily_ui.reward_panel", "daily_ui.claim_reward"],
             }
         },
