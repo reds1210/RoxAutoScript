@@ -123,6 +123,15 @@ _REQUIREMENT_SPECS: dict[str, _RequirementSpec] = {
         builder_blocking=True,
         implementation_blocking=True,
     ),
+    "foundation.daily_ui.guild_order_custom_option_contract": _RequirementSpec(
+        requirement_id="foundation.daily_ui.guild_order_custom_option_contract",
+        domain=TaskGapDomain.FOUNDATION,
+        summary=(
+            "Guild-order self-select support still requires a truthful custom-order contract for the list button, option list panel, visible option quantities, and selected-option verification."
+        ),
+        builder_blocking=True,
+        implementation_blocking=True,
+    ),
     "runtime.daily_ui.dispatch_bridge": _RequirementSpec(
         requirement_id="runtime.daily_ui.dispatch_bridge",
         domain=TaskGapDomain.RUNTIME,
@@ -551,6 +560,18 @@ class TaskFoundationRepository:
                     "daily_ui.guild_order_submit_result_state",
                 ],
             )
+        if spec.requirement_id == "foundation.daily_ui.guild_order_custom_option_contract":
+            return self._all_anchor_records_present(
+                asset_records,
+                [
+                    "daily_ui.guild_order_custom_list_button",
+                    "daily_ui.guild_order_custom_list_panel",
+                    "daily_ui.guild_order_custom_option_material_label",
+                    "daily_ui.guild_order_custom_option_required_quantity",
+                    "daily_ui.guild_order_custom_option_available_quantity",
+                    "daily_ui.guild_order_custom_option_selected_state",
+                ],
+            )
         if spec.requirement_id == "runtime.daily_ui.dispatch_bridge":
             try:
                 from roxauto.tasks.daily_ui import has_claim_rewards_runtime_bridge
@@ -584,6 +605,12 @@ class TaskFoundationRepository:
                 "anchor_statuses="
                 f"{self._anchor_status_summary(asset_records, ['daily_ui.guild_order_unavailable_state', 'daily_ui.guild_order_insufficient_material_feedback', 'daily_ui.guild_order_submit_result_state'])} "
                 "verification_surface=completed_insufficient_submit_result"
+            )
+        if spec.requirement_id == "foundation.daily_ui.guild_order_custom_option_contract":
+            return (
+                "anchor_statuses="
+                f"{self._anchor_status_summary(asset_records, ['daily_ui.guild_order_custom_list_button', 'daily_ui.guild_order_custom_list_panel', 'daily_ui.guild_order_custom_option_material_label', 'daily_ui.guild_order_custom_option_required_quantity', 'daily_ui.guild_order_custom_option_available_quantity', 'daily_ui.guild_order_custom_option_selected_state'])} "
+                "selection_surface=custom_list_button_custom_list_panel_visible_option_quantities_selected_option"
             )
         if spec.requirement_id == "runtime.daily_ui.dispatch_bridge":
             status = "implemented" if satisfied else "missing"

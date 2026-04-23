@@ -117,7 +117,7 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
         self.assertEqual(catalogs[0].entries[2].task_id, "daily_ui.guild_order_submit")
         self.assertEqual(
             catalogs[0].entries[2].metadata["signal_contract_version"],
-            "guild_order_submit.v1",
+            "guild_order_submit.v2",
         )
 
     def test_builds_asset_inventory(self) -> None:
@@ -252,6 +252,7 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
             [
                 "foundation.daily_ui.guild_order_visible_quantity_contract",
                 "foundation.daily_ui.guild_order_result_state_contract",
+                "foundation.daily_ui.guild_order_custom_option_contract",
             ],
         )
         self.assertEqual(
@@ -311,6 +312,7 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
                 "asset.daily_ui.guild_order_refresh_button",
                 "foundation.daily_ui.guild_order_visible_quantity_contract",
                 "foundation.daily_ui.guild_order_result_state_contract",
+                "foundation.daily_ui.guild_order_custom_option_contract",
             ],
         )
         self.assertEqual(by_task["odin.preset_entry"].builder_readiness_state.value, "ready")

@@ -93,16 +93,24 @@
       ],
       "metadata": {
         "phase": "round-9",
-        "signal_contract_version": "guild_order_submit.v1",
+        "signal_contract_version": "guild_order_submit.v2",
         "supporting_anchor_ids": [
           "daily_ui.guild_order_material_label",
           "daily_ui.guild_order_required_quantity",
           "daily_ui.guild_order_available_quantity",
+          "daily_ui.guild_order_custom_list_button",
+          "daily_ui.guild_order_custom_list_panel",
+          "daily_ui.guild_order_custom_option_material_label",
+          "daily_ui.guild_order_custom_option_required_quantity",
+          "daily_ui.guild_order_custom_option_available_quantity",
+          "daily_ui.guild_order_custom_option_selected_state",
           "daily_ui.guild_order_unavailable_state",
           "daily_ui.guild_order_insufficient_material_feedback",
           "daily_ui.guild_order_submit_result_state"
         ],
         "supporting_golden_screen_slugs": [
+          "custom_order_detail",
+          "custom_order_list",
           "insufficient_material_state",
           "completed_state",
           "submit_result"
@@ -117,8 +125,11 @@
           "decision",
           "reason_id",
           "slot_index",
+          "order_kind",
           "requirements",
           "availability",
+          "custom_options",
+          "selected_custom_option",
           "refresh_attempted",
           "verification_state"
         ]

@@ -22,6 +22,22 @@
       ]
     },
     {
+      "notes": "Supporting self-select guild-order detail state where the first-round bonus custom-order card is focused and the custom-order list button is visible.",
+      "screen_slug": "custom_order_detail",
+      "variants": [
+        "baseline",
+        "failure"
+      ]
+    },
+    {
+      "notes": "Supporting self-select guild-order list state where visible custom-order candidates can be inspected and one option may be selected truthfully.",
+      "screen_slug": "custom_order_list",
+      "variants": [
+        "baseline",
+        "failure"
+      ]
+    },
+    {
       "notes": "Supporting insufficient-material state used to verify skip or refresh decisions honestly.",
       "screen_slug": "insufficient_material_state",
       "variants": [
@@ -58,28 +74,35 @@
     {
       "step_id": "inspect_visible_order",
       "action": "vision_verify",
-      "success_condition": "The current order slot, visible requirement, and visible available-material state can be classified honestly.",
-      "failure_condition": "The current order requirement or visible quantity state remains ambiguous.",
+      "success_condition": "The current order slot, visible requirement or self-select order state, and visible available-material state can be classified honestly.",
+      "failure_condition": "The current standard requirement, custom-order state, or visible quantity state remains ambiguous.",
       "notes": "No freeform OCR-only inference is allowed in this first cut."
+    },
+    {
+      "step_id": "inspect_custom_order_options",
+      "action": "vision_verify",
+      "success_condition": "When the current slot is a self-select order, the visible candidate options can be inspected honestly from the bounded custom-order list.",
+      "failure_condition": "The custom-order list, visible option requirements, or visible available-material state remains ambiguous.",
+      "notes": "This step applies only when the current guild-order slot is the self-select custom order."
     },
     {
       "step_id": "decide_material_action",
       "action": "task_policy",
-      "success_condition": "The task chooses submit, skip, or refresh from machine-readable material policy and visible evidence only.",
+      "success_condition": "The task chooses submit, skip, or refresh from machine-readable material policy and visible evidence only, including self-select order candidates when present.",
       "failure_condition": "No truthful bounded decision can be made from visible state and configured policy.",
-      "notes": "This step must not introduce crafting, buying, gathering, or pathing as hidden dependencies."
+      "notes": "This step must not introduce crafting, gathering, or pathing as hidden dependencies."
     },
     {
       "step_id": "apply_material_decision",
       "action": "tap_anchor",
-      "success_condition": "The selected bounded decision path is applied without expanding beyond submit, skip, or refresh.",
+      "success_condition": "The selected bounded decision path is applied without expanding beyond submit, skip, or refresh, including bounded self-select option picking when required before submission.",
       "failure_condition": "Submit or refresh affordances are missing when the bounded decision requires them.",
       "notes": "Skip remains an explicit no-action path that still records the reason honestly."
     },
     {
       "step_id": "verify_material_outcome",
       "action": "vision_verify",
-      "success_condition": "The task verifies the chosen submit, skip, or refresh outcome with truthful post-decision evidence.",
+      "success_condition": "The task verifies the chosen submit, skip, or refresh outcome with truthful post-decision evidence, including custom-order selection outcomes when that path is taken.",
       "failure_condition": "The bounded decision outcome cannot be verified from stable guild-order UI evidence.",
       "notes": "Round 9 requires honest verification instead of assuming the action succeeded."
     }
@@ -95,17 +118,26 @@
     ],
     "foundation_requirement_ids": [
       "foundation.daily_ui.guild_order_visible_quantity_contract",
-      "foundation.daily_ui.guild_order_result_state_contract"
+      "foundation.daily_ui.guild_order_result_state_contract",
+      "foundation.daily_ui.guild_order_custom_option_contract"
     ],
     "supporting_anchor_ids": [
       "daily_ui.guild_order_material_label",
       "daily_ui.guild_order_required_quantity",
       "daily_ui.guild_order_available_quantity",
+      "daily_ui.guild_order_custom_list_button",
+      "daily_ui.guild_order_custom_list_panel",
+      "daily_ui.guild_order_custom_option_material_label",
+      "daily_ui.guild_order_custom_option_required_quantity",
+      "daily_ui.guild_order_custom_option_available_quantity",
+      "daily_ui.guild_order_custom_option_selected_state",
       "daily_ui.guild_order_unavailable_state",
       "daily_ui.guild_order_insufficient_material_feedback",
       "daily_ui.guild_order_submit_result_state"
     ],
     "supporting_golden_screen_slugs": [
+      "custom_order_detail",
+      "custom_order_list",
       "insufficient_material_state",
       "completed_state",
       "submit_result"
@@ -119,6 +151,11 @@
       "reserve_quantity_by_material_label": {},
       "refresh_allowed": true,
       "max_refresh_attempts_per_run": 1,
+      "custom_order_enabled": true,
+      "custom_order_preferred_material_ids": [],
+      "custom_order_preferred_material_labels": [],
+      "custom_order_max_candidates_to_inspect": 8,
+      "custom_order_selection_boundary": "visible_custom_order_candidate_evidence_only",
       "decision_priority": [
         "submit",
         "refresh",
@@ -127,11 +164,10 @@
       "decision_boundary": "visible_material_evidence_only",
       "disallowed_behaviors": [
         "crafting",
-        "buying",
         "gathering",
         "pathing"
       ],
-      "notes": "Round 9 only allows submit, skip, or refresh when the visible order requirement and visible quantity evidence are sufficient for a truthful bounded decision."
+      "notes": "Guild-order submission now includes the bounded self-select order path. The self-select order is a first-round bonus card, not a second-round mode. The task may inspect visible custom-order candidates and choose one truthful option using the same material-policy rules, but it still must not hide crafting, gathering, or pathing as dependencies."
     },
     "guild_order_decision_contract": {
       "allowed_decisions": [
@@ -147,6 +183,10 @@
         "order_state_unknown",
         "refresh_not_allowed",
         "refresh_limit_reached",
+        "custom_order_disabled",
+        "custom_order_list_unavailable",
+        "custom_order_no_viable_option",
+        "custom_order_option_selected",
         "submit_verification_failed",
         "refresh_verification_failed"
       ],
@@ -161,13 +201,18 @@
         "decision",
         "reason_id",
         "slot_index",
+        "order_kind",
         "requirements",
         "availability",
+        "custom_options",
+        "selected_custom_option",
         "refresh_attempted",
         "verification_state"
       ],
       "material_evidence_fields": [
+        "order_kind",
         "slot_index",
+        "candidate_index",
         "material_label",
         "normalized_material_id",
         "required_quantity",
@@ -175,11 +220,11 @@
         "sufficiency"
       ],
       "decision_rules": {
-        "submit": "Visible requirement is allowed and visible available quantity satisfies the configured reserve policy.",
-        "skip": "Visible order is already completed, refresh is disallowed, or no truthful bounded action remains after policy evaluation.",
-        "refresh": "Visible order is unsuitable and one bounded refresh remains allowed by policy."
+        "submit": "Visible standard requirements are allowed and sufficiently stocked, or a visible self-select option is chosen truthfully under the same material policy.",
+        "skip": "Visible order is already completed, self-select support is unavailable or disabled, refresh is disallowed, or no truthful bounded action remains after policy evaluation.",
+        "refresh": "Visible order or self-select option set is unsuitable and one bounded refresh remains allowed by policy."
       },
-      "notes": "Unknown order state should fail honestly instead of inventing a fourth hidden action path."
+      "notes": "Unknown order state should fail honestly instead of inventing a fourth hidden action path. Self-select orders stay inside the same submit / skip / refresh decision envelope as a first-round bonus path and must record the chosen option explicitly."
     },
     "guild_order_visibility_contract": {
       "required_anchor_ids": [
@@ -193,6 +238,12 @@
         "daily_ui.guild_order_material_label",
         "daily_ui.guild_order_required_quantity",
         "daily_ui.guild_order_available_quantity",
+        "daily_ui.guild_order_custom_list_button",
+        "daily_ui.guild_order_custom_list_panel",
+        "daily_ui.guild_order_custom_option_material_label",
+        "daily_ui.guild_order_custom_option_required_quantity",
+        "daily_ui.guild_order_custom_option_available_quantity",
+        "daily_ui.guild_order_custom_option_selected_state",
         "daily_ui.guild_order_unavailable_state",
         "daily_ui.guild_order_insufficient_material_feedback",
         "daily_ui.guild_order_submit_result_state"
@@ -202,28 +253,39 @@
         "order_detail"
       ],
       "supporting_screen_slugs": [
+        "custom_order_detail",
+        "custom_order_list",
         "insufficient_material_state",
         "completed_state",
         "submit_result"
       ],
       "decision_input_fields": [
+        "order_kind",
         "slot_index",
         "material_label",
         "required_quantity",
-        "available_quantity"
+        "available_quantity",
+        "candidate_index",
+        "custom_option_material_label",
+        "custom_option_required_quantity",
+        "custom_option_available_quantity"
       ],
       "foundation_requirement_ids": [
         "foundation.daily_ui.guild_order_visible_quantity_contract",
-        "foundation.daily_ui.guild_order_result_state_contract"
+        "foundation.daily_ui.guild_order_result_state_contract",
+        "foundation.daily_ui.guild_order_custom_option_contract"
       ],
-      "notes": "Round 9 remains blocked until visible quantities and post-decision result states are truthful and deterministic."
+      "notes": "Guild-order submit remains blocked until visible quantities, self-select option surfaces, and post-decision result states are truthful and deterministic."
     },
     "guild_order_handoff_fields": [
       "decision",
       "reason_id",
       "slot_index",
+      "order_kind",
       "requirements",
       "availability",
+      "custom_options",
+      "selected_custom_option",
       "refresh_attempted",
       "verification_state"
     ],
@@ -249,7 +311,7 @@
     "metadata": {
       "implementation_state": "spec_only",
       "phase": "round-9",
-      "signal_contract_version": "guild_order_submit.v1"
+      "signal_contract_version": "guild_order_submit.v2"
     },
     "name": "Guild Order Submit",
     "recovery_policy": "abort",
@@ -290,7 +352,7 @@
         }
       }
     ],
-    "success_condition": "The task reaches a truthful submit, skip, or refresh outcome and records why that outcome was chosen.",
+    "success_condition": "The task reaches a truthful submit, skip, or refresh outcome for either a standard or self-select guild order and records why that outcome was chosen.",
     "task_id": "daily_ui.guild_order_submit",
     "version": "0.1.0"
   }

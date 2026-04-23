@@ -32,6 +32,26 @@ Round 9 explicitly does not include:
 - OCR-heavy freeform parsing
 - a second new task beyond guild-order submit/skip/refresh
 
+## Execution Stability Rule
+
+Guild-order exploration may temporarily use bounded coordinate probes to collect truthful live evidence, but those probes are not the production runtime contract.
+
+For this round:
+
+- coordinate-only tapping is acceptable only for screenshot-gated exploration or evidence collection
+- every exploratory tap should be followed by an immediate screenshot and checkpoint classification
+- if the observed checkpoint does not match the expected state, the worker should stop and record the mismatch instead of probing sideways
+
+For future runnable automation:
+
+- a guild-order task must not infer progress from tap coordinates alone
+- every `detect -> act -> verify` step should verify the next checkpoint from screenshot, anchor, or other machine-readable visual evidence
+- waiting for transitions should prefer bounded polling until the expected checkpoint appears or a timeout expires
+- fixed sleeps may remain as small backoff defaults, but they must not be the only proof that the UI advanced
+- fixed coordinate hotzones are acceptable only when the surrounding panel is already verified stable and the post-tap checkpoint is also verified immediately
+
+This rule exists because emulator performance, animation timing, and device load can vary across machines even when the ADB serial, resolution, and route are nominally the same.
+
 ## Canonical Task Direction
 
 Tentative task target for this round:
