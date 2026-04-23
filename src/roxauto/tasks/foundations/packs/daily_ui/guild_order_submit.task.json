@@ -187,6 +187,9 @@
         "custom_order_list_unavailable",
         "custom_order_no_viable_option",
         "custom_order_option_selected",
+        "custom_order_selected_candidate_missing",
+        "custom_order_selected_candidate_blocked",
+        "custom_order_selected_candidate_insufficient",
         "submit_verification_failed",
         "refresh_verification_failed"
       ],
@@ -224,7 +227,7 @@
         "skip": "Visible order is already completed, self-select support is unavailable or disabled, refresh is disallowed, or no truthful bounded action remains after policy evaluation.",
         "refresh": "Visible order or self-select option set is unsuitable and one bounded refresh remains allowed by policy."
       },
-      "notes": "Unknown order state should fail honestly instead of inventing a fourth hidden action path. Self-select orders stay inside the same submit / skip / refresh decision envelope as a first-round bonus path and must record the chosen option explicitly."
+      "notes": "Unknown order state should fail honestly instead of inventing a fourth hidden action path. Self-select orders stay inside the same submit / skip / refresh decision envelope as a first-round bonus path, must record the chosen option explicitly, and should preserve truthful failure reasons when an operator-selected candidate index is missing, blocked, or insufficient."
     },
     "guild_order_visibility_contract": {
       "required_anchor_ids": [
