@@ -27,6 +27,9 @@ class GuildOrderDecisionReason(str, Enum):
     CUSTOM_ORDER_LIST_UNAVAILABLE = "custom_order_list_unavailable"
     CUSTOM_ORDER_NO_VIABLE_OPTION = "custom_order_no_viable_option"
     CUSTOM_ORDER_OPTION_SELECTED = "custom_order_option_selected"
+    CUSTOM_ORDER_SELECTED_CANDIDATE_MISSING = "custom_order_selected_candidate_missing"
+    CUSTOM_ORDER_SELECTED_CANDIDATE_BLOCKED = "custom_order_selected_candidate_blocked"
+    CUSTOM_ORDER_SELECTED_CANDIDATE_INSUFFICIENT = "custom_order_selected_candidate_insufficient"
     SUBMIT_VERIFICATION_FAILED = "submit_verification_failed"
     REFRESH_VERIFICATION_FAILED = "refresh_verification_failed"
 
@@ -439,22 +442,11 @@ def select_guild_order_custom_option(
     explicit_candidate_index = policy.custom_order_selected_candidate_index
 
     if explicit_candidate_index is not None:
-        selected_option = next(
-            (option for option in inspected_options if option.candidate_index == explicit_candidate_index),
-            None,
+        selected_option, _ = _select_explicit_custom_order_candidate(
+            custom_options=inspected_options,
+            policy=policy,
         )
-        if selected_option is None:
-            return None
-        sufficiency = _resolve_custom_option_sufficiency(selected_option, policy)
-        if not _is_material_allowed(
-            policy,
-            normalized_material_id=selected_option.normalized_material_id,
-            material_label=selected_option.material_label,
-        ):
-            return None
-        if sufficiency is not GuildOrderMaterialSufficiency.SUFFICIENT:
-            return None
-        return _clone_custom_option_with_sufficiency(selected_option, sufficiency)
+        return selected_option
 
     for option in inspected_options:
         sufficiency = _resolve_custom_option_sufficiency(option, policy)
@@ -780,7 +772,14 @@ def _evaluate_custom_order_decision(
             metadata={"refresh_attempt_count": refresh_attempt_count},
         )
 
-    selected_option = select_guild_order_custom_option(custom_options=custom_options, policy=policy)
+    explicit_selection_failure: GuildOrderDecisionReason | None = None
+    if policy.custom_order_selected_candidate_index is not None:
+        selected_option, explicit_selection_failure = _select_explicit_custom_order_candidate(
+            custom_options=custom_options,
+            policy=policy,
+        )
+    else:
+        selected_option = select_guild_order_custom_option(custom_options=custom_options, policy=policy)
     if selected_option is not None:
         return GuildOrderDecision(
             decision=GuildOrderDecisionValue.SUBMIT,
@@ -820,7 +819,7 @@ def _evaluate_custom_order_decision(
         requirements=[],
         availability=[],
         refresh_attempt_count=refresh_attempt_count,
-        fallback_reason=GuildOrderDecisionReason.CUSTOM_ORDER_NO_VIABLE_OPTION,
+        fallback_reason=explicit_selection_failure or GuildOrderDecisionReason.CUSTOM_ORDER_NO_VIABLE_OPTION,
         custom_options=[
             _clone_custom_option_with_sufficiency(option, _resolve_custom_option_sufficiency(option, policy))
             for option in custom_options
@@ -873,6 +872,36 @@ def _build_refresh_or_skip_decision(
             "fallback_reason_id": fallback_reason.value,
         },
     )
+
+
+def _select_explicit_custom_order_candidate(
+    *,
+    custom_options: list[GuildOrderCustomOption],
+    policy: GuildOrderMaterialPolicy,
+) -> tuple[GuildOrderCustomOption | None, GuildOrderDecisionReason | None]:
+    explicit_candidate_index = policy.custom_order_selected_candidate_index
+    if explicit_candidate_index is None:
+        return None, None
+
+    selected_option = next(
+        (option for option in custom_options if option.candidate_index == explicit_candidate_index),
+        None,
+    )
+    if selected_option is None:
+        return None, GuildOrderDecisionReason.CUSTOM_ORDER_SELECTED_CANDIDATE_MISSING
+
+    if not _is_material_allowed(
+        policy,
+        normalized_material_id=selected_option.normalized_material_id,
+        material_label=selected_option.material_label,
+    ):
+        return None, GuildOrderDecisionReason.CUSTOM_ORDER_SELECTED_CANDIDATE_BLOCKED
+
+    sufficiency = _resolve_custom_option_sufficiency(selected_option, policy)
+    if sufficiency is not GuildOrderMaterialSufficiency.SUFFICIENT:
+        return None, GuildOrderDecisionReason.CUSTOM_ORDER_SELECTED_CANDIDATE_INSUFFICIENT
+
+    return _clone_custom_option_with_sufficiency(selected_option, sufficiency), None
 
 
 def _match_availability_for_requirement(

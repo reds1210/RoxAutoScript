@@ -70,6 +70,9 @@ class GuildOrderSubmitFoundationsTests(unittest.TestCase):
         self.assertEqual(material_policy.max_refresh_attempts_per_run, 1)
         self.assertEqual(decision_contract.allowed_decisions, ["submit", "skip", "refresh"])
         self.assertIn("custom_order_option_selected", decision_contract.reason_ids)
+        self.assertIn("custom_order_selected_candidate_missing", decision_contract.reason_ids)
+        self.assertIn("custom_order_selected_candidate_blocked", decision_contract.reason_ids)
+        self.assertIn("custom_order_selected_candidate_insufficient", decision_contract.reason_ids)
         self.assertIn("order_kind", decision_contract.decision_signal_keys)
         self.assertIn("materials_sufficient", decision_contract.reason_ids)
         self.assertIn("verification_state", decision_contract.decision_signal_keys)
@@ -351,6 +354,7 @@ class GuildOrderSubmitFoundationsTests(unittest.TestCase):
             order_kind=GuildOrderOrderKind.CUSTOM,
             policy=GuildOrderMaterialPolicy(
                 custom_order_enabled=True,
+                custom_order_selected_candidate_index=None,
                 refresh_allowed=True,
                 max_refresh_attempts_per_run=1,
             ),
@@ -367,6 +371,102 @@ class GuildOrderSubmitFoundationsTests(unittest.TestCase):
 
         self.assertEqual(decision.decision, GuildOrderDecisionValue.REFRESH)
         self.assertEqual(decision.reason_id, "custom_order_no_viable_option")
+
+    def test_evaluates_custom_order_refresh_when_selected_candidate_is_missing(self) -> None:
+        decision = evaluate_guild_order_submit_decision(
+            slot_index=9,
+            order_kind=GuildOrderOrderKind.CUSTOM,
+            policy=GuildOrderMaterialPolicy(
+                custom_order_enabled=True,
+                custom_order_selected_candidate_index=3,
+                refresh_allowed=True,
+                max_refresh_attempts_per_run=1,
+            ),
+            custom_options=[
+                GuildOrderCustomOption(
+                    candidate_index=1,
+                    material_label="Iron Ore",
+                    normalized_material_id="iron_ore",
+                    required_quantity=10,
+                    available_quantity=20,
+                ),
+                GuildOrderCustomOption(
+                    candidate_index=2,
+                    material_label="Copper Ore",
+                    normalized_material_id="copper_ore",
+                    required_quantity=10,
+                    available_quantity=20,
+                ),
+            ],
+        )
+
+        self.assertEqual(decision.decision, GuildOrderDecisionValue.REFRESH)
+        self.assertEqual(decision.reason_id, "custom_order_selected_candidate_missing")
+
+    def test_evaluates_custom_order_refresh_when_selected_candidate_is_blocked(self) -> None:
+        decision = evaluate_guild_order_submit_decision(
+            slot_index=9,
+            order_kind=GuildOrderOrderKind.CUSTOM,
+            policy=GuildOrderMaterialPolicy(
+                custom_order_enabled=True,
+                custom_order_selected_candidate_index=2,
+                blocked_material_ids=["copper_ore"],
+                refresh_allowed=True,
+                max_refresh_attempts_per_run=1,
+            ),
+            custom_options=[
+                GuildOrderCustomOption(
+                    candidate_index=1,
+                    material_label="Iron Ore",
+                    normalized_material_id="iron_ore",
+                    required_quantity=10,
+                    available_quantity=20,
+                ),
+                GuildOrderCustomOption(
+                    candidate_index=2,
+                    material_label="Copper Ore",
+                    normalized_material_id="copper_ore",
+                    required_quantity=10,
+                    available_quantity=20,
+                ),
+            ],
+        )
+
+        self.assertEqual(decision.decision, GuildOrderDecisionValue.REFRESH)
+        self.assertEqual(decision.reason_id, "custom_order_selected_candidate_blocked")
+
+    def test_evaluates_custom_order_skip_when_selected_candidate_is_insufficient_and_refresh_is_exhausted(self) -> None:
+        decision = evaluate_guild_order_submit_decision(
+            slot_index=9,
+            order_kind=GuildOrderOrderKind.CUSTOM,
+            policy=GuildOrderMaterialPolicy(
+                custom_order_enabled=True,
+                custom_order_selected_candidate_index=2,
+                refresh_allowed=True,
+                max_refresh_attempts_per_run=1,
+            ),
+            custom_options=[
+                GuildOrderCustomOption(
+                    candidate_index=1,
+                    material_label="Iron Ore",
+                    normalized_material_id="iron_ore",
+                    required_quantity=10,
+                    available_quantity=20,
+                ),
+                GuildOrderCustomOption(
+                    candidate_index=2,
+                    material_label="Copper Ore",
+                    normalized_material_id="copper_ore",
+                    required_quantity=10,
+                    available_quantity=0,
+                ),
+            ],
+            refresh_attempt_count=1,
+        )
+
+        self.assertEqual(decision.decision, GuildOrderDecisionValue.SKIP)
+        self.assertEqual(decision.reason_id, "refresh_limit_reached")
+        self.assertEqual(decision.metadata["fallback_reason_id"], "custom_order_selected_candidate_insufficient")
 
     def test_evaluates_standard_order_skip_after_refresh_limit(self) -> None:
         decision = evaluate_guild_order_submit_decision(
