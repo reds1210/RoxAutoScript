@@ -7,6 +7,7 @@ import time
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Callable
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = REPO_ROOT / "src"
@@ -74,6 +75,14 @@ class ActionRecord:
     notes: str = ""
 
 
+@dataclass(slots=True)
+class CheckpointPollResult:
+    screenshot_path: Path
+    matched: bool
+    attempt_count: int
+    elapsed_sec: float
+
+
 def _load_pillow_image():
     try:
         from PIL import Image
@@ -136,6 +145,48 @@ def _resolve_custom_backpack_item_point(custom_order_index: int) -> tuple[int, i
     return CUSTOM_BACKPACK_ITEM_POINTS[custom_order_index - 1]
 
 
+def _poll_for_checkpoint(
+    *,
+    capture: Callable[[], Path],
+    predicate: Callable[[Path], bool],
+    initial_delay_sec: float,
+    poll_interval_sec: float,
+    timeout_sec: float,
+    sleep_fn: Callable[[float], None] = time.sleep,
+    monotonic_fn: Callable[[], float] = time.monotonic,
+) -> CheckpointPollResult:
+    resolved_initial_delay = max(0.0, float(initial_delay_sec))
+    resolved_poll_interval = max(0.05, float(poll_interval_sec))
+    resolved_timeout = max(0.05, float(timeout_sec))
+    start_monotonic = monotonic_fn()
+    deadline = start_monotonic + resolved_timeout
+    next_delay = resolved_initial_delay
+    attempt_count = 0
+    last_path: Path | None = None
+
+    while True:
+        if next_delay > 0.0:
+            sleep_fn(next_delay)
+        last_path = capture()
+        attempt_count += 1
+        if predicate(last_path):
+            return CheckpointPollResult(
+                screenshot_path=last_path,
+                matched=True,
+                attempt_count=attempt_count,
+                elapsed_sec=max(0.0, monotonic_fn() - start_monotonic),
+            )
+        remaining = deadline - monotonic_fn()
+        if remaining <= 0.0:
+            return CheckpointPollResult(
+                screenshot_path=last_path,
+                matched=False,
+                attempt_count=attempt_count,
+                elapsed_sec=max(0.0, monotonic_fn() - start_monotonic),
+            )
+        next_delay = min(resolved_poll_interval, remaining)
+
+
 class GuildOrderCurrentPanelRunner:
     def __init__(
         self,
@@ -143,6 +194,8 @@ class GuildOrderCurrentPanelRunner:
         serial: str,
         output_root: Path,
         tap_delay_sec: float,
+        poll_interval_sec: float,
+        checkpoint_timeout_sec: float,
         max_material_actions: int,
         custom_order_index: int,
     ) -> None:
@@ -158,6 +211,8 @@ class GuildOrderCurrentPanelRunner:
         )
         self._instance = build_instance_state(serial)
         self._tap_delay_sec = tap_delay_sec
+        self._poll_interval_sec = max(0.05, float(poll_interval_sec))
+        self._checkpoint_timeout_sec = max(0.05, float(checkpoint_timeout_sec))
         self._max_material_actions = max_material_actions
         self._custom_order_index = int(custom_order_index)
         self._custom_order_point = _resolve_custom_backpack_item_point(self._custom_order_index)
@@ -234,23 +289,32 @@ class GuildOrderCurrentPanelRunner:
             )
             return False
 
-        popup_path = self._tap_and_capture(
+        popup_path = self._tap_and_wait_for_checkpoint(
             get_point,
             f"{slot_name}-after-get",
             notes="open get/purchase popup",
-            delay_sec=2.3,
+            predicate=lambda screenshot_path: _is_orange_buy_now(_pixel(screenshot_path, BUY_NOW_POINT)),
+            timeout_message=(
+                lambda screenshot_path: (
+                    f"{slot_name}: expected orange buy-now popup after tapping get at {get_point}, "
+                    f"got {_pixel(screenshot_path, BUY_NOW_POINT)}"
+                )
+            ),
         )
         buy_now_rgb = _pixel(popup_path, BUY_NOW_POINT)
-        if not _is_orange_buy_now(buy_now_rgb):
-            raise RuntimeError(
-                f"{slot_name}: expected orange buy-now popup after tapping get at {get_point}, got {buy_now_rgb}"
-            )
 
-        purchase_path = self._tap_and_capture(
+        purchase_path = self._tap_and_wait_for_checkpoint(
             BUY_NOW_POINT,
             f"{slot_name}-after-buy-now",
             notes="open purchase panel",
-            delay_sec=2.3,
+            predicate=self._has_blue_buy_button,
+            timeout_message=(
+                lambda screenshot_path: (
+                    f"{slot_name}: expected blue purchase button after tapping buy-now, "
+                    f"got center={_pixel(screenshot_path, BUY_CONFIRM_POINT)} "
+                    f"samples={self._sample_pixels(screenshot_path, BUY_CONFIRM_SAMPLE_POINTS)}"
+                )
+            ),
         )
         buy_confirm_rgb = _pixel(purchase_path, BUY_CONFIRM_POINT)
         buy_confirm_samples = {
@@ -305,52 +369,61 @@ class GuildOrderCurrentPanelRunner:
             )
             return False
 
-        list_path = self._tap_and_capture(
+        list_path = self._tap_and_wait_for_checkpoint(
             CUSTOM_LIST_BUTTON_POINT,
             f"{slot_name}-after-custom-list",
             notes="open custom-order list",
-            delay_sec=2.3,
+            predicate=self._is_custom_list_panel,
+            timeout_message=(
+                lambda screenshot_path: (
+                    f"{slot_name}: expected custom-order list panel after tapping list button, "
+                    f"got submit_rgb={_pixel(screenshot_path, CUSTOM_LIST_PANEL_SUBMIT_POINT)}"
+                )
+            ),
         )
-        if not self._is_custom_list_panel(list_path):
-            raise RuntimeError(
-                f"{slot_name}: expected custom-order list panel after tapping list button, got submit_rgb={_pixel(list_path, CUSTOM_LIST_PANEL_SUBMIT_POINT)}"
-            )
 
-        quantity_path = self._tap_and_capture(
+        quantity_path = self._tap_and_wait_for_checkpoint(
             self._custom_order_point,
             f"{slot_name}-after-backpack-item",
             notes=(
                 "open quantity popup for visible row-major backpack item "
                 f"index={self._custom_order_index}"
             ),
-            delay_sec=2.3,
+            predicate=self._is_custom_quantity_popup,
+            timeout_message=(
+                lambda screenshot_path: (
+                    f"{slot_name}: expected quantity popup after tapping visible row-major backpack item "
+                    f"index={self._custom_order_index}, "
+                    f"got confirm_rgb={_pixel(screenshot_path, CUSTOM_QUANTITY_CONFIRM_POINT)}"
+                )
+            ),
         )
-        if not self._is_custom_quantity_popup(quantity_path):
-            raise RuntimeError(
-                f"{slot_name}: expected quantity popup after tapping visible row-major backpack item index={self._custom_order_index}, got confirm_rgb={_pixel(quantity_path, CUSTOM_QUANTITY_CONFIRM_POINT)}"
-            )
 
-        ready_path = self._tap_and_capture(
+        ready_path = self._tap_and_wait_for_checkpoint(
             CUSTOM_QUANTITY_CONFIRM_POINT,
             f"{slot_name}-after-quantity-confirm",
             notes="confirm prefilled custom-order quantity",
-            delay_sec=2.3,
+            predicate=self._is_custom_list_ready_to_submit,
+            timeout_message=(
+                lambda screenshot_path: (
+                    f"{slot_name}: expected custom-order list to become ready after confirming quantity, "
+                    f"got submit_rgb={_pixel(screenshot_path, CUSTOM_LIST_PANEL_SUBMIT_POINT)}"
+                )
+            ),
         )
-        if not self._is_custom_list_ready_to_submit(ready_path):
-            raise RuntimeError(
-                f"{slot_name}: expected custom-order list to become ready after confirming quantity, got submit_rgb={_pixel(ready_path, CUSTOM_LIST_PANEL_SUBMIT_POINT)}"
-            )
 
-        submitted_path = self._tap_and_capture(
+        submitted_path = self._tap_and_wait_for_checkpoint(
             CUSTOM_LIST_PANEL_SUBMIT_POINT,
             f"{slot_name}-after-custom-submit",
             notes="submit custom-order bonus",
-            delay_sec=2.8,
+            predicate=self._detect_custom_order_submitted,
+            timeout_message=(
+                lambda screenshot_path: (
+                    f"{slot_name}: expected custom-order card to show submitted overlay after submitting bonus, "
+                    f"samples={self._sample_pixels(screenshot_path, CUSTOM_ORDER_SUBMITTED_SAMPLES)}"
+                )
+            ),
         )
-        if not self._detect_custom_order_submitted(submitted_path):
-            raise RuntimeError(
-                f"{slot_name}: expected custom-order card to show submitted overlay after submitting bonus, samples={self._sample_pixels(submitted_path, CUSTOM_ORDER_SUBMITTED_SAMPLES)}"
-            )
 
         self._record(
             "submit_custom_order",
@@ -365,6 +438,12 @@ class GuildOrderCurrentPanelRunner:
             if any(_is_light_button(_pixel(screenshot_path, point)) for point in candidate["samples"]):
                 return tuple(candidate["tap"])
         return None
+
+    def _has_blue_buy_button(self, screenshot_path: Path) -> bool:
+        return any(
+            _is_blue_buy(rgb)
+            for rgb in self._sample_pixels(screenshot_path, BUY_CONFIRM_SAMPLE_POINTS).values()
+        )
 
     def _detect_custom_list_button(self, screenshot_path: Path) -> bool:
         return any(
@@ -405,6 +484,36 @@ class GuildOrderCurrentPanelRunner:
         screenshot_path = self._capture(label)
         self._record("tap", point, screenshot_path, notes=notes)
         return screenshot_path
+
+    def _tap_and_wait_for_checkpoint(
+        self,
+        point: tuple[int, int],
+        label: str,
+        *,
+        notes: str,
+        predicate: Callable[[Path], bool],
+        timeout_message: Callable[[Path], str],
+        initial_delay_sec: float | None = None,
+        timeout_sec: float | None = None,
+    ) -> Path:
+        self._step_index += 1
+        self._adapter.tap(self._instance, point)
+        poll_result = _poll_for_checkpoint(
+            capture=lambda: self._capture(label),
+            predicate=predicate,
+            initial_delay_sec=self._tap_delay_sec if initial_delay_sec is None else initial_delay_sec,
+            poll_interval_sec=self._poll_interval_sec,
+            timeout_sec=self._checkpoint_timeout_sec if timeout_sec is None else timeout_sec,
+        )
+        record_notes = (
+            f"{notes} checkpoint_attempts={poll_result.attempt_count} "
+            f"elapsed_sec={poll_result.elapsed_sec:.2f}"
+        )
+        if poll_result.matched:
+            self._record("tap", point, poll_result.screenshot_path, notes=record_notes)
+            return poll_result.screenshot_path
+        self._record("tap_failed_checkpoint", point, poll_result.screenshot_path, notes=record_notes)
+        raise RuntimeError(timeout_message(poll_result.screenshot_path))
 
     def _capture(self, label: str) -> Path:
         path = self._adapter.capture_screenshot(self._instance)
@@ -470,7 +579,19 @@ def build_parser() -> argparse.ArgumentParser:
         "--tap-delay-sec",
         type=float,
         default=1.6,
-        help="Default delay after each tap before capturing a screenshot",
+        help="Initial delay after each tap before the first checkpoint capture",
+    )
+    parser.add_argument(
+        "--poll-interval-sec",
+        type=float,
+        default=0.5,
+        help="Polling interval while waiting for a checkpoint to appear",
+    )
+    parser.add_argument(
+        "--checkpoint-timeout-sec",
+        type=float,
+        default=6.0,
+        help="Bounded timeout for one checkpoint transition",
     )
     parser.add_argument(
         "--max-material-actions",
@@ -497,6 +618,8 @@ def main(argv: list[str] | None = None) -> int:
         serial=args.serial,
         output_root=args.output_root,
         tap_delay_sec=float(args.tap_delay_sec),
+        poll_interval_sec=float(args.poll_interval_sec),
+        checkpoint_timeout_sec=float(args.checkpoint_timeout_sec),
         max_material_actions=int(args.max_material_actions),
         custom_order_index=int(args.custom_order_index),
     )
