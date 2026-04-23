@@ -8,8 +8,6 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 
-from PIL import Image
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = REPO_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
@@ -76,8 +74,20 @@ class ActionRecord:
     notes: str = ""
 
 
+def _load_pillow_image():
+    try:
+        from PIL import Image
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(
+            "run-guild-order-current-panel.py requires Pillow only when sampling screenshots; "
+            "install Pillow to execute this helper."
+        ) from exc
+    return Image
+
+
 def _pixel(path: Path, point: tuple[int, int]) -> tuple[int, int, int]:
-    with Image.open(path) as image:
+    image_module = _load_pillow_image()
+    with image_module.open(path) as image:
         rgb = image.convert("RGB")
         return tuple(int(channel) for channel in rgb.getpixel(point))
 
