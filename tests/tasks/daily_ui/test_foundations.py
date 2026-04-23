@@ -39,6 +39,12 @@ class DailyUiFoundationsTests(unittest.TestCase):
                 "daily_ui.guild_order_material_label",
                 "daily_ui.guild_order_required_quantity",
                 "daily_ui.guild_order_available_quantity",
+                "daily_ui.guild_order_custom_list_button",
+                "daily_ui.guild_order_custom_list_panel",
+                "daily_ui.guild_order_custom_option_material_label",
+                "daily_ui.guild_order_custom_option_required_quantity",
+                "daily_ui.guild_order_custom_option_available_quantity",
+                "daily_ui.guild_order_custom_option_selected_state",
                 "daily_ui.guild_order_unavailable_state",
                 "daily_ui.guild_order_insufficient_material_feedback",
                 "daily_ui.guild_order_submit_result_state",
@@ -74,6 +80,7 @@ class DailyUiFoundationsTests(unittest.TestCase):
             [
                 "foundation.daily_ui.guild_order_visible_quantity_contract",
                 "foundation.daily_ui.guild_order_result_state_contract",
+                "foundation.daily_ui.guild_order_custom_option_contract",
             ],
         )
 

@@ -725,6 +725,14 @@ Every task step should follow:
 detect -> act -> verify -> retry or fail
 ```
 
+Execution rules:
+
+- production task steps must not treat a tap coordinate or a fixed sleep interval as sufficient proof that the UI advanced
+- after an action, verification should prefer a machine-readable checkpoint such as a matched anchor, scene classification, or another bounded visual signal
+- when UI timing may vary across machines, runtimes should poll for the expected checkpoint until timeout instead of assuming one fixed delay is always sufficient
+- bounded coordinate hotzones are still allowed when the current panel is already verified stable and the next checkpoint is verified immediately after the action
+- screenshot-gated coordinate probes may exist for exploration tooling, but they should be documented as exploration-only and not silently promoted to production task contracts
+
 ## 7. Asset Rules
 
 Template assets must be grouped by task or subsystem.

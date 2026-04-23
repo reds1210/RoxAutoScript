@@ -456,11 +456,12 @@ class TemplateValidationTests(unittest.TestCase):
         guild_dependency = dependency_by_anchor["daily_ui.guild_check_in_button"]
         claim_dependency = dependency_by_anchor["daily_ui.claim_reward"]
         guild_order_dependency = dependency_by_anchor["daily_ui.guild_order_list_panel"]
+        guild_order_custom_dependency = dependency_by_anchor["daily_ui.guild_order_custom_list_button"]
 
-        self.assertEqual(report.template_dependency_count, 20)
+        self.assertEqual(report.template_dependency_count, 26)
         self.assertEqual(report.ready_count, 8)
         self.assertEqual(report.placeholder_count, 9)
-        self.assertEqual(report.missing_count, 3)
+        self.assertEqual(report.missing_count, 9)
         self.assertEqual(report.inventory_mismatch_count, 0)
         self.assertEqual(guild_dependency.readiness_status, TemplateReadinessStatus.PLACEHOLDER)
         self.assertTrue(guild_dependency.anchor_present)
@@ -473,6 +474,13 @@ class TemplateValidationTests(unittest.TestCase):
         self.assertEqual(
             guild_order_dependency.source_path,
             "assets/templates/daily_ui/manifest.json#daily_ui.guild_order_list_panel",
+        )
+        self.assertEqual(guild_order_custom_dependency.readiness_status, TemplateReadinessStatus.MISSING)
+        self.assertFalse(guild_order_custom_dependency.anchor_present)
+        self.assertFalse(guild_order_custom_dependency.asset_exists)
+        self.assertEqual(
+            guild_order_custom_dependency.source_path,
+            "assets/templates/daily_ui/manifest.json#daily_ui.guild_order_custom_list_button",
         )
         self.assertEqual(claim_dependency.readiness_status, TemplateReadinessStatus.READY)
         self.assertFalse(claim_dependency.inventory_mismatch)
