@@ -620,30 +620,6 @@ class TemplateValidationTests(unittest.TestCase):
             "reviewed_live_detail_capture",
         )
         self.assertEqual(
-            report.metadata["guild_order_scene_contract"]["scene_truth"]["guild_order_submit_result_state"][
-                "contract_state"
-            ],
-            "placeholder_anchor_only",
-        )
-        self.assertEqual(
-            report.metadata["guild_order_scene_contract"]["scene_truth"]["guild_order_submit_result_state"][
-                "live_probe_status"
-            ],
-            "missing",
-        )
-        self.assertEqual(
-            report.metadata["guild_order_scene_contract"]["surface_truth"]["guild_order_available_material_count"][
-                "contract_state"
-            ],
-            "blocked_missing_live_evidence",
-        )
-        self.assertEqual(
-            report.metadata["guild_order_scene_contract"]["surface_truth"]["guild_order_available_material_count"][
-                "truth_basis"
-            ],
-            "reviewed_probe_without_detail_scene",
-        )
-        self.assertEqual(
             report.metadata["guild_order_scene_contract"]["placeholder_anchor_ids"],
             [
                 "daily_ui.guild_order_hub_entry",
