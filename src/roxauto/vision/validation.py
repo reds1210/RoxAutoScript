@@ -2009,6 +2009,14 @@ def _normalize_guild_order_scene_contract(contract: dict[str, Any] | None) -> di
             for scene_id in contract.get("blocked_scene_ids", [])
             if str(scene_id).strip()
         ],
+        "scene_truth": _normalize_guild_order_truth_entries(
+            contract.get("scene_truth"),
+            include_anchor_ids=True,
+        ),
+        "surface_truth": _normalize_guild_order_truth_entries(
+            contract.get("surface_truth"),
+            include_anchor_ids=False,
+        ),
         "ambiguous_scene_ids": [
             str(scene_id).strip()
             for scene_id in contract.get("ambiguous_scene_ids", [])
@@ -2018,6 +2026,35 @@ def _normalize_guild_order_scene_contract(contract: dict[str, Any] | None) -> di
         "decision_surface_state": str(contract.get("decision_surface_state", "")).strip(),
         "summary": str(contract.get("summary", "")).strip(),
     }
+
+
+def _normalize_guild_order_truth_entries(
+    raw_entries: Any,
+    *,
+    include_anchor_ids: bool,
+) -> dict[str, dict[str, Any]]:
+    if not isinstance(raw_entries, dict):
+        return {}
+
+    normalized: dict[str, dict[str, Any]] = {}
+    for entry_id, raw_entry in raw_entries.items():
+        resolved_entry_id = str(entry_id).strip()
+        if not resolved_entry_id or not isinstance(raw_entry, dict):
+            continue
+        entry: dict[str, Any] = {
+            "contract_state": str(raw_entry.get("contract_state", "")).strip(),
+            "live_probe_status": str(raw_entry.get("live_probe_status", "")).strip(),
+            "truth_basis": str(raw_entry.get("truth_basis", "")).strip(),
+            "summary": str(raw_entry.get("summary", "")).strip(),
+        }
+        if include_anchor_ids:
+            entry["anchor_ids"] = [
+                str(anchor_id).strip()
+                for anchor_id in raw_entry.get("anchor_ids", [])
+                if str(anchor_id).strip()
+            ]
+        normalized[resolved_entry_id] = entry
+    return normalized
 
 
 def _file_sha256(path: Path) -> str:
@@ -2518,6 +2555,8 @@ def _validate_guild_order_scene_contract(
 
     for field_name, code in [
         ("required_scene_ids", "missing_guild_order_scene_contract_required_scenes"),
+        ("scene_truth", "missing_guild_order_scene_contract_scene_truth"),
+        ("surface_truth", "missing_guild_order_scene_contract_surface_truth"),
         ("evidence_state", "missing_guild_order_scene_contract_evidence_state"),
         ("decision_surface_state", "missing_guild_order_scene_contract_decision_surface_state"),
         ("summary", "missing_guild_order_scene_contract_summary"),
@@ -2537,6 +2576,105 @@ def _validate_guild_order_scene_contract(
                     ),
                     path=str(repository.manifest_path),
                     metadata={"task_id": "daily_ui.guild_order_submit"},
+                )
+            )
+
+    required_scene_ids = set(contract.get("required_scene_ids", []))
+    blocked_scene_ids = set(contract.get("blocked_scene_ids", []))
+    scene_truth = contract.get("scene_truth", {})
+    surface_truth = contract.get("surface_truth", {})
+    truth_entry_fields = ("contract_state", "live_probe_status", "truth_basis", "summary")
+
+    for scene_id in sorted(required_scene_ids):
+        entry = scene_truth.get(scene_id)
+        if not isinstance(entry, dict) or not entry:
+            issues.append(
+                TemplateValidationIssue(
+                    code="missing_guild_order_scene_truth_entry",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=(
+                        f"Guild-order scene_contract.scene_truth must define '{scene_id}' so "
+                        "each required scene keeps an explicit evidence basis."
+                    ),
+                    path=str(repository.manifest_path),
+                    metadata={"task_id": "daily_ui.guild_order_submit", "scene_id": scene_id},
+                )
+            )
+            continue
+
+        missing_fields = [field_name for field_name in truth_entry_fields if not entry.get(field_name)]
+        anchor_ids = [str(anchor_id).strip() for anchor_id in entry.get("anchor_ids", []) if str(anchor_id).strip()]
+        if missing_fields or not anchor_ids:
+            issues.append(
+                TemplateValidationIssue(
+                    code="invalid_guild_order_scene_truth_entry",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=(
+                        f"Guild-order scene_contract.scene_truth['{scene_id}'] must define "
+                        "anchor_ids, contract_state, live_probe_status, truth_basis, and summary."
+                    ),
+                    path=str(repository.manifest_path),
+                    metadata={
+                        "task_id": "daily_ui.guild_order_submit",
+                        "scene_id": scene_id,
+                        "missing_fields": missing_fields,
+                    },
+                )
+            )
+            continue
+
+        unknown_anchor_ids = sorted(set(anchor_ids) - task_anchor_ids)
+        if unknown_anchor_ids:
+            issues.append(
+                TemplateValidationIssue(
+                    code="unknown_guild_order_scene_truth_anchor",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=(
+                        f"Guild-order scene_contract.scene_truth['{scene_id}'] must only "
+                        "reference anchors assigned to daily_ui.guild_order_submit."
+                    ),
+                    path=str(repository.manifest_path),
+                    metadata={
+                        "task_id": "daily_ui.guild_order_submit",
+                        "scene_id": scene_id,
+                        "anchor_ids": unknown_anchor_ids,
+                    },
+                )
+            )
+
+    for surface_id in sorted(blocked_scene_ids):
+        entry = surface_truth.get(surface_id)
+        if not isinstance(entry, dict) or not entry:
+            issues.append(
+                TemplateValidationIssue(
+                    code="missing_guild_order_surface_truth_entry",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=(
+                        f"Guild-order scene_contract.surface_truth must define '{surface_id}' so "
+                        "each blocked material surface keeps an explicit truth status."
+                    ),
+                    path=str(repository.manifest_path),
+                    metadata={"task_id": "daily_ui.guild_order_submit", "surface_id": surface_id},
+                )
+            )
+            continue
+
+        missing_fields = [field_name for field_name in truth_entry_fields if not entry.get(field_name)]
+        if missing_fields:
+            issues.append(
+                TemplateValidationIssue(
+                    code="invalid_guild_order_surface_truth_entry",
+                    severity=TemplateValidationSeverity.ERROR,
+                    message=(
+                        f"Guild-order scene_contract.surface_truth['{surface_id}'] must define "
+                        "contract_state, live_probe_status, truth_basis, and summary."
+                    ),
+                    path=str(repository.manifest_path),
+                    metadata={
+                        "task_id": "daily_ui.guild_order_submit",
+                        "surface_id": surface_id,
+                        "missing_fields": missing_fields,
+                    },
                 )
             )
 

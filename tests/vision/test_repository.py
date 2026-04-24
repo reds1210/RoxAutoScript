@@ -167,6 +167,31 @@ class AnchorRepositoryTests(unittest.TestCase):
             ],
         )
         self.assertEqual(
+            repository.get_guild_order_scene_contract()["scene_truth"]["guild_order_submit_result_state"],
+            {
+                "anchor_ids": ["daily_ui.guild_order_submit_result_state"],
+                "contract_state": "placeholder_anchor_only",
+                "live_probe_status": "missing",
+                "truth_basis": "placeholder_manifest_plus_reviewed_probe",
+                "summary": (
+                    "Only a placeholder submit-result scaffold exists, and the reviewed "
+                    "Engine E probe did not reach any accepted-order or submit-result state."
+                ),
+            },
+        )
+        self.assertEqual(
+            repository.get_guild_order_scene_contract()["surface_truth"]["guild_order_required_quantity"],
+            {
+                "contract_state": "blocked_missing_live_evidence",
+                "live_probe_status": "missing",
+                "truth_basis": "reviewed_probe_without_detail_scene",
+                "summary": (
+                    "No reviewed guild-order detail capture exists yet, so the visible "
+                    "required-quantity surface is still blocked."
+                ),
+            },
+        )
+        self.assertEqual(
             repository.get_guild_order_scene_contract()["placeholder_anchor_ids"],
             [
                 "daily_ui.guild_order_hub_entry",

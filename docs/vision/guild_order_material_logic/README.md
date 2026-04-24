@@ -94,6 +94,18 @@ Explicitly blocked material surfaces:
 - `guild_order_required_quantity`
 - `guild_order_available_material_count`
 
+Per-scene and per-surface truth status:
+
+- `scene_truth`
+  - all eight required guild-order scenes currently resolve to `placeholder_anchor_only`
+  - this includes `guild_order_submit_result_state`; it has a placeholder scaffold, but the reviewed live probe still records the scene as `missing`
+- `surface_truth`
+  - `guild_order_requirement_material`
+  - `guild_order_required_quantity`
+  - `guild_order_available_material_count`
+  - all three currently resolve to `blocked_missing_live_evidence`
+  - the reviewed live probe still records each one as `missing`
+
 ## Why The Contract Stays Blocked
 
 - the new Engine E packet shows only pre-guild navigation surfaces from `sanctuary_2f`
