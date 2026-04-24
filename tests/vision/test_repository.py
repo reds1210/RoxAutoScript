@@ -152,19 +152,40 @@ class AnchorRepositoryTests(unittest.TestCase):
         )
         self.assertEqual(
             repository.get_guild_order_scene_contract()["evidence_state"],
-            "placeholder_only",
+            "partial_reviewed_live_evidence",
         )
         self.assertEqual(
             repository.get_guild_order_scene_contract()["decision_surface_state"],
-            "blocked_by_missing_material_evidence",
+            "submit_decision_surfaces_captured_failure_states_pending",
         )
         self.assertEqual(
             repository.get_guild_order_scene_contract()["blocked_scene_ids"],
-            [
-                "guild_order_requirement_material",
-                "guild_order_required_quantity",
-                "guild_order_available_material_count",
-            ],
+            [],
+        )
+        self.assertEqual(
+            repository.get_guild_order_scene_contract()["scene_truth"]["guild_order_submit_result_state"],
+            {
+                "anchor_ids": ["daily_ui.guild_order_submit_result_state"],
+                "contract_state": "placeholder_anchor_with_reviewed_live_evidence",
+                "live_probe_status": "captured",
+                "truth_basis": "reviewed_live_submit_result_capture",
+                "summary": (
+                    "The anchor is still placeholder scaffolding, but reviewed live evidence "
+                    "captured a stable submitted-result state after one real guild-order submit."
+                ),
+            },
+        )
+        self.assertEqual(
+            repository.get_guild_order_scene_contract()["surface_truth"]["guild_order_required_quantity"],
+            {
+                "contract_state": "reviewed_live_evidence_captured",
+                "live_probe_status": "captured",
+                "truth_basis": "reviewed_live_detail_capture",
+                "summary": (
+                    "Reviewed live guild-order detail evidence now captures the visible "
+                    "required-quantity surface for the selected order."
+                ),
+            },
         )
         self.assertEqual(
             repository.get_guild_order_scene_contract()["scene_truth"]["guild_order_submit_result_state"],

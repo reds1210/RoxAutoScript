@@ -104,19 +104,15 @@ class VisionToolingTests(unittest.TestCase):
         )
         self.assertEqual(
             workspace.readiness.metadata["guild_order_scene_contract"]["evidence_state"],
-            "placeholder_only",
+            "partial_reviewed_live_evidence",
         )
         self.assertEqual(
             workspace.readiness.metadata["guild_order_scene_contract"]["decision_surface_state"],
-            "blocked_by_missing_material_evidence",
+            "submit_decision_surfaces_captured_failure_states_pending",
         )
         self.assertEqual(
             workspace.readiness.metadata["guild_order_scene_contract"]["blocked_scene_ids"],
-            [
-                "guild_order_requirement_material",
-                "guild_order_required_quantity",
-                "guild_order_available_material_count",
-            ],
+            [],
         )
 
     def test_build_anchor_inspector_applies_calibration_override_and_validation_issues(self) -> None:

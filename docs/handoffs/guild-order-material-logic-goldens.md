@@ -2,16 +2,15 @@
 
 Track:
 
-- `codex/claim-rewards-goldens`
+- `codex/guild-order-reviewed-live-evidence`
 
 ADB serial claim:
 
 - primary reserved and used:
   - `127.0.0.1:16480`
-- fallback reserved and used after the primary probe failed to reach guild UI:
+  - MuMu window label: `healer-reds.wang`
+- visible but not used in the reviewed route:
   - `127.0.0.1:16416`
-- did not use:
-  - `127.0.0.1:16448`
   - `127.0.0.1:16512`
 
 Scope:
@@ -35,89 +34,98 @@ Files changed:
 Public APIs added or changed:
 
 - no Python API changed
-- added one machine-readable Engine E evidence packet for round 9:
+- refreshed the machine-readable Engine E evidence packet for round 9:
   - `docs/vision/guild_order_material_logic/guild_order_live_evidence_packet.json`
 
 Contract changes:
 
 - no manifest or catalog contract changed in this pass
 - the truthful evidence conclusion is now explicit:
-  - both reserved devices were reachable through `adb`
-  - both reserved devices started in `sanctuary_2f`
-  - this pass captured only pre-guild navigation surfaces
-  - no live guild-order target scene was reached
-  - all first-cut live material surfaces remain missing
+  - the reserved healer MuMu reached the live guild-order submit screen
+  - this pass captured reviewed live evidence for:
+    - guild hub entry
+    - guild-order list
+    - guild-order detail
+    - submit affordance
+    - material name
+    - required quantity
+    - available quantity
+    - submit result state
+- this pass intentionally did not promote the manifest-level placeholder or blocked contract; it only landed evidence
+
+Successful live route:
+
+1. open the top-right collapsible entry icon
+2. enter `Carnival`
+3. open the guild-order card
+4. tap the go button
+5. on the guild panel, switch to `Activity`
+6. tap the guild-order card's go button
+7. reach the live guild-order submit scene
 
 Successful live states captured:
 
-- `world_combat_state`
-  - `127.0.0.1:16480`
-  - `127.0.0.1:16416`
-- `team_panel`
-  - `127.0.0.1:16480`
-  - `127.0.0.1:16416`
-- `character_profile_panel`
-  - `127.0.0.1:16480`
-  - `127.0.0.1:16416`
-- `character_home_profile_page`
-  - `127.0.0.1:16480`
-- `map_info_panel`
-  - `127.0.0.1:16480`
-  - `127.0.0.1:16416`
-- `current_map_npc_panel`
-  - `127.0.0.1:16480`
-- `line_switch_panel`
-  - `127.0.0.1:16416`
-- `right_side_quick_item_drawer`
-  - `127.0.0.1:16480`
-
-Still-missing live guild-order states:
-
 - `guild_hub_entry`
+  - `raw/127.0.0.1-16480-step17-after-go-guild-panel-reroute.png`
+- `guild_activity_cards`
+  - `raw/127.0.0.1-16480-step18-after-activity-tab.png`
 - `guild_order_list`
+  - `raw/127.0.0.1-16480-step19-after-guild-order-go.png`
 - `guild_order_detail`
+  - `raw/127.0.0.1-16480-step19-after-guild-order-go.png`
 - `submit_affordance`
-- `refresh_affordance`
-- `unavailable_state`
-- `insufficient_material_feedback`
+  - `raw/127.0.0.1-16480-step19-after-guild-order-go.png`
 - `submit_result_state`
+  - `raw/127.0.0.1-16480-step20-after-submit-once.png`
+  - `raw/127.0.0.1-16480-step21-stable-submitted-state.png`
 
-Still-missing live material surfaces:
+Successful live material surfaces:
 
 - `guild_order_requirement_material`
+  - observed value: stable zh-TW material label shown on `step19`
+  - capture: `raw/127.0.0.1-16480-step19-after-guild-order-go.png`
 - `guild_order_required_quantity`
+  - observed value: `50`
+  - capture: `raw/127.0.0.1-16480-step19-after-guild-order-go.png`
 - `guild_order_available_material_count`
+  - observed value: `5512`
+  - capture: `raw/127.0.0.1-16480-step19-after-guild-order-go.png`
 
 Assumptions:
 
-- the assigned serial reservation from dispatch is authoritative, so `127.0.0.1:16480` stayed primary and `127.0.0.1:16416` stayed the only fallback
-- the observed `sanctuary_2f` live state on both devices is not itself a guild-order scene
-- it is better to record an honest navigation block than to guess at freeform pathing toward Guild Hall
-
-Operator Questions:
-
-- if the next pass needs actual guild-order list/detail evidence quickly, can one reserved device be parked at Guild Hall or at a known guild-order NPC route before the probe starts?
+- the user-confirmed live route is authoritative for this pass
+- the captured submitted badge plus auto-advance to the next order is sufficient to classify a truthful submit-result state
+- one successful live order is enough for this bounded evidence pass; this pass should not widen into refresh, crafting, gathering, or pathing
 
 Verification performed:
 
 - `adb devices`
 - `adb -s 127.0.0.1:16480 get-state`
-- `adb -s 127.0.0.1:16416 get-state`
-- `adb -s 127.0.0.1:16480 shell uiautomator dump /sdcard/guild-order-ui-16480.xml`
+- screenshot-gated navigation on every reviewed step
+- one live submit on a reviewed order with enough materials
 
 Known limitations:
 
-- this pass did not reach any target guild-order UI, so it cannot prove whether list/detail/submit/refresh scenes are visually stable yet
-- both reserved devices were already inside `sanctuary_2f`, and the common navigation probes available from that live state only exposed team, character, map, and line-switch surfaces
-- the `WorldMap` button did not transition away from the current-floor map during this pass
+- this pass did not capture:
+  - refresh affordance
+  - unavailable state
+  - insufficient-material feedback
+- the manifest-level guild-order contract in this branch still says `placeholder_only`; this pass did not promote it
 
 Blockers:
 
-- no reserved device in this pass exposed a route to Guild Hall or any guild-order panel through the probed stable UI surfaces
-- because no guild-order detail scene was reached, no visible material label, required quantity, or available-count surface could be captured honestly
+- Engine C still needs to consume the new live packet before the placeholder contract can be updated truthfully
+- failure-path scenes still need separate reviewed evidence
 
 Recommended next step:
 
-- let Engine C consume `docs/vision/guild_order_material_logic/guild_order_live_evidence_packet.json` as the truthful round-9 Engine E input
-- keep the guild-order scene contract blocked for all target scenes and live material surfaces
-- run the next capture pass only after a reserved serial can reach Guild Hall or another confirmed guild-order entry route
+- let Engine C consume `docs/vision/guild_order_material_logic/guild_order_live_evidence_packet.json` as the new truthful round-9 Engine E input
+- promote only the proven surfaces first:
+  - guild hub entry
+  - guild-order list and detail
+  - submit affordance
+  - submit-result state
+  - material name
+  - required quantity
+  - available quantity
+- keep refresh, unavailable, and insufficient-material states blocked until a separate reviewed pass lands

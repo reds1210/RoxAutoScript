@@ -580,19 +580,39 @@ class TemplateValidationTests(unittest.TestCase):
         )
         self.assertEqual(
             report.metadata["guild_order_scene_contract"]["evidence_state"],
-            "placeholder_only",
+            "partial_reviewed_live_evidence",
         )
         self.assertEqual(
             report.metadata["guild_order_scene_contract"]["decision_surface_state"],
-            "blocked_by_missing_material_evidence",
+            "submit_decision_surfaces_captured_failure_states_pending",
         )
         self.assertEqual(
             report.metadata["guild_order_scene_contract"]["blocked_scene_ids"],
-            [
-                "guild_order_requirement_material",
-                "guild_order_required_quantity",
-                "guild_order_available_material_count",
+            [],
+        )
+        self.assertEqual(
+            report.metadata["guild_order_scene_contract"]["scene_truth"]["guild_order_submit_result_state"][
+                "contract_state"
             ],
+            "placeholder_anchor_with_reviewed_live_evidence",
+        )
+        self.assertEqual(
+            report.metadata["guild_order_scene_contract"]["scene_truth"]["guild_order_submit_result_state"][
+                "live_probe_status"
+            ],
+            "captured",
+        )
+        self.assertEqual(
+            report.metadata["guild_order_scene_contract"]["surface_truth"]["guild_order_available_material_count"][
+                "contract_state"
+            ],
+            "reviewed_live_evidence_captured",
+        )
+        self.assertEqual(
+            report.metadata["guild_order_scene_contract"]["surface_truth"]["guild_order_available_material_count"][
+                "truth_basis"
+            ],
+            "reviewed_live_detail_capture",
         )
         self.assertEqual(
             report.metadata["guild_order_scene_contract"]["scene_truth"]["guild_order_submit_result_state"][

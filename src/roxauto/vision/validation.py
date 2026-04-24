@@ -2642,7 +2642,8 @@ def _validate_guild_order_scene_contract(
                 )
             )
 
-    for surface_id in sorted(blocked_scene_ids):
+    tracked_surface_ids = set(surface_truth.keys()) | blocked_scene_ids
+    for surface_id in sorted(tracked_surface_ids):
         entry = surface_truth.get(surface_id)
         if not isinstance(entry, dict) or not entry:
             issues.append(
@@ -2651,7 +2652,7 @@ def _validate_guild_order_scene_contract(
                     severity=TemplateValidationSeverity.ERROR,
                     message=(
                         f"Guild-order scene_contract.surface_truth must define '{surface_id}' so "
-                        "each blocked material surface keeps an explicit truth status."
+                        "each tracked guild-order surface keeps an explicit truth status."
                     ),
                     path=str(repository.manifest_path),
                     metadata={"task_id": "daily_ui.guild_order_submit", "surface_id": surface_id},
