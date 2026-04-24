@@ -1,10 +1,21 @@
 # Round 9: Guild Order Material Logic
 
+## Status
+
+This round is paused as of `2026-04-23`.
+
+Reason:
+
+- the last live-evidence pass did not follow the operator-described UI route precisely enough
+- dispatch should not open new round-9 worker threads until a restart brief is published from the preserved operator truth below
+
+This file is now a paused reference brief, not an active launch order.
+
 ## Goal
 
 Start the next bounded MVP wave after `claim_rewards` and keep scope tight.
 
-This round is about the first truthful implementation path for guild orders with material-aware decision logic. The wave should prove:
+This round is about the first truthful implementation path for guild orders with material-aware decision logic. When resumed, the wave should prove:
 
 - the automation can reach the guild-order UI through deterministic navigation
 - the task can classify visible guild-order requirement states honestly
@@ -13,9 +24,35 @@ This round is about the first truthful implementation path for guild orders with
 
 This round is not about building the full resource-production loop.
 
+## Preserved Operator Truth
+
+Use this section as the canonical restart point for the next guild-order evidence pass.
+
+Entry path from the main game screen:
+
+1. open the collapsible logo button in the top-right area above the Facebook logo
+2. choose `嘉年華`
+3. choose `公會訂單`
+4. tap `立即前往`
+5. on the page with tabs such as `訊息`, `成就`, and `活動`, switch to `活動`
+6. find the `公會訂單` card near the lower area of the page
+7. tap the `前往` button inside that card
+
+Guild-order scene truth after entry:
+
+- the left side lists the required materials
+- tapping a material row can highlight it
+- the material image itself is not a stable detail-entry affordance and should not be treated as one
+- the right side is the submission area
+- if quantity is insufficient, the scene shows a `獲取` affordance
+- `獲取` leads to a flow where tapping `立即購買` opens the purchase confirmation
+- for the first guild-order round, purchase cost is expected to be `zeny`, not crystals
+- quantity entry does not need to be tuned manually for the first-cut flow; direct purchase is acceptable
+- do not use the `求助` button in this round
+
 ## First-Cut Scope
 
-Round 9 stays limited to:
+Round 9 stays limited to when resumed:
 
 - guild-order list and detail UI detection
 - stable guild-order anchors and scenes
@@ -26,11 +63,31 @@ Round 9 stays limited to:
 Round 9 explicitly does not include:
 
 - auto-crafting
-- auto-buying
+- generic or unrestricted auto-buying outside the explicit first-round `獲取 -> 立即購買` guild-order recovery path
 - auto-gathering
 - pathing
 - OCR-heavy freeform parsing
 - a second new task beyond guild-order submit/skip/refresh
+
+## Execution Stability Rule
+
+Guild-order exploration may temporarily use bounded coordinate probes to collect truthful live evidence, but those probes are not the production runtime contract.
+
+For this round:
+
+- coordinate-only tapping is acceptable only for screenshot-gated exploration or evidence collection
+- every exploratory tap should be followed by an immediate screenshot and checkpoint classification
+- if the observed checkpoint does not match the expected state, the worker should stop and record the mismatch instead of probing sideways
+
+For future runnable automation:
+
+- a guild-order task must not infer progress from tap coordinates alone
+- every `detect -> act -> verify` step should verify the next checkpoint from screenshot, anchor, or other machine-readable visual evidence
+- waiting for transitions should prefer bounded polling until the expected checkpoint appears or a timeout expires
+- fixed sleeps may remain as small backoff defaults, but they must not be the only proof that the UI advanced
+- fixed coordinate hotzones are acceptable only when the surrounding panel is already verified stable and the post-tap checkpoint is also verified immediately
+
+This rule exists because emulator performance, animation timing, and device load can vary across machines even when the ADB serial, resolution, and route are nominally the same.
 
 ## Canonical Task Direction
 
@@ -170,7 +227,7 @@ Reason:
 
 ## Relevant Docs
 
-Every new round-9 worker should read:
+Every new round-9 worker should read after dispatch publishes a restart brief:
 
 1. `README.md`
 2. `docs/rox-mvp-plan.md`
@@ -181,12 +238,13 @@ Every new round-9 worker should read:
 7. `docs/guild-order-material-logic-plan.md`
 8. the relevant handoff under `docs/handoffs/`
 
-Recommended round-9 prompt pack:
+Recommended round-9 prompt pack after a restart brief exists:
 
 - `docs/prompts/round-9-thread-prompts.md`
 
 ## Non-Negotiable Rule
 
-Round 9 stays scoped to the first-cut guild-order flow only.
+Round 9 stays scoped to the first-cut guild-order flow only when resumed.
 
 Do not expand this round into crafting, gathering, buying, or generic inventory automation.
+Do not launch new round-9 worker threads from this brief while it remains paused.

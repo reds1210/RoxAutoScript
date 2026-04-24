@@ -138,7 +138,7 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
         self.assertEqual(catalogs[0].entries[2].task_id, "daily_ui.guild_order_submit")
         self.assertEqual(
             catalogs[0].entries[2].metadata["signal_contract_version"],
-            "guild_order_submit.v1",
+            "guild_order_submit.v2",
         )
         self.assertEqual(catalogs[0].entries[3].task_id, "daily_ui.merchant_commission_meow")
         self.assertEqual(
@@ -298,6 +298,7 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
             [
                 "foundation.daily_ui.guild_order_visible_quantity_contract",
                 "foundation.daily_ui.guild_order_result_state_contract",
+                "foundation.daily_ui.guild_order_custom_option_contract",
             ],
         )
         self.assertEqual(
@@ -396,6 +397,7 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
                 "asset.daily_ui.guild_order_refresh_button",
                 "foundation.daily_ui.guild_order_visible_quantity_contract",
                 "foundation.daily_ui.guild_order_result_state_contract",
+                "foundation.daily_ui.guild_order_custom_option_contract",
             ],
         )
         self.assertEqual(

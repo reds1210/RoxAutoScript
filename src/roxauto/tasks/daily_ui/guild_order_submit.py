@@ -23,6 +23,13 @@ class GuildOrderDecisionReason(str, Enum):
     ORDER_STATE_UNKNOWN = "order_state_unknown"
     REFRESH_NOT_ALLOWED = "refresh_not_allowed"
     REFRESH_LIMIT_REACHED = "refresh_limit_reached"
+    CUSTOM_ORDER_DISABLED = "custom_order_disabled"
+    CUSTOM_ORDER_LIST_UNAVAILABLE = "custom_order_list_unavailable"
+    CUSTOM_ORDER_NO_VIABLE_OPTION = "custom_order_no_viable_option"
+    CUSTOM_ORDER_OPTION_SELECTED = "custom_order_option_selected"
+    CUSTOM_ORDER_SELECTED_CANDIDATE_MISSING = "custom_order_selected_candidate_missing"
+    CUSTOM_ORDER_SELECTED_CANDIDATE_BLOCKED = "custom_order_selected_candidate_blocked"
+    CUSTOM_ORDER_SELECTED_CANDIDATE_INSUFFICIENT = "custom_order_selected_candidate_insufficient"
     SUBMIT_VERIFICATION_FAILED = "submit_verification_failed"
     REFRESH_VERIFICATION_FAILED = "refresh_verification_failed"
 
@@ -31,6 +38,11 @@ class GuildOrderMaterialSufficiency(str, Enum):
     SUFFICIENT = "sufficient"
     INSUFFICIENT = "insufficient"
     UNKNOWN = "unknown"
+
+
+class GuildOrderOrderKind(str, Enum):
+    STANDARD = "standard"
+    CUSTOM = "custom"
 
 
 class GuildOrderVerificationState(str, Enum):
@@ -108,12 +120,57 @@ class GuildOrderAvailability:
 
 
 @dataclass(slots=True)
+class GuildOrderCustomOption:
+    candidate_index: int
+    material_label: str
+    normalized_material_id: str | None = None
+    required_quantity: int | None = None
+    available_quantity: int | None = None
+    sufficiency: GuildOrderMaterialSufficiency = GuildOrderMaterialSufficiency.UNKNOWN
+    evidence: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return to_primitive(
+            {
+                "candidate_index": self.candidate_index,
+                "material_label": self.material_label,
+                "normalized_material_id": self.normalized_material_id,
+                "required_quantity": self.required_quantity,
+                "available_quantity": self.available_quantity,
+                "sufficiency": self.sufficiency.value,
+                "evidence": self.evidence,
+            }
+        )
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        raw_sufficiency = data.get("sufficiency", GuildOrderMaterialSufficiency.UNKNOWN.value)
+        sufficiency = (
+            raw_sufficiency
+            if isinstance(raw_sufficiency, GuildOrderMaterialSufficiency)
+            else GuildOrderMaterialSufficiency(str(raw_sufficiency))
+        )
+        return cls(
+            candidate_index=int(data.get("candidate_index", 1)),
+            material_label=str(data.get("material_label", "")),
+            normalized_material_id=_optional_string(data.get("normalized_material_id")),
+            required_quantity=_optional_int(data.get("required_quantity")),
+            available_quantity=_optional_int(data.get("available_quantity")),
+            sufficiency=sufficiency,
+            evidence=dict(data.get("evidence", {})),
+        )
+
+
+@dataclass(slots=True)
 class GuildOrderDecision:
     decision: GuildOrderDecisionValue
     reason_id: str
     slot_index: int
+    order_kind: GuildOrderOrderKind = GuildOrderOrderKind.STANDARD
     requirements: list[GuildOrderRequirement] = field(default_factory=list)
     availability: list[GuildOrderAvailability] = field(default_factory=list)
+    custom_options: list[GuildOrderCustomOption] = field(default_factory=list)
+    selected_custom_option: GuildOrderCustomOption | None = None
     refresh_attempted: bool = False
     verification_state: GuildOrderVerificationState = GuildOrderVerificationState.ORDER_STATE_UNKNOWN
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -124,8 +181,13 @@ class GuildOrderDecision:
                 "decision": self.decision.value,
                 "reason_id": self.reason_id,
                 "slot_index": self.slot_index,
+                "order_kind": self.order_kind.value,
                 "requirements": [item.to_dict() for item in self.requirements],
                 "availability": [item.to_dict() for item in self.availability],
+                "custom_options": [item.to_dict() for item in self.custom_options],
+                "selected_custom_option": (
+                    self.selected_custom_option.to_dict() if self.selected_custom_option is not None else None
+                ),
                 "refresh_attempted": self.refresh_attempted,
                 "verification_state": self.verification_state.value,
                 "metadata": self.metadata,
@@ -135,6 +197,7 @@ class GuildOrderDecision:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Self:
         raw_decision = data.get("decision", GuildOrderDecisionValue.SKIP.value)
+        raw_order_kind = data.get("order_kind", GuildOrderOrderKind.STANDARD.value)
         raw_verification_state = data.get(
             "verification_state",
             GuildOrderVerificationState.ORDER_STATE_UNKNOWN.value,
@@ -143,6 +206,11 @@ class GuildOrderDecision:
             raw_decision
             if isinstance(raw_decision, GuildOrderDecisionValue)
             else GuildOrderDecisionValue(str(raw_decision))
+        )
+        order_kind = (
+            raw_order_kind
+            if isinstance(raw_order_kind, GuildOrderOrderKind)
+            else GuildOrderOrderKind(str(raw_order_kind))
         )
         verification_state = (
             raw_verification_state
@@ -153,8 +221,15 @@ class GuildOrderDecision:
             decision=decision,
             reason_id=str(data.get("reason_id", "")),
             slot_index=int(data.get("slot_index", 0)),
+            order_kind=order_kind,
             requirements=[GuildOrderRequirement.from_dict(item) for item in data.get("requirements", [])],
             availability=[GuildOrderAvailability.from_dict(item) for item in data.get("availability", [])],
+            custom_options=[GuildOrderCustomOption.from_dict(item) for item in data.get("custom_options", [])],
+            selected_custom_option=(
+                GuildOrderCustomOption.from_dict(selected_custom_option)
+                if isinstance((selected_custom_option := data.get("selected_custom_option")), dict)
+                else None
+            ),
             refresh_attempted=bool(data.get("refresh_attempted", False)),
             verification_state=verification_state,
             metadata=dict(data.get("metadata", {})),
@@ -171,6 +246,12 @@ class GuildOrderMaterialPolicy:
     reserve_quantity_by_material_label: dict[str, int] = field(default_factory=dict)
     refresh_allowed: bool = True
     max_refresh_attempts_per_run: int = 1
+    custom_order_enabled: bool = True
+    custom_order_preferred_material_ids: list[str] = field(default_factory=list)
+    custom_order_preferred_material_labels: list[str] = field(default_factory=list)
+    custom_order_selected_candidate_index: int | None = 1
+    custom_order_max_candidates_to_inspect: int = 8
+    custom_order_selection_boundary: str = ""
     decision_priority: list[str] = field(default_factory=list)
     decision_boundary: str = ""
     disallowed_behaviors: list[str] = field(default_factory=list)
@@ -187,6 +268,12 @@ class GuildOrderMaterialPolicy:
                 "reserve_quantity_by_material_label": self.reserve_quantity_by_material_label,
                 "refresh_allowed": self.refresh_allowed,
                 "max_refresh_attempts_per_run": self.max_refresh_attempts_per_run,
+                "custom_order_enabled": self.custom_order_enabled,
+                "custom_order_preferred_material_ids": self.custom_order_preferred_material_ids,
+                "custom_order_preferred_material_labels": self.custom_order_preferred_material_labels,
+                "custom_order_selected_candidate_index": self.custom_order_selected_candidate_index,
+                "custom_order_max_candidates_to_inspect": self.custom_order_max_candidates_to_inspect,
+                "custom_order_selection_boundary": self.custom_order_selection_boundary,
                 "decision_priority": self.decision_priority,
                 "decision_boundary": self.decision_boundary,
                 "disallowed_behaviors": self.disallowed_behaviors,
@@ -211,6 +298,18 @@ class GuildOrderMaterialPolicy:
             },
             refresh_allowed=bool(data.get("refresh_allowed", True)),
             max_refresh_attempts_per_run=int(data.get("max_refresh_attempts_per_run", 1)),
+            custom_order_enabled=bool(data.get("custom_order_enabled", True)),
+            custom_order_preferred_material_ids=[
+                str(item) for item in data.get("custom_order_preferred_material_ids", [])
+            ],
+            custom_order_preferred_material_labels=[
+                str(item) for item in data.get("custom_order_preferred_material_labels", [])
+            ],
+            custom_order_selected_candidate_index=_optional_positive_int(
+                data.get("custom_order_selected_candidate_index", 1)
+            ),
+            custom_order_max_candidates_to_inspect=int(data.get("custom_order_max_candidates_to_inspect", 8)),
+            custom_order_selection_boundary=str(data.get("custom_order_selection_boundary", "")),
             decision_priority=[str(item) for item in data.get("decision_priority", [])],
             decision_boundary=str(data.get("decision_boundary", "")),
             disallowed_behaviors=[str(item) for item in data.get("disallowed_behaviors", [])],
@@ -332,6 +431,113 @@ class GuildOrderSubmitSpecification:
         )
 
 
+def select_guild_order_custom_option(
+    *,
+    custom_options: list[GuildOrderCustomOption],
+    policy: GuildOrderMaterialPolicy,
+) -> GuildOrderCustomOption | None:
+    ranked_options: list[tuple[tuple[int, int, int, str], GuildOrderCustomOption]] = []
+    max_candidates = max(0, policy.custom_order_max_candidates_to_inspect)
+    inspected_options = custom_options[:max_candidates] if max_candidates else []
+    explicit_candidate_index = policy.custom_order_selected_candidate_index
+
+    if explicit_candidate_index is not None:
+        selected_option, _ = _select_explicit_custom_order_candidate(
+            custom_options=inspected_options,
+            policy=policy,
+        )
+        return selected_option
+
+    for option in inspected_options:
+        sufficiency = _resolve_custom_option_sufficiency(option, policy)
+        if not _is_material_allowed(
+            policy,
+            normalized_material_id=option.normalized_material_id,
+            material_label=option.material_label,
+        ):
+            continue
+        if sufficiency is not GuildOrderMaterialSufficiency.SUFFICIENT:
+            continue
+        rank = (
+            _material_preference_rank(
+                normalized_material_id=option.normalized_material_id,
+                material_label=option.material_label,
+                preferred_ids=policy.custom_order_preferred_material_ids,
+                preferred_labels=policy.custom_order_preferred_material_labels,
+            ),
+            option.candidate_index,
+            -(option.available_quantity or 0),
+            option.material_label,
+        )
+        ranked_options.append((rank, _clone_custom_option_with_sufficiency(option, sufficiency)))
+
+    if not ranked_options:
+        return None
+    ranked_options.sort(key=lambda item: item[0])
+    return ranked_options[0][1]
+
+
+def evaluate_guild_order_submit_decision(
+    *,
+    slot_index: int,
+    order_kind: GuildOrderOrderKind,
+    policy: GuildOrderMaterialPolicy,
+    requirements: list[GuildOrderRequirement] | None = None,
+    availability: list[GuildOrderAvailability] | None = None,
+    custom_options: list[GuildOrderCustomOption] | None = None,
+    refresh_attempt_count: int = 0,
+    order_completed: bool = False,
+    order_state_known: bool = True,
+    custom_order_list_visible: bool = True,
+) -> GuildOrderDecision:
+    resolved_requirements = list(requirements or [])
+    resolved_availability = list(availability or [])
+    resolved_custom_options = list(custom_options or [])
+
+    if order_completed:
+        return GuildOrderDecision(
+            decision=GuildOrderDecisionValue.SKIP,
+            reason_id=GuildOrderDecisionReason.ORDER_ALREADY_COMPLETED.value,
+            slot_index=slot_index,
+            order_kind=order_kind,
+            requirements=resolved_requirements,
+            availability=resolved_availability,
+            custom_options=resolved_custom_options,
+            verification_state=GuildOrderVerificationState.SKIP_RECORDED,
+            metadata={"refresh_attempt_count": refresh_attempt_count},
+        )
+
+    if not order_state_known:
+        return GuildOrderDecision(
+            decision=GuildOrderDecisionValue.SKIP,
+            reason_id=GuildOrderDecisionReason.ORDER_STATE_UNKNOWN.value,
+            slot_index=slot_index,
+            order_kind=order_kind,
+            requirements=resolved_requirements,
+            availability=resolved_availability,
+            custom_options=resolved_custom_options,
+            verification_state=GuildOrderVerificationState.ORDER_STATE_UNKNOWN,
+            metadata={"refresh_attempt_count": refresh_attempt_count},
+        )
+
+    if order_kind is GuildOrderOrderKind.CUSTOM:
+        return _evaluate_custom_order_decision(
+            slot_index=slot_index,
+            policy=policy,
+            custom_options=resolved_custom_options,
+            refresh_attempt_count=refresh_attempt_count,
+            custom_order_list_visible=custom_order_list_visible,
+        )
+
+    return _evaluate_standard_order_decision(
+        slot_index=slot_index,
+        policy=policy,
+        requirements=resolved_requirements,
+        availability=resolved_availability,
+        refresh_attempt_count=refresh_attempt_count,
+    )
+
+
 def load_guild_order_submit_blueprint(
     repository: TaskFoundationRepository | None = None,
 ) -> TaskBlueprint:
@@ -445,6 +651,13 @@ def _optional_int(value: object) -> int | None:
     return int(value)
 
 
+def _optional_positive_int(value: object) -> int | None:
+    parsed = _optional_int(value)
+    if parsed is None:
+        return None
+    return parsed if parsed > 0 else None
+
+
 def _optional_string(value: object) -> str | None:
     if value in ("", None):
         return None
@@ -455,3 +668,353 @@ def _select_fixture_profile_path(builder_input: TaskRuntimeBuilderInput) -> str:
     if not builder_input.fixture_profile_paths:
         raise ValueError("Guild-order specification requires at least one fixture profile path")
     return builder_input.fixture_profile_paths[0]
+
+
+def _evaluate_standard_order_decision(
+    *,
+    slot_index: int,
+    policy: GuildOrderMaterialPolicy,
+    requirements: list[GuildOrderRequirement],
+    availability: list[GuildOrderAvailability],
+    refresh_attempt_count: int,
+) -> GuildOrderDecision:
+    if not requirements:
+        return GuildOrderDecision(
+            decision=GuildOrderDecisionValue.SKIP,
+            reason_id=GuildOrderDecisionReason.ORDER_STATE_UNKNOWN.value,
+            slot_index=slot_index,
+            order_kind=GuildOrderOrderKind.STANDARD,
+            requirements=[],
+            availability=[],
+            verification_state=GuildOrderVerificationState.ORDER_STATE_UNKNOWN,
+            metadata={"refresh_attempt_count": refresh_attempt_count},
+        )
+
+    matched_availability = [
+        _match_availability_for_requirement(requirement, availability) for requirement in requirements
+    ]
+    blocked_requirement = next(
+        (
+            requirement
+            for requirement in requirements
+            if not _is_material_allowed(
+                policy,
+                normalized_material_id=requirement.normalized_material_id,
+                material_label=requirement.material_label,
+            )
+        ),
+        None,
+    )
+    if blocked_requirement is not None:
+        return _build_refresh_or_skip_decision(
+            slot_index=slot_index,
+            order_kind=GuildOrderOrderKind.STANDARD,
+            policy=policy,
+            requirements=requirements,
+            availability=matched_availability,
+            refresh_attempt_count=refresh_attempt_count,
+            fallback_reason=GuildOrderDecisionReason.POLICY_BLOCKED_MATERIAL,
+        )
+
+    if all(
+        _resolve_requirement_sufficiency(requirement, matched_availability[index], policy)
+        is GuildOrderMaterialSufficiency.SUFFICIENT
+        for index, requirement in enumerate(requirements)
+    ):
+        return GuildOrderDecision(
+            decision=GuildOrderDecisionValue.SUBMIT,
+            reason_id=GuildOrderDecisionReason.MATERIALS_SUFFICIENT.value,
+            slot_index=slot_index,
+            order_kind=GuildOrderOrderKind.STANDARD,
+            requirements=requirements,
+            availability=matched_availability,
+            metadata={"refresh_attempt_count": refresh_attempt_count},
+        )
+
+    return _build_refresh_or_skip_decision(
+        slot_index=slot_index,
+        order_kind=GuildOrderOrderKind.STANDARD,
+        policy=policy,
+        requirements=requirements,
+        availability=matched_availability,
+        refresh_attempt_count=refresh_attempt_count,
+        fallback_reason=GuildOrderDecisionReason.MATERIALS_INSUFFICIENT,
+    )
+
+
+def _evaluate_custom_order_decision(
+    *,
+    slot_index: int,
+    policy: GuildOrderMaterialPolicy,
+    custom_options: list[GuildOrderCustomOption],
+    refresh_attempt_count: int,
+    custom_order_list_visible: bool,
+) -> GuildOrderDecision:
+    if not policy.custom_order_enabled:
+        return GuildOrderDecision(
+            decision=GuildOrderDecisionValue.SKIP,
+            reason_id=GuildOrderDecisionReason.CUSTOM_ORDER_DISABLED.value,
+            slot_index=slot_index,
+            order_kind=GuildOrderOrderKind.CUSTOM,
+            custom_options=custom_options,
+            verification_state=GuildOrderVerificationState.SKIP_RECORDED,
+            metadata={"refresh_attempt_count": refresh_attempt_count},
+        )
+
+    if not custom_order_list_visible:
+        return GuildOrderDecision(
+            decision=GuildOrderDecisionValue.SKIP,
+            reason_id=GuildOrderDecisionReason.CUSTOM_ORDER_LIST_UNAVAILABLE.value,
+            slot_index=slot_index,
+            order_kind=GuildOrderOrderKind.CUSTOM,
+            custom_options=custom_options,
+            verification_state=GuildOrderVerificationState.ORDER_STATE_UNKNOWN,
+            metadata={"refresh_attempt_count": refresh_attempt_count},
+        )
+
+    explicit_selection_failure: GuildOrderDecisionReason | None = None
+    if policy.custom_order_selected_candidate_index is not None:
+        selected_option, explicit_selection_failure = _select_explicit_custom_order_candidate(
+            custom_options=custom_options,
+            policy=policy,
+        )
+    else:
+        selected_option = select_guild_order_custom_option(custom_options=custom_options, policy=policy)
+    if selected_option is not None:
+        return GuildOrderDecision(
+            decision=GuildOrderDecisionValue.SUBMIT,
+            reason_id=GuildOrderDecisionReason.CUSTOM_ORDER_OPTION_SELECTED.value,
+            slot_index=slot_index,
+            order_kind=GuildOrderOrderKind.CUSTOM,
+            requirements=[
+                GuildOrderRequirement(
+                    slot_index=slot_index,
+                    material_label=selected_option.material_label,
+                    normalized_material_id=selected_option.normalized_material_id,
+                    required_quantity=selected_option.required_quantity,
+                    evidence=dict(selected_option.evidence),
+                )
+            ],
+            availability=[
+                GuildOrderAvailability(
+                    material_label=selected_option.material_label,
+                    normalized_material_id=selected_option.normalized_material_id,
+                    available_quantity=selected_option.available_quantity,
+                    sufficiency=selected_option.sufficiency,
+                    evidence=dict(selected_option.evidence),
+                )
+            ],
+            custom_options=[
+                _clone_custom_option_with_sufficiency(option, _resolve_custom_option_sufficiency(option, policy))
+                for option in custom_options
+            ],
+            selected_custom_option=selected_option,
+            metadata={"refresh_attempt_count": refresh_attempt_count},
+        )
+
+    return _build_refresh_or_skip_decision(
+        slot_index=slot_index,
+        order_kind=GuildOrderOrderKind.CUSTOM,
+        policy=policy,
+        requirements=[],
+        availability=[],
+        refresh_attempt_count=refresh_attempt_count,
+        fallback_reason=explicit_selection_failure or GuildOrderDecisionReason.CUSTOM_ORDER_NO_VIABLE_OPTION,
+        custom_options=[
+            _clone_custom_option_with_sufficiency(option, _resolve_custom_option_sufficiency(option, policy))
+            for option in custom_options
+        ],
+    )
+
+
+def _build_refresh_or_skip_decision(
+    *,
+    slot_index: int,
+    order_kind: GuildOrderOrderKind,
+    policy: GuildOrderMaterialPolicy,
+    requirements: list[GuildOrderRequirement],
+    availability: list[GuildOrderAvailability],
+    refresh_attempt_count: int,
+    fallback_reason: GuildOrderDecisionReason,
+    custom_options: list[GuildOrderCustomOption] | None = None,
+) -> GuildOrderDecision:
+    refresh_attempted = refresh_attempt_count > 0
+    if policy.refresh_allowed and refresh_attempt_count < policy.max_refresh_attempts_per_run:
+        return GuildOrderDecision(
+            decision=GuildOrderDecisionValue.REFRESH,
+            reason_id=fallback_reason.value,
+            slot_index=slot_index,
+            order_kind=order_kind,
+            requirements=requirements,
+            availability=availability,
+            custom_options=list(custom_options or []),
+            refresh_attempted=refresh_attempted,
+            metadata={"refresh_attempt_count": refresh_attempt_count},
+        )
+
+    final_reason = (
+        GuildOrderDecisionReason.REFRESH_NOT_ALLOWED
+        if not policy.refresh_allowed
+        else GuildOrderDecisionReason.REFRESH_LIMIT_REACHED
+    )
+    return GuildOrderDecision(
+        decision=GuildOrderDecisionValue.SKIP,
+        reason_id=final_reason.value,
+        slot_index=slot_index,
+        order_kind=order_kind,
+        requirements=requirements,
+        availability=availability,
+        custom_options=list(custom_options or []),
+        refresh_attempted=refresh_attempted,
+        verification_state=GuildOrderVerificationState.SKIP_RECORDED,
+        metadata={
+            "refresh_attempt_count": refresh_attempt_count,
+            "fallback_reason_id": fallback_reason.value,
+        },
+    )
+
+
+def _select_explicit_custom_order_candidate(
+    *,
+    custom_options: list[GuildOrderCustomOption],
+    policy: GuildOrderMaterialPolicy,
+) -> tuple[GuildOrderCustomOption | None, GuildOrderDecisionReason | None]:
+    explicit_candidate_index = policy.custom_order_selected_candidate_index
+    if explicit_candidate_index is None:
+        return None, None
+
+    selected_option = next(
+        (option for option in custom_options if option.candidate_index == explicit_candidate_index),
+        None,
+    )
+    if selected_option is None:
+        return None, GuildOrderDecisionReason.CUSTOM_ORDER_SELECTED_CANDIDATE_MISSING
+
+    if not _is_material_allowed(
+        policy,
+        normalized_material_id=selected_option.normalized_material_id,
+        material_label=selected_option.material_label,
+    ):
+        return None, GuildOrderDecisionReason.CUSTOM_ORDER_SELECTED_CANDIDATE_BLOCKED
+
+    sufficiency = _resolve_custom_option_sufficiency(selected_option, policy)
+    if sufficiency is not GuildOrderMaterialSufficiency.SUFFICIENT:
+        return None, GuildOrderDecisionReason.CUSTOM_ORDER_SELECTED_CANDIDATE_INSUFFICIENT
+
+    return _clone_custom_option_with_sufficiency(selected_option, sufficiency), None
+
+
+def _match_availability_for_requirement(
+    requirement: GuildOrderRequirement,
+    availability: list[GuildOrderAvailability],
+) -> GuildOrderAvailability:
+    for option in availability:
+        if requirement.normalized_material_id and option.normalized_material_id == requirement.normalized_material_id:
+            return option
+        if option.material_label == requirement.material_label:
+            return option
+    return GuildOrderAvailability(
+        material_label=requirement.material_label,
+        normalized_material_id=requirement.normalized_material_id,
+        available_quantity=None,
+        sufficiency=GuildOrderMaterialSufficiency.UNKNOWN,
+        evidence={"source": "unmatched_requirement"},
+    )
+
+
+def _resolve_requirement_sufficiency(
+    requirement: GuildOrderRequirement,
+    availability: GuildOrderAvailability,
+    policy: GuildOrderMaterialPolicy,
+) -> GuildOrderMaterialSufficiency:
+    if availability.sufficiency is not GuildOrderMaterialSufficiency.UNKNOWN:
+        return availability.sufficiency
+    if requirement.required_quantity is None or availability.available_quantity is None:
+        return GuildOrderMaterialSufficiency.UNKNOWN
+    reserve = _reserve_quantity(
+        policy,
+        normalized_material_id=requirement.normalized_material_id,
+        material_label=requirement.material_label,
+    )
+    return (
+        GuildOrderMaterialSufficiency.SUFFICIENT
+        if availability.available_quantity - reserve >= requirement.required_quantity
+        else GuildOrderMaterialSufficiency.INSUFFICIENT
+    )
+
+
+def _resolve_custom_option_sufficiency(
+    option: GuildOrderCustomOption,
+    policy: GuildOrderMaterialPolicy,
+) -> GuildOrderMaterialSufficiency:
+    if option.sufficiency is not GuildOrderMaterialSufficiency.UNKNOWN:
+        return option.sufficiency
+    if option.required_quantity is None or option.available_quantity is None:
+        return GuildOrderMaterialSufficiency.UNKNOWN
+    reserve = _reserve_quantity(
+        policy,
+        normalized_material_id=option.normalized_material_id,
+        material_label=option.material_label,
+    )
+    return (
+        GuildOrderMaterialSufficiency.SUFFICIENT
+        if option.available_quantity - reserve >= option.required_quantity
+        else GuildOrderMaterialSufficiency.INSUFFICIENT
+    )
+
+
+def _reserve_quantity(
+    policy: GuildOrderMaterialPolicy,
+    *,
+    normalized_material_id: str | None,
+    material_label: str,
+) -> int:
+    if normalized_material_id and normalized_material_id in policy.reserve_quantity_by_material_id:
+        return int(policy.reserve_quantity_by_material_id[normalized_material_id])
+    return int(policy.reserve_quantity_by_material_label.get(material_label, 0))
+
+
+def _is_material_allowed(
+    policy: GuildOrderMaterialPolicy,
+    *,
+    normalized_material_id: str | None,
+    material_label: str,
+) -> bool:
+    if normalized_material_id and normalized_material_id in policy.blocked_material_ids:
+        return False
+    if material_label in policy.blocked_material_labels:
+        return False
+    if policy.allowed_material_ids and normalized_material_id not in policy.allowed_material_ids:
+        return False
+    if policy.allowed_material_labels and material_label not in policy.allowed_material_labels:
+        return False
+    return True
+
+
+def _material_preference_rank(
+    *,
+    normalized_material_id: str | None,
+    material_label: str,
+    preferred_ids: list[str],
+    preferred_labels: list[str],
+) -> int:
+    if normalized_material_id and normalized_material_id in preferred_ids:
+        return preferred_ids.index(normalized_material_id)
+    if material_label in preferred_labels:
+        return len(preferred_ids) + preferred_labels.index(material_label)
+    return len(preferred_ids) + len(preferred_labels) + 1
+
+
+def _clone_custom_option_with_sufficiency(
+    option: GuildOrderCustomOption,
+    sufficiency: GuildOrderMaterialSufficiency,
+) -> GuildOrderCustomOption:
+    return GuildOrderCustomOption(
+        candidate_index=option.candidate_index,
+        material_label=option.material_label,
+        normalized_material_id=option.normalized_material_id,
+        required_quantity=option.required_quantity,
+        available_quantity=option.available_quantity,
+        sufficiency=sufficiency,
+        evidence=dict(option.evidence),
+    )

@@ -313,6 +313,17 @@
           "requirement_id": "foundation.daily_ui.guild_order_result_state_contract",
           "satisfied": false,
           "summary": "Guild-order submit/skip/refresh still requires a truthful verification-state contract for completed, insufficient-material, and submit-result surfaces."
+        },
+        {
+          "blocking": true,
+          "details": "anchor_statuses=daily_ui.guild_order_custom_list_button:missing,daily_ui.guild_order_custom_list_panel:missing,daily_ui.guild_order_custom_option_material_label:missing,daily_ui.guild_order_custom_option_required_quantity:missing,daily_ui.guild_order_custom_option_available_quantity:missing,daily_ui.guild_order_custom_option_selected_state:missing selection_surface=custom_list_button_custom_list_panel_visible_option_quantities_selected_option",
+          "domain": "foundation",
+          "metadata": {
+            "domain": "foundation"
+          },
+          "requirement_id": "foundation.daily_ui.guild_order_custom_option_contract",
+          "satisfied": false,
+          "summary": "Guild-order self-select support still requires a truthful custom-order contract for the list button, option list panel, visible option quantities, and selected-option verification."
         }
       ],
       "implementation_readiness_state": "blocked_by_foundation",
@@ -382,6 +393,17 @@
           "requirement_id": "foundation.daily_ui.guild_order_result_state_contract",
           "satisfied": false,
           "summary": "Guild-order submit/skip/refresh still requires a truthful verification-state contract for completed, insufficient-material, and submit-result surfaces."
+        },
+        {
+          "blocking": true,
+          "details": "anchor_statuses=daily_ui.guild_order_custom_list_button:missing,daily_ui.guild_order_custom_list_panel:missing,daily_ui.guild_order_custom_option_material_label:missing,daily_ui.guild_order_custom_option_required_quantity:missing,daily_ui.guild_order_custom_option_available_quantity:missing,daily_ui.guild_order_custom_option_selected_state:missing selection_surface=custom_list_button_custom_list_panel_visible_option_quantities_selected_option",
+          "domain": "foundation",
+          "metadata": {
+            "domain": "foundation"
+          },
+          "requirement_id": "foundation.daily_ui.guild_order_custom_option_contract",
+          "satisfied": false,
+          "summary": "Guild-order self-select support still requires a truthful custom-order contract for the list button, option list panel, visible option quantities, and selected-option verification."
         }
       ],
       "metadata": {
@@ -398,7 +420,8 @@
           ],
           "foundation_requirement_ids": [
             "foundation.daily_ui.guild_order_visible_quantity_contract",
-            "foundation.daily_ui.guild_order_result_state_contract"
+            "foundation.daily_ui.guild_order_result_state_contract",
+            "foundation.daily_ui.guild_order_custom_option_contract"
           ],
           "manifest_path": "packs/daily_ui/guild_order_submit.task.json",
           "metadata": {
@@ -409,28 +432,33 @@
                 "refresh"
               ],
               "decision_rules": {
-                "refresh": "Visible order is unsuitable and one bounded refresh remains allowed by policy.",
-                "skip": "Visible order is already completed, refresh is disallowed, or no truthful bounded action remains after policy evaluation.",
-                "submit": "Visible requirement is allowed and visible available quantity satisfies the configured reserve policy."
+                "refresh": "Visible order or self-select option set is unsuitable and one bounded refresh remains allowed by policy.",
+                "skip": "Visible order is already completed, self-select support is unavailable or disabled, refresh is disallowed, or no truthful bounded action remains after policy evaluation.",
+                "submit": "Visible standard requirements are allowed and sufficiently stocked, or a visible self-select option is chosen truthfully under the same material policy."
               },
               "decision_signal_keys": [
                 "decision",
                 "reason_id",
                 "slot_index",
+                "order_kind",
                 "requirements",
                 "availability",
+                "custom_options",
+                "selected_custom_option",
                 "refresh_attempted",
                 "verification_state"
               ],
               "material_evidence_fields": [
+                "order_kind",
                 "slot_index",
+                "candidate_index",
                 "material_label",
                 "normalized_material_id",
                 "required_quantity",
                 "available_quantity",
                 "sufficiency"
               ],
-              "notes": "Unknown order state should fail honestly instead of inventing a fourth hidden action path.",
+              "notes": "Unknown order state should fail honestly instead of inventing a fourth hidden action path. Self-select orders stay inside the same submit / skip / refresh decision envelope as a first-round bonus path, must record the chosen option explicitly, and should preserve truthful failure reasons when an operator-selected candidate index is missing, blocked, or insufficient.",
               "reason_ids": [
                 "materials_sufficient",
                 "materials_insufficient",
@@ -439,6 +467,13 @@
                 "order_state_unknown",
                 "refresh_not_allowed",
                 "refresh_limit_reached",
+                "custom_order_disabled",
+                "custom_order_list_unavailable",
+                "custom_order_no_viable_option",
+                "custom_order_option_selected",
+                "custom_order_selected_candidate_missing",
+                "custom_order_selected_candidate_blocked",
+                "custom_order_selected_candidate_insufficient",
                 "submit_verification_failed",
                 "refresh_verification_failed"
               ],
@@ -454,8 +489,11 @@
               "decision",
               "reason_id",
               "slot_index",
+              "order_kind",
               "requirements",
               "availability",
+              "custom_options",
+              "selected_custom_option",
               "refresh_attempted",
               "verification_state"
             ],
@@ -464,6 +502,11 @@
               "allowed_material_labels": [],
               "blocked_material_ids": [],
               "blocked_material_labels": [],
+              "custom_order_enabled": true,
+              "custom_order_max_candidates_to_inspect": 8,
+              "custom_order_preferred_material_ids": [],
+              "custom_order_preferred_material_labels": [],
+              "custom_order_selection_boundary": "visible_custom_order_candidate_evidence_only",
               "decision_boundary": "visible_material_evidence_only",
               "decision_priority": [
                 "submit",
@@ -472,12 +515,11 @@
               ],
               "disallowed_behaviors": [
                 "crafting",
-                "buying",
                 "gathering",
                 "pathing"
               ],
               "max_refresh_attempts_per_run": 1,
-              "notes": "Round 9 only allows submit, skip, or refresh when the visible order requirement and visible quantity evidence are sufficient for a truthful bounded decision.",
+              "notes": "Guild-order submission now includes the bounded self-select order path. The self-select order is a first-round bonus card, not a second-round mode. The task may inspect visible custom-order candidates and choose one truthful option using the same material-policy rules, but it still must not hide crafting, gathering, or pathing as dependencies.",
               "refresh_allowed": true,
               "reserve_quantity_by_material_id": {},
               "reserve_quantity_by_material_label": {}
@@ -490,16 +532,22 @@
             },
             "guild_order_visibility_contract": {
               "decision_input_fields": [
+                "order_kind",
                 "slot_index",
                 "material_label",
                 "required_quantity",
-                "available_quantity"
+                "available_quantity",
+                "candidate_index",
+                "custom_option_material_label",
+                "custom_option_required_quantity",
+                "custom_option_available_quantity"
               ],
               "foundation_requirement_ids": [
                 "foundation.daily_ui.guild_order_visible_quantity_contract",
-                "foundation.daily_ui.guild_order_result_state_contract"
+                "foundation.daily_ui.guild_order_result_state_contract",
+                "foundation.daily_ui.guild_order_custom_option_contract"
               ],
-              "notes": "Round 9 remains blocked until visible quantities and post-decision result states are truthful and deterministic.",
+              "notes": "Guild-order submit remains blocked until visible quantities, self-select option surfaces, and post-decision result states are truthful and deterministic.",
               "required_anchor_ids": [
                 "common.close_button",
                 "daily_ui.guild_order_list_panel",
@@ -515,11 +563,19 @@
                 "daily_ui.guild_order_material_label",
                 "daily_ui.guild_order_required_quantity",
                 "daily_ui.guild_order_available_quantity",
+                "daily_ui.guild_order_custom_list_button",
+                "daily_ui.guild_order_custom_list_panel",
+                "daily_ui.guild_order_custom_option_material_label",
+                "daily_ui.guild_order_custom_option_required_quantity",
+                "daily_ui.guild_order_custom_option_available_quantity",
+                "daily_ui.guild_order_custom_option_selected_state",
                 "daily_ui.guild_order_unavailable_state",
                 "daily_ui.guild_order_insufficient_material_feedback",
                 "daily_ui.guild_order_submit_result_state"
               ],
               "supporting_screen_slugs": [
+                "custom_order_detail",
+                "custom_order_list",
                 "insufficient_material_state",
                 "completed_state",
                 "submit_result"
@@ -527,17 +583,25 @@
             },
             "inventory_source": "curated_inventory",
             "phase": "round-9",
-            "signal_contract_version": "guild_order_submit.v1",
+            "signal_contract_version": "guild_order_submit.v2",
             "source": "task_foundations",
             "supporting_anchor_ids": [
               "daily_ui.guild_order_material_label",
               "daily_ui.guild_order_required_quantity",
               "daily_ui.guild_order_available_quantity",
+              "daily_ui.guild_order_custom_list_button",
+              "daily_ui.guild_order_custom_list_panel",
+              "daily_ui.guild_order_custom_option_material_label",
+              "daily_ui.guild_order_custom_option_required_quantity",
+              "daily_ui.guild_order_custom_option_available_quantity",
+              "daily_ui.guild_order_custom_option_selected_state",
               "daily_ui.guild_order_unavailable_state",
               "daily_ui.guild_order_insufficient_material_feedback",
               "daily_ui.guild_order_submit_result_state"
             ],
             "supporting_golden_screen_slugs": [
+              "custom_order_detail",
+              "custom_order_list",
               "insufficient_material_state",
               "completed_state",
               "submit_result"
@@ -637,6 +701,24 @@
           "domain": "asset",
           "metadata": {},
           "requirement_id": "warning.daily_ui.guild_order_submit:golden:order_detail",
+          "satisfied": false,
+          "summary": "Golden screenshots are still planned and not curated yet."
+        },
+        {
+          "blocking": false,
+          "details": "asset_status=planned source_path=daily_ui/daily_ui_guild_order_submit/custom_order_detail/daily_ui_guild_order_submit__custom_order_detail__baseline__v1.png",
+          "domain": "asset",
+          "metadata": {},
+          "requirement_id": "warning.daily_ui.guild_order_submit:golden:custom_order_detail",
+          "satisfied": false,
+          "summary": "Golden screenshots are still planned and not curated yet."
+        },
+        {
+          "blocking": false,
+          "details": "asset_status=planned source_path=daily_ui/daily_ui_guild_order_submit/custom_order_list/daily_ui_guild_order_submit__custom_order_list__baseline__v1.png",
+          "domain": "asset",
+          "metadata": {},
+          "requirement_id": "warning.daily_ui.guild_order_submit:golden:custom_order_list",
           "satisfied": false,
           "summary": "Golden screenshots are still planned and not curated yet."
         },

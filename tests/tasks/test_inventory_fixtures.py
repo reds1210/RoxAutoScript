@@ -93,6 +93,16 @@ class TaskFixtureExamplesTests(unittest.TestCase):
             ],
             "supporting",
         )
+        self.assertEqual(
+            statuses["daily_ui.guild_order_submit:template:daily_ui.guild_order_custom_list_button"],
+            TaskAssetStatus.MISSING,
+        )
+        self.assertEqual(
+            records["daily_ui.guild_order_submit:template:daily_ui.guild_order_custom_option_material_label"].metadata[
+                "requirement_level"
+            ],
+            "supporting",
+        )
 
     def test_curated_readiness_report_matches_expected_states(self) -> None:
         repository = TaskFoundationRepository.load_default()
