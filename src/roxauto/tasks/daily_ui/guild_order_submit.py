@@ -437,8 +437,7 @@ def select_guild_order_custom_option(
     policy: GuildOrderMaterialPolicy,
 ) -> GuildOrderCustomOption | None:
     ranked_options: list[tuple[tuple[int, int, int, str], GuildOrderCustomOption]] = []
-    max_candidates = max(0, policy.custom_order_max_candidates_to_inspect)
-    inspected_options = custom_options[:max_candidates] if max_candidates else []
+    inspected_options = _limit_custom_order_candidates(custom_options=custom_options, policy=policy)
     explicit_candidate_index = policy.custom_order_selected_candidate_index
 
     if explicit_candidate_index is not None:
@@ -772,10 +771,11 @@ def _evaluate_custom_order_decision(
             metadata={"refresh_attempt_count": refresh_attempt_count},
         )
 
+    inspected_options = _limit_custom_order_candidates(custom_options=custom_options, policy=policy)
     explicit_selection_failure: GuildOrderDecisionReason | None = None
     if policy.custom_order_selected_candidate_index is not None:
         selected_option, explicit_selection_failure = _select_explicit_custom_order_candidate(
-            custom_options=custom_options,
+            custom_options=inspected_options,
             policy=policy,
         )
     else:
@@ -902,6 +902,15 @@ def _select_explicit_custom_order_candidate(
         return None, GuildOrderDecisionReason.CUSTOM_ORDER_SELECTED_CANDIDATE_INSUFFICIENT
 
     return _clone_custom_option_with_sufficiency(selected_option, sufficiency), None
+
+
+def _limit_custom_order_candidates(
+    *,
+    custom_options: list[GuildOrderCustomOption],
+    policy: GuildOrderMaterialPolicy,
+) -> list[GuildOrderCustomOption]:
+    max_candidates = max(0, policy.custom_order_max_candidates_to_inspect)
+    return custom_options[:max_candidates] if max_candidates else []
 
 
 def _match_availability_for_requirement(
