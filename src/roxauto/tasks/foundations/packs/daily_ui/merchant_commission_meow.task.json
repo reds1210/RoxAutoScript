@@ -1,0 +1,275 @@
+{
+  "fixture_profile_paths": [
+    "fixture_profiles/default_tw_merchant.fixture.json"
+  ],
+  "golden_cases": [
+    {
+      "notes": "Validated Carnival map state with the merchant commission entry visible.",
+      "screen_slug": "carnival_entry",
+      "variants": [
+        "baseline",
+        "failure"
+      ]
+    },
+    {
+      "notes": "Merchant commission detail modal before auto-path begins.",
+      "screen_slug": "commission_detail_modal",
+      "variants": [
+        "baseline",
+        "failure"
+      ]
+    },
+    {
+      "notes": "Merchant group list where the Meow Group commission can be accepted.",
+      "screen_slug": "merchant_group_list",
+      "variants": [
+        "baseline",
+        "failure"
+      ]
+    },
+    {
+      "notes": "Preferred left-task-list round entry after one Meow Group commission is already accepted.",
+      "screen_slug": "meow_task_list_round",
+      "variants": [
+        "baseline",
+        "failure"
+      ]
+    },
+    {
+      "notes": "Item submit panel when the target item is already visible or partially owned.",
+      "screen_slug": "meow_submit_panel",
+      "variants": [
+        "baseline",
+        "failure"
+      ]
+    },
+    {
+      "notes": "Item submit panel when the inventory is empty and the task must branch to immediate buy.",
+      "screen_slug": "meow_empty_submit_panel",
+      "variants": [
+        "baseline",
+        "failure"
+      ]
+    },
+    {
+      "notes": "Immediate-buy confirmation dialog for the missing Meow Group round quantity.",
+      "screen_slug": "meow_buy_confirmation",
+      "variants": [
+        "baseline",
+        "failure"
+      ]
+    },
+    {
+      "notes": "Updated left-task-list round after one submission succeeds and the loop advances.",
+      "screen_slug": "meow_round_progression",
+      "variants": [
+        "baseline",
+        "failure"
+      ]
+    }
+  ],
+  "implementation_state": "spec_only",
+  "steps": [
+    {
+      "step_id": "open_merchant_commission_entry",
+      "action": "deterministic_navigation",
+      "success_condition": "The fixed Poring -> Carnival -> Merchant Commission route reaches the commission detail modal truthfully.",
+      "failure_condition": "The validated fixed-UI entry route cannot reach the merchant commission detail modal.",
+      "notes": "This slice stays inside the validated fixed-UI city route only."
+    },
+    {
+      "step_id": "accept_meow_group_commission",
+      "action": "tap_anchor",
+      "success_condition": "The merchant group list is visible and the Meow Group commission can be accepted without probing other merchant groups.",
+      "failure_condition": "The Meow Group commission card is not visible or the route drifts into another merchant group.",
+      "notes": "Do not widen this slice to any non-Meow merchant group."
+    },
+    {
+      "step_id": "reenter_from_daily_task_list",
+      "action": "deterministic_navigation",
+      "success_condition": "The accepted commission is re-entered through the left `[日常] 商會委託` task-list route.",
+      "failure_condition": "The accepted commission cannot be resumed from the validated task-list route.",
+      "notes": "Re-entry should prefer the task-list path instead of reopening Carnival every round."
+    },
+    {
+      "step_id": "resolve_round_material_submission",
+      "action": "task_policy",
+      "success_condition": "The active round truthfully chooses direct submit or immediate-buy-then-submit from the validated submit panel.",
+      "failure_condition": "No truthful bounded hand-in action can be selected from the Meow Group submit panel.",
+      "notes": "This slice allows `立即購買` but still forbids crafting, gathering, or pathing."
+    },
+    {
+      "step_id": "verify_round_progression",
+      "action": "vision_verify",
+      "success_condition": "The round advances to the next `[日常] 商會委託(n/10)` state after submission.",
+      "failure_condition": "The round result cannot be verified from the updated task list or submit flow surfaces.",
+      "notes": "Only the validated Meow Group round progression contract is in scope."
+    }
+  ],
+  "metadata": {
+    "phase": "merchant_commission_transition",
+    "task_pack_owner": "engine_d",
+    "asset_requirement_ids": [
+      "asset.daily_ui.merchant_commission_poring_button",
+      "asset.daily_ui.merchant_commission_carnival_entry",
+      "asset.daily_ui.merchant_commission_detail_modal",
+      "asset.daily_ui.merchant_commission_go_now_button",
+      "asset.daily_ui.merchant_commission_npc_dialog",
+      "asset.daily_ui.merchant_commission_list_panel",
+      "asset.daily_ui.merchant_commission_meow_accept_button",
+      "asset.daily_ui.merchant_commission_task_list_entry",
+      "asset.daily_ui.merchant_commission_meow_submit_option",
+      "asset.daily_ui.merchant_commission_submit_item_panel",
+      "asset.daily_ui.merchant_commission_buy_now_button",
+      "asset.daily_ui.merchant_commission_buy_confirmation_dialog",
+      "asset.daily_ui.merchant_commission_buy_confirm_button",
+      "asset.daily_ui.merchant_commission_submit_button"
+    ],
+    "supporting_anchor_ids": [
+      "daily_ui.merchant_commission_round_counter",
+      "daily_ui.merchant_commission_material_label",
+      "daily_ui.merchant_commission_material_progress",
+      "daily_ui.merchant_commission_empty_inventory_feedback"
+    ],
+    "supporting_golden_screen_slugs": [
+      "meow_empty_submit_panel",
+      "meow_round_progression"
+    ],
+    "merchant_commission_meow_route_contract": {
+      "entry_checkpoint_ids": [
+        "idle_prontera_fountain",
+        "event_poring_menu",
+        "carnival_map",
+        "merchant_commission_detail_modal",
+        "merchant_autopath_to_npc",
+        "merchant_npc_dialog_initial",
+        "merchant_commission_list"
+      ],
+      "preferred_reentry_checkpoint_ids": [
+        "task_list_round_visible",
+        "npc_submit_dialog",
+        "submit_item_panel",
+        "buy_confirmation",
+        "round_progression_visible"
+      ],
+      "do_not_click_notes": [
+        "Do not use the top-right line-switch arrow near the minimap as the merchant entry.",
+        "Do not reopen Carnival for every round after one Meow Group commission is already accepted.",
+        "Do not widen the route to any non-Meow merchant group."
+      ],
+      "notes": "Validated route stays inside the fixed Poring -> Carnival entry and the preferred left task-list re-entry loop."
+    },
+    "merchant_commission_meow_loop_contract": {
+      "merchant_group_label": "喵手商團",
+      "task_list_label": "[日常] 商會委託",
+      "round_limit": 10,
+      "verified_round_count": 2,
+      "preferred_reentry_mode": "left_task_list",
+      "submit_panel_title": "上交道具",
+      "buy_now_label": "立即購買",
+      "buy_confirm_label": "購買",
+      "submit_label": "交付",
+      "task_round_pattern": "商會委託({round_index}/10)",
+      "verified_material_labels": [
+        "礦渣萃取物",
+        "琥珀結晶"
+      ],
+      "notes": "The validated Meow Group loop is a semi-fixed 10-round material hand-in chain with immediate-buy support."
+    },
+    "merchant_commission_meow_handoff_fields": [
+      "merchant_group_label",
+      "round_index",
+      "round_limit",
+      "material_label",
+      "material_progress",
+      "buy_required",
+      "zeny_cost",
+      "reentry_mode"
+    ],
+    "merchant_commission_meow_spec_builders": {
+      "task_specification_builder": "roxauto.tasks.daily_ui.merchant_commission_meow.build_merchant_commission_meow_specification",
+      "route_contract_loader": "roxauto.tasks.daily_ui.merchant_commission_meow.load_merchant_commission_meow_route_contract",
+      "loop_contract_loader": "roxauto.tasks.daily_ui.merchant_commission_meow.load_merchant_commission_meow_loop_contract"
+    }
+  },
+  "notes": "Specification-only blueprint for the bounded `商會委託 -> 喵手商團` first delivery slice.",
+  "pack_id": "daily_ui",
+  "required_anchors": [
+    "common.close_button",
+    "daily_ui.merchant_commission_poring_button",
+    "daily_ui.merchant_commission_carnival_entry",
+    "daily_ui.merchant_commission_detail_modal",
+    "daily_ui.merchant_commission_go_now_button",
+    "daily_ui.merchant_commission_npc_dialog",
+    "daily_ui.merchant_commission_list_panel",
+    "daily_ui.merchant_commission_meow_accept_button",
+    "daily_ui.merchant_commission_task_list_entry",
+    "daily_ui.merchant_commission_meow_submit_option",
+    "daily_ui.merchant_commission_submit_item_panel",
+    "daily_ui.merchant_commission_buy_now_button",
+    "daily_ui.merchant_commission_buy_confirmation_dialog",
+    "daily_ui.merchant_commission_buy_confirm_button",
+    "daily_ui.merchant_commission_submit_button"
+  ],
+  "task_manifest": {
+    "entry_condition": "The account is on the validated main-city UI route and can reach Merchant Commission through the fixed Poring -> Carnival entry.",
+    "failure_condition": "The Meow Group route leaves the validated fixed-UI entry, cannot re-enter through the left task list, or cannot verify round progression honestly.",
+    "metadata": {
+      "implementation_state": "spec_only",
+      "phase": "merchant_commission_transition",
+      "signal_contract_version": "merchant_commission_meow.v1"
+    },
+    "name": "Merchant Commission (Meow Group)",
+    "recovery_policy": "abort",
+    "requires": [
+      "common.close_button",
+      "daily_ui.merchant_commission_poring_button",
+      "daily_ui.merchant_commission_carnival_entry",
+      "daily_ui.merchant_commission_detail_modal",
+      "daily_ui.merchant_commission_go_now_button",
+      "daily_ui.merchant_commission_npc_dialog",
+      "daily_ui.merchant_commission_list_panel",
+      "daily_ui.merchant_commission_meow_accept_button",
+      "daily_ui.merchant_commission_task_list_entry",
+      "daily_ui.merchant_commission_meow_submit_option",
+      "daily_ui.merchant_commission_submit_item_panel",
+      "daily_ui.merchant_commission_buy_now_button",
+      "daily_ui.merchant_commission_buy_confirmation_dialog",
+      "daily_ui.merchant_commission_buy_confirm_button",
+      "daily_ui.merchant_commission_submit_button"
+    ],
+    "stop_conditions": [
+      {
+        "condition_id": "daily_ui.merchant_commission_meow.timeout",
+        "enabled": true,
+        "kind": "timeout",
+        "message": "Merchant commission meow fixture exceeded task-side timeout.",
+        "metadata": {
+          "scope": "task"
+        },
+        "timeout_ms": 120000
+      },
+      {
+        "condition_id": "daily_ui.merchant_commission_meow.manual_stop",
+        "enabled": true,
+        "kind": "manual",
+        "message": "Operator stop should abort merchant commission meow immediately.",
+        "metadata": {
+          "scope": "operator"
+        }
+      },
+      {
+        "condition_id": "daily_ui.merchant_commission_meow.vision",
+        "enabled": true,
+        "kind": "vision_mismatch",
+        "message": "Expected Meow Group merchant commission anchors did not match stable UI.",
+        "metadata": {
+          "scope": "vision"
+        }
+      }
+    ],
+    "success_condition": "The task truthfully reaches the validated Meow Group round hand-in loop and can verify round progression after submission.",
+    "task_id": "daily_ui.merchant_commission_meow",
+    "version": "0.1.0"
+  }
+}

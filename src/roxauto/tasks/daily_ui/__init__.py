@@ -44,6 +44,15 @@ from roxauto.tasks.daily_ui.guild_order_submit import (
     load_guild_order_submit_material_policy,
     load_guild_order_submit_visibility_contract,
 )
+from roxauto.tasks.daily_ui.merchant_commission_meow import (
+    MerchantCommissionMeowLoopContract,
+    MerchantCommissionMeowRouteContract,
+    MerchantCommissionMeowSpecification,
+    build_merchant_commission_meow_specification,
+    load_merchant_commission_meow_blueprint,
+    load_merchant_commission_meow_loop_contract,
+    load_merchant_commission_meow_route_contract,
+)
 from roxauto.tasks.daily_ui.foundations import load_daily_ui_blueprints, load_daily_ui_catalog
 
 __all__ = [
@@ -71,7 +80,11 @@ __all__ = [
     "GuildOrderSubmitSpecification",
     "GuildOrderVerificationState",
     "GuildOrderVisibilityContract",
+    "MerchantCommissionMeowLoopContract",
+    "MerchantCommissionMeowRouteContract",
+    "MerchantCommissionMeowSpecification",
     "TemplateMatcherClaimRewardsVisionGateway",
+    "build_merchant_commission_meow_specification",
     "build_guild_order_submit_specification",
     "build_claim_rewards_step_telemetry",
     "build_claim_rewards_task_display_model",
@@ -89,5 +102,8 @@ __all__ = [
     "load_guild_order_submit_decision_contract",
     "load_guild_order_submit_material_policy",
     "load_guild_order_submit_visibility_contract",
+    "load_merchant_commission_meow_blueprint",
+    "load_merchant_commission_meow_loop_contract",
+    "load_merchant_commission_meow_route_contract",
 ]
 

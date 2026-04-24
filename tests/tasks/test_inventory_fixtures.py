@@ -48,6 +48,14 @@ class TaskFixtureExamplesTests(unittest.TestCase):
             TaskAssetStatus.PLANNED,
         )
         self.assertEqual(
+            statuses["daily_ui.merchant_commission_meow:template:daily_ui.merchant_commission_poring_button"],
+            TaskAssetStatus.MISSING,
+        )
+        self.assertEqual(
+            statuses["daily_ui.merchant_commission_meow:golden:merchant_group_list"],
+            TaskAssetStatus.PLANNED,
+        )
+        self.assertEqual(
             statuses["daily_ui.claim_rewards:template:daily_ui.claim_reward"],
             TaskAssetStatus.PRESENT,
         )
@@ -71,6 +79,18 @@ class TaskFixtureExamplesTests(unittest.TestCase):
         )
         self.assertEqual(
             records["daily_ui.guild_order_submit:template:daily_ui.guild_order_available_quantity"].metadata["requirement_level"],
+            "supporting",
+        )
+        self.assertEqual(
+            records["daily_ui.merchant_commission_meow:template:daily_ui.merchant_commission_empty_inventory_feedback"].metadata[
+                "requirement_level"
+            ],
+            "supporting",
+        )
+        self.assertEqual(
+            records["daily_ui.merchant_commission_meow:golden:meow_empty_submit_panel"].metadata[
+                "requirement_level"
+            ],
             "supporting",
         )
 
@@ -98,5 +118,10 @@ class TaskFixtureExamplesTests(unittest.TestCase):
         self.assertEqual(
             by_task["daily_ui.guild_order_submit"].implementation_readiness_state.value,
             "blocked_by_foundation",
+        )
+        self.assertEqual(by_task["daily_ui.merchant_commission_meow"].builder_readiness_state.value, "blocked_by_asset")
+        self.assertEqual(
+            by_task["daily_ui.merchant_commission_meow"].implementation_readiness_state.value,
+            "blocked_by_asset",
         )
         self.assertEqual(by_task["odin.preset_entry"].implementation_readiness_state.value, "blocked_by_calibration")

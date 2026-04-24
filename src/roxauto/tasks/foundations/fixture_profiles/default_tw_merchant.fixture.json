@@ -1,0 +1,21 @@
+{
+  "display_name": "TW Merchant Fixture",
+  "emulator_name": "mumu",
+  "fixture_id": "fixture.tw.merchant.default",
+  "locale": "zh-TW",
+  "metadata": {
+    "account_tier": "sample",
+    "client_build": "tma.sample",
+    "purpose": "merchant_commission_meow",
+    "region": "tw"
+  },
+  "notes": "Reference fixture for the validated merchant commission meow-group route.",
+  "resolution": [
+    1280,
+    720
+  ],
+  "template_packs": [
+    "common",
+    "daily_ui"
+  ]
+}

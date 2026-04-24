@@ -670,6 +670,517 @@
       ]
     },
     {
+      "builder_readiness_state": "blocked_by_asset",
+      "builder_requirements": [
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_poring_button",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_poring_button",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful Poring activity entry anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_carnival_entry",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_carnival_entry",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful Carnival entry anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_detail_modal",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_detail_modal",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful merchant commission detail modal anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_go_now_button",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_go_now_button",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful `\u7acb\u5373\u524d\u5f80` anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_npc_dialog",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_npc_dialog",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful merchant NPC dialog anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_list_panel",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_list_panel",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful merchant group list anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_meow_accept_button",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_meow_accept_button",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful Meow Group accept-button anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_task_list_entry",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_task_list_entry",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful left task-list re-entry anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_meow_submit_option",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_meow_submit_option",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful NPC top submit-option anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_submit_item_panel",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_submit_item_panel",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful submit-item panel anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_buy_now_button",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_buy_now_button",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful immediate-buy anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_buy_confirmation_dialog",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_buy_confirmation_dialog",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful buy-confirmation dialog anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_buy_confirm_button",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_buy_confirm_button",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful buy-confirm button anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_submit_button",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_submit_button",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful submit button anchor."
+        }
+      ],
+      "implementation_readiness_state": "blocked_by_asset",
+      "implementation_requirements": [
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_poring_button",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_poring_button",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful Poring activity entry anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_carnival_entry",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_carnival_entry",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful Carnival entry anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_detail_modal",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_detail_modal",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful merchant commission detail modal anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_go_now_button",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_go_now_button",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful `\u7acb\u5373\u524d\u5f80` anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_npc_dialog",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_npc_dialog",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful merchant NPC dialog anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_list_panel",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_list_panel",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful merchant group list anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_meow_accept_button",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_meow_accept_button",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful Meow Group accept-button anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_task_list_entry",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_task_list_entry",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful left task-list re-entry anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_meow_submit_option",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_meow_submit_option",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful NPC top submit-option anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_submit_item_panel",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_submit_item_panel",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful submit-item panel anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_buy_now_button",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_buy_now_button",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful immediate-buy anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_buy_confirmation_dialog",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_buy_confirmation_dialog",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful buy-confirmation dialog anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_buy_confirm_button",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_buy_confirm_button",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful buy-confirm button anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_submit_button",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_submit_button",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful submit button anchor."
+        }
+      ],
+      "metadata": {
+        "builder_input": {
+          "asset_requirement_ids": [
+            "asset.daily_ui.merchant_commission_poring_button",
+            "asset.daily_ui.merchant_commission_carnival_entry",
+            "asset.daily_ui.merchant_commission_detail_modal",
+            "asset.daily_ui.merchant_commission_go_now_button",
+            "asset.daily_ui.merchant_commission_npc_dialog",
+            "asset.daily_ui.merchant_commission_list_panel",
+            "asset.daily_ui.merchant_commission_meow_accept_button",
+            "asset.daily_ui.merchant_commission_task_list_entry",
+            "asset.daily_ui.merchant_commission_meow_submit_option",
+            "asset.daily_ui.merchant_commission_submit_item_panel",
+            "asset.daily_ui.merchant_commission_buy_now_button",
+            "asset.daily_ui.merchant_commission_buy_confirmation_dialog",
+            "asset.daily_ui.merchant_commission_buy_confirm_button",
+            "asset.daily_ui.merchant_commission_submit_button"
+          ],
+          "calibration_requirement_ids": [],
+          "fixture_profile_paths": [
+            "fixture_profiles/default_tw_merchant.fixture.json"
+          ],
+          "foundation_requirement_ids": [],
+          "manifest_path": "packs/daily_ui/merchant_commission_meow.task.json",
+          "metadata": {
+            "inventory_source": "curated_inventory",
+            "merchant_commission_meow_handoff_fields": [
+              "merchant_group_label",
+              "round_index",
+              "round_limit",
+              "material_label",
+              "material_progress",
+              "buy_required",
+              "zeny_cost",
+              "reentry_mode"
+            ],
+            "merchant_commission_meow_loop_contract": {
+              "buy_confirm_label": "\u8cfc\u8cb7",
+              "buy_now_label": "\u7acb\u5373\u8cfc\u8cb7",
+              "merchant_group_label": "\u55b5\u624b\u5546\u5718",
+              "notes": "The validated Meow Group loop is a semi-fixed 10-round material hand-in chain with immediate-buy support.",
+              "preferred_reentry_mode": "left_task_list",
+              "round_limit": 10,
+              "submit_label": "\u4ea4\u4ed8",
+              "submit_panel_title": "\u4e0a\u4ea4\u9053\u5177",
+              "task_list_label": "[\u65e5\u5e38] \u5546\u6703\u59d4\u8a17",
+              "task_round_pattern": "\u5546\u6703\u59d4\u8a17({round_index}/10)",
+              "verified_material_labels": [
+                "\u7926\u6e23\u8403\u53d6\u7269",
+                "\u7425\u73c0\u7d50\u6676"
+              ],
+              "verified_round_count": 2
+            },
+            "merchant_commission_meow_route_contract": {
+              "do_not_click_notes": [
+                "Do not use the top-right line-switch arrow near the minimap as the merchant entry.",
+                "Do not reopen Carnival for every round after one Meow Group commission is already accepted.",
+                "Do not widen the route to any non-Meow merchant group."
+              ],
+              "entry_checkpoint_ids": [
+                "idle_prontera_fountain",
+                "event_poring_menu",
+                "carnival_map",
+                "merchant_commission_detail_modal",
+                "merchant_autopath_to_npc",
+                "merchant_npc_dialog_initial",
+                "merchant_commission_list"
+              ],
+              "notes": "Validated route stays inside the fixed Poring -> Carnival entry and the preferred left task-list re-entry loop.",
+              "preferred_reentry_checkpoint_ids": [
+                "task_list_round_visible",
+                "npc_submit_dialog",
+                "submit_item_panel",
+                "buy_confirmation",
+                "round_progression_visible"
+              ]
+            },
+            "merchant_commission_meow_spec_builders": {
+              "loop_contract_loader": "roxauto.tasks.daily_ui.merchant_commission_meow.load_merchant_commission_meow_loop_contract",
+              "route_contract_loader": "roxauto.tasks.daily_ui.merchant_commission_meow.load_merchant_commission_meow_route_contract",
+              "task_specification_builder": "roxauto.tasks.daily_ui.merchant_commission_meow.build_merchant_commission_meow_specification"
+            },
+            "phase": "merchant_commission_transition",
+            "signal_contract_version": "merchant_commission_meow.v1",
+            "source": "task_foundations",
+            "supporting_anchor_ids": [
+              "daily_ui.merchant_commission_round_counter",
+              "daily_ui.merchant_commission_material_label",
+              "daily_ui.merchant_commission_material_progress",
+              "daily_ui.merchant_commission_empty_inventory_feedback"
+            ],
+            "supporting_golden_screen_slugs": [
+              "meow_empty_submit_panel",
+              "meow_round_progression"
+            ]
+          },
+          "pack_id": "daily_ui",
+          "required_anchors": [
+            "common.close_button",
+            "daily_ui.merchant_commission_poring_button",
+            "daily_ui.merchant_commission_carnival_entry",
+            "daily_ui.merchant_commission_detail_modal",
+            "daily_ui.merchant_commission_go_now_button",
+            "daily_ui.merchant_commission_npc_dialog",
+            "daily_ui.merchant_commission_list_panel",
+            "daily_ui.merchant_commission_meow_accept_button",
+            "daily_ui.merchant_commission_task_list_entry",
+            "daily_ui.merchant_commission_meow_submit_option",
+            "daily_ui.merchant_commission_submit_item_panel",
+            "daily_ui.merchant_commission_buy_now_button",
+            "daily_ui.merchant_commission_buy_confirmation_dialog",
+            "daily_ui.merchant_commission_buy_confirm_button",
+            "daily_ui.merchant_commission_submit_button"
+          ],
+          "runtime_requirement_ids": [],
+          "task_id": "daily_ui.merchant_commission_meow"
+        },
+        "implementation_state": "spec_only"
+      },
+      "pack_id": "daily_ui",
+      "task_id": "daily_ui.merchant_commission_meow",
+      "warning_requirements": [
+        {
+          "blocking": false,
+          "details": "asset_status=planned source_path=daily_ui/daily_ui_merchant_commission_meow/carnival_entry/daily_ui_merchant_commission_meow__carnival_entry__baseline__v1.png",
+          "domain": "asset",
+          "metadata": {},
+          "requirement_id": "warning.daily_ui.merchant_commission_meow:golden:carnival_entry",
+          "satisfied": false,
+          "summary": "Golden screenshots are still planned and not curated yet."
+        },
+        {
+          "blocking": false,
+          "details": "asset_status=planned source_path=daily_ui/daily_ui_merchant_commission_meow/commission_detail_modal/daily_ui_merchant_commission_meow__commission_detail_modal__baseline__v1.png",
+          "domain": "asset",
+          "metadata": {},
+          "requirement_id": "warning.daily_ui.merchant_commission_meow:golden:commission_detail_modal",
+          "satisfied": false,
+          "summary": "Golden screenshots are still planned and not curated yet."
+        },
+        {
+          "blocking": false,
+          "details": "asset_status=planned source_path=daily_ui/daily_ui_merchant_commission_meow/merchant_group_list/daily_ui_merchant_commission_meow__merchant_group_list__baseline__v1.png",
+          "domain": "asset",
+          "metadata": {},
+          "requirement_id": "warning.daily_ui.merchant_commission_meow:golden:merchant_group_list",
+          "satisfied": false,
+          "summary": "Golden screenshots are still planned and not curated yet."
+        },
+        {
+          "blocking": false,
+          "details": "asset_status=planned source_path=daily_ui/daily_ui_merchant_commission_meow/meow_task_list_round/daily_ui_merchant_commission_meow__meow_task_list_round__baseline__v1.png",
+          "domain": "asset",
+          "metadata": {},
+          "requirement_id": "warning.daily_ui.merchant_commission_meow:golden:meow_task_list_round",
+          "satisfied": false,
+          "summary": "Golden screenshots are still planned and not curated yet."
+        },
+        {
+          "blocking": false,
+          "details": "asset_status=planned source_path=daily_ui/daily_ui_merchant_commission_meow/meow_submit_panel/daily_ui_merchant_commission_meow__meow_submit_panel__baseline__v1.png",
+          "domain": "asset",
+          "metadata": {},
+          "requirement_id": "warning.daily_ui.merchant_commission_meow:golden:meow_submit_panel",
+          "satisfied": false,
+          "summary": "Golden screenshots are still planned and not curated yet."
+        },
+        {
+          "blocking": false,
+          "details": "asset_status=planned source_path=daily_ui/daily_ui_merchant_commission_meow/meow_empty_submit_panel/daily_ui_merchant_commission_meow__meow_empty_submit_panel__baseline__v1.png",
+          "domain": "asset",
+          "metadata": {},
+          "requirement_id": "warning.daily_ui.merchant_commission_meow:golden:meow_empty_submit_panel",
+          "satisfied": false,
+          "summary": "Golden screenshots are still planned and not curated yet."
+        },
+        {
+          "blocking": false,
+          "details": "asset_status=planned source_path=daily_ui/daily_ui_merchant_commission_meow/meow_buy_confirmation/daily_ui_merchant_commission_meow__meow_buy_confirmation__baseline__v1.png",
+          "domain": "asset",
+          "metadata": {},
+          "requirement_id": "warning.daily_ui.merchant_commission_meow:golden:meow_buy_confirmation",
+          "satisfied": false,
+          "summary": "Golden screenshots are still planned and not curated yet."
+        },
+        {
+          "blocking": false,
+          "details": "asset_status=planned source_path=daily_ui/daily_ui_merchant_commission_meow/meow_round_progression/daily_ui_merchant_commission_meow__meow_round_progression__baseline__v1.png",
+          "domain": "asset",
+          "metadata": {},
+          "requirement_id": "warning.daily_ui.merchant_commission_meow:golden:meow_round_progression",
+          "satisfied": false,
+          "summary": "Golden screenshots are still planned and not curated yet."
+        }
+      ]
+    },
+    {
       "builder_readiness_state": "ready",
       "builder_requirements": [],
       "implementation_readiness_state": "blocked_by_calibration",
