@@ -174,10 +174,63 @@
         ],
         "merchant_commission_meow_spec_builders": {
           "task_specification_builder": "roxauto.tasks.daily_ui.merchant_commission_meow.build_merchant_commission_meow_specification",
+          "submission_policy_loader": "roxauto.tasks.daily_ui.merchant_commission_meow.load_merchant_commission_meow_submission_policy",
+          "decision_contract_loader": "roxauto.tasks.daily_ui.merchant_commission_meow.load_merchant_commission_meow_decision_contract",
+          "round_decision_evaluator": "roxauto.tasks.daily_ui.merchant_commission_meow.evaluate_merchant_commission_meow_round_decision",
           "route_contract_loader": "roxauto.tasks.daily_ui.merchant_commission_meow.load_merchant_commission_meow_route_contract",
           "loop_contract_loader": "roxauto.tasks.daily_ui.merchant_commission_meow.load_merchant_commission_meow_loop_contract"
         },
+        "merchant_commission_meow_submission_policy": {
+          "allow_immediate_buy": true,
+          "allow_partial_inventory_buy": true,
+          "buy_flow_requires_confirmation": true,
+          "verified_reentry_mode": "left_task_list",
+          "disallowed_behaviors": [
+            "crafting",
+            "gathering",
+            "pathing",
+            "merchant_group_switch"
+          ],
+          "notes": "The first delivery slice may buy missing materials from the validated submit panel, but it must not widen into crafting, gathering, or other merchant-group routes."
+        },
+        "merchant_commission_meow_decision_contract": {
+          "allowed_decisions": [
+            "direct_submit",
+            "immediate_buy_then_submit",
+            "stop_for_operator"
+          ],
+          "reason_ids": [
+            "materials_ready",
+            "buy_required",
+            "submit_panel_unavailable",
+            "submit_button_unavailable",
+            "buy_now_unavailable",
+            "immediate_buy_disabled",
+            "round_state_unknown"
+          ],
+          "decision_signal_keys": [
+            "round_index",
+            "material_label",
+            "material_progress",
+            "buy_required",
+            "zeny_cost",
+            "reentry_mode"
+          ],
+          "required_evidence_fields": [
+            "round_index",
+            "material_label",
+            "current_quantity",
+            "required_quantity",
+            "submit_panel_visible",
+            "buy_now_visible",
+            "submit_button_visible",
+            "empty_inventory_feedback_visible"
+          ],
+          "notes": "The round resolver only chooses among the validated submit, immediate-buy-then-submit, or stop-for-operator outcomes."
+        },
         "merchant_commission_meow_handoff_fields": [
+          "decision",
+          "reason_id",
           "merchant_group_label",
           "round_index",
           "round_limit",

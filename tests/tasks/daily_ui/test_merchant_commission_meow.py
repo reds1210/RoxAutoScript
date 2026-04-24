@@ -5,12 +5,19 @@ import unittest
 import tests._bootstrap  # noqa: F401
 from roxauto.tasks import TaskFoundationRepository, TaskReadinessState
 from roxauto.tasks.daily_ui import (
+    MerchantCommissionMeowDecisionReason,
+    MerchantCommissionMeowDecisionValue,
+    MerchantCommissionMeowRoundEvidence,
     MerchantCommissionMeowLoopContract,
     MerchantCommissionMeowRouteContract,
+    MerchantCommissionMeowSubmissionPolicy,
     build_merchant_commission_meow_specification,
+    evaluate_merchant_commission_meow_round_decision,
     load_merchant_commission_meow_blueprint,
+    load_merchant_commission_meow_decision_contract,
     load_merchant_commission_meow_loop_contract,
     load_merchant_commission_meow_route_contract,
+    load_merchant_commission_meow_submission_policy,
 )
 
 
@@ -22,6 +29,8 @@ class MerchantCommissionMeowFoundationsTests(unittest.TestCase):
         blueprint = load_merchant_commission_meow_blueprint(self.repository)
         route_contract = load_merchant_commission_meow_route_contract(self.repository)
         loop_contract = load_merchant_commission_meow_loop_contract(self.repository)
+        submission_policy = load_merchant_commission_meow_submission_policy(self.repository)
+        decision_contract = load_merchant_commission_meow_decision_contract(self.repository)
 
         self.assertEqual(blueprint.task_id, "daily_ui.merchant_commission_meow")
         self.assertEqual(blueprint.implementation_state.value, "spec_only")
@@ -81,6 +90,16 @@ class MerchantCommissionMeowFoundationsTests(unittest.TestCase):
             loop_contract.verified_material_labels,
             ["\u7926\u6e23\u8403\u53d6\u7269", "\u7425\u73c0\u7d50\u6676"],
         )
+        self.assertTrue(submission_policy.allow_immediate_buy)
+        self.assertTrue(submission_policy.allow_partial_inventory_buy)
+        self.assertEqual(submission_policy.verified_reentry_mode, "left_task_list")
+        self.assertIn("merchant_group_switch", submission_policy.disallowed_behaviors)
+        self.assertEqual(
+            decision_contract.allowed_decisions,
+            ["direct_submit", "immediate_buy_then_submit", "stop_for_operator"],
+        )
+        self.assertIn("buy_required", decision_contract.reason_ids)
+        self.assertIn("material_progress", decision_contract.decision_signal_keys)
 
     def test_builds_merchant_commission_meow_specification_from_builder_input_and_readiness(self) -> None:
         builder_input = self.repository.build_runtime_builder_input("daily_ui.merchant_commission_meow")
@@ -98,6 +117,8 @@ class MerchantCommissionMeowFoundationsTests(unittest.TestCase):
         self.assertEqual(
             specification.metadata["merchant_commission_meow_handoff_fields"],
             [
+                "decision",
+                "reason_id",
                 "merchant_group_label",
                 "round_index",
                 "round_limit",
@@ -133,6 +154,89 @@ class MerchantCommissionMeowFoundationsTests(unittest.TestCase):
         )
         self.assertEqual(specification.route_contract.preferred_reentry_checkpoint_ids[0], "task_list_round_visible")
         self.assertEqual(specification.loop_contract.preferred_reentry_mode, "left_task_list")
+        self.assertTrue(specification.submission_policy.allow_immediate_buy)
+        self.assertEqual(
+            specification.decision_contract.allowed_decisions,
+            ["direct_submit", "immediate_buy_then_submit", "stop_for_operator"],
+        )
+
+    def test_evaluates_direct_submit_round_decision(self) -> None:
+        decision = evaluate_merchant_commission_meow_round_decision(
+            round_evidence=MerchantCommissionMeowRoundEvidence(
+                round_index=3,
+                material_label="豹命毒液",
+                current_quantity=15,
+                required_quantity=15,
+                submit_panel_visible=True,
+                submit_button_visible=True,
+                buy_now_visible=False,
+            ),
+            loop_contract=load_merchant_commission_meow_loop_contract(self.repository),
+        )
+
+        self.assertEqual(decision.decision, MerchantCommissionMeowDecisionValue.DIRECT_SUBMIT)
+        self.assertEqual(decision.reason_id, MerchantCommissionMeowDecisionReason.MATERIALS_READY.value)
+        self.assertFalse(decision.buy_required)
+        self.assertEqual(decision.material_progress, "15/15")
+        self.assertEqual(decision.reentry_mode, "left_task_list")
+
+    def test_evaluates_immediate_buy_round_decision(self) -> None:
+        decision = evaluate_merchant_commission_meow_round_decision(
+            round_evidence=MerchantCommissionMeowRoundEvidence(
+                round_index=2,
+                material_label="琥珀結晶",
+                current_quantity=0,
+                required_quantity=15,
+                submit_panel_visible=True,
+                submit_button_visible=False,
+                buy_now_visible=True,
+                empty_inventory_feedback_visible=True,
+                zeny_cost=1200,
+            ),
+            submission_policy=load_merchant_commission_meow_submission_policy(self.repository),
+            loop_contract=load_merchant_commission_meow_loop_contract(self.repository),
+        )
+
+        self.assertEqual(
+            decision.decision,
+            MerchantCommissionMeowDecisionValue.IMMEDIATE_BUY_THEN_SUBMIT,
+        )
+        self.assertEqual(decision.reason_id, MerchantCommissionMeowDecisionReason.BUY_REQUIRED.value)
+        self.assertTrue(decision.buy_required)
+        self.assertTrue(decision.requires_buy_confirmation)
+        self.assertEqual(decision.zeny_cost, 1200)
+
+    def test_stops_when_buy_now_is_not_available_for_incomplete_round(self) -> None:
+        decision = evaluate_merchant_commission_meow_round_decision(
+            round_evidence=MerchantCommissionMeowRoundEvidence(
+                round_index=4,
+                material_label="未知材料",
+                current_quantity=3,
+                required_quantity=15,
+                submit_panel_visible=True,
+                submit_button_visible=False,
+                buy_now_visible=False,
+                empty_inventory_feedback_visible=True,
+            ),
+            submission_policy=MerchantCommissionMeowSubmissionPolicy(
+                allow_immediate_buy=True,
+                allow_partial_inventory_buy=True,
+                buy_flow_requires_confirmation=True,
+                verified_reentry_mode="left_task_list",
+                disallowed_behaviors=["crafting", "gathering", "pathing"],
+            ),
+            loop_contract=load_merchant_commission_meow_loop_contract(self.repository),
+        )
+
+        self.assertEqual(
+            decision.decision,
+            MerchantCommissionMeowDecisionValue.STOP_FOR_OPERATOR,
+        )
+        self.assertEqual(
+            decision.reason_id,
+            MerchantCommissionMeowDecisionReason.BUY_NOW_UNAVAILABLE.value,
+        )
+        self.assertTrue(decision.buy_required)
 
     def test_round_trips_machine_readable_route_and_loop_contracts(self) -> None:
         route_contract = MerchantCommissionMeowRouteContract(

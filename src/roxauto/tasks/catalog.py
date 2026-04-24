@@ -1166,6 +1166,8 @@ class TaskFoundationRepository:
         for key in (
             "merchant_commission_meow_route_contract",
             "merchant_commission_meow_loop_contract",
+            "merchant_commission_meow_submission_policy",
+            "merchant_commission_meow_decision_contract",
             "merchant_commission_meow_spec_builders",
             "merchant_commission_meow_handoff_fields",
         ):

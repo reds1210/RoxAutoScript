@@ -102,9 +102,18 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
             meow_record.metadata["merchant_commission_meow_loop_contract"]["preferred_reentry_mode"],
             "left_task_list",
         )
+        self.assertTrue(
+            meow_record.metadata["merchant_commission_meow_submission_policy"]["allow_immediate_buy"]
+        )
+        self.assertEqual(
+            meow_record.metadata["merchant_commission_meow_decision_contract"]["allowed_decisions"],
+            ["direct_submit", "immediate_buy_then_submit", "stop_for_operator"],
+        )
         self.assertEqual(
             meow_record.metadata["merchant_commission_meow_handoff_fields"],
             [
+                "decision",
+                "reason_id",
                 "merchant_group_label",
                 "round_index",
                 "round_limit",
@@ -329,6 +338,17 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
                 "preferred_reentry_mode"
             ],
             "left_task_list",
+        )
+        self.assertTrue(
+            by_task["daily_ui.merchant_commission_meow"].metadata["merchant_commission_meow_submission_policy"][
+                "allow_immediate_buy"
+            ]
+        )
+        self.assertEqual(
+            by_task["daily_ui.merchant_commission_meow"].metadata["merchant_commission_meow_decision_contract"][
+                "allowed_decisions"
+            ],
+            ["direct_submit", "immediate_buy_then_submit", "stop_for_operator"],
         )
         self.assertEqual(
             by_task["daily_ui.merchant_commission_meow"].metadata["merchant_commission_meow_route_contract"][
