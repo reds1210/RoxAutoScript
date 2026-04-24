@@ -120,6 +120,25 @@ A successful first exploration pass should produce:
   - `promote to Engine E/C/D`
   - `reject as out-of-scope for MVP`
 
+## Current Product Priority
+
+Operator product guidance is now explicit:
+
+- there are five merchant groups in the broader `merchant commission` feature
+- only two are currently worth delivery effort:
+  - `meow_group`
+    - operator label: `喵手商團`
+  - `kingdom_supply_group`
+    - operator label: `王國軍需處`
+- the other three merchant groups are future-scope only for now
+
+Implications:
+
+- do not normalize all five merchant groups into one first implementation
+- finish `meow_group` truthfully first
+- treat `kingdom_supply_group` as the second valuable exploration or delivery target
+- keep the remaining three merchant groups explicitly deferred unless the user reprioritizes them later
+
 ## Tentative Naming
 
 Do not treat these as final contracts yet.
@@ -145,6 +164,12 @@ Only after the exploration thread validates the route:
 3. `Engine D`
    - define task blueprint and readiness blockers
 4. then decide whether `Engine A` or `Engine B` should open
+
+Suggested merchant-group order once exploration is sufficient:
+
+1. `meow_group` / `喵手商團`
+2. `kingdom_supply_group` / `王國軍需處`
+3. keep the remaining three merchant groups out of implementation scope for now
 
 ## Branch And Worktree
 
