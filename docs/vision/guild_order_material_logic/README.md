@@ -53,6 +53,7 @@ Reviewed raw trail for the successful route:
   - required quantity
   - available quantity
   - submit result state
+- the shipped manifest now marks those proven surfaces and result states as captured instead of blocked or missing
 - this pass did not probe:
   - refresh affordance
   - unavailable state
@@ -65,12 +66,12 @@ Manifest source:
 - `assets/templates/daily_ui/manifest.json`
 - `metadata.task_support["daily_ui.guild_order_submit"].scene_contract`
 
-Machine-readable state still shipped in code:
+Machine-readable state now shipped in code:
 
-- `evidence_state`: `placeholder_only`
-- `decision_surface_state`: `blocked_by_missing_material_evidence`
+- `evidence_state`: `partial_reviewed_live_evidence`
+- `decision_surface_state`: `submit_decision_surfaces_captured_failure_states_pending`
 
-That contract has not been promoted in this pass. This branch intentionally adds reviewed live evidence only; it does not yet change the manifest-level placeholder or blocked partitions.
+The manifest now truthfully promotes the scenes and surfaces proven by the reviewed live route, while still keeping all eight anchors as placeholder scaffolds.
 
 ## What The New Evidence Proves
 
@@ -86,8 +87,7 @@ That contract has not been promoted in this pass. This branch intentionally adds
 
 ## Expected Follow-Up
 
-- Engine C can now review and promote the scenes or surfaces that are truly proven in `guild_order_live_evidence_packet.json`
-- Engine D can stop treating material name, required quantity, available quantity, and submit-result visibility as unsupported once Engine C promotion lands
+- Engine D can now stop treating material name, required quantity, available quantity, and submit-result visibility as unsupported because the Engine C promotion has landed
 - a later Engine E pass should still capture:
   - refresh affordance
   - unavailable state

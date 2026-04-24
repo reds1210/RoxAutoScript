@@ -98,7 +98,7 @@ Vision-side tooling can now validate template packs before GUI or task code cons
 - claim-rewards task support must also point at a valid `metadata.task_support.daily_ui.claim_rewards.golden_catalog_path`, and every curated anchor must map its `golden_id`, primary reference, and `live_capture` flag back to the matching catalog entry.
 - round-8 claim-rewards support now also validates `metadata.task_support.daily_ui.claim_rewards.live_capture_coverage`, per-anchor `metadata.curation.metadata.failure_case`, and the catalog `sha256` values for both canonical goldens and supporting captures so live-promotion drift stays machine-readable instead of silently diverging from the files on disk.
 - round-8 claim-rewards support now also validates a machine-readable `metadata.task_support.daily_ui.claim_rewards.post_tap_contract` packet, mirrored in `catalog.json`, so the confirm-modal truth gap stays explicit and reviewable instead of hiding in free-form handoff notes.
-- round-9 guild-order support now also validates a machine-readable `metadata.task_support.daily_ui.guild_order_submit.scene_contract` packet so placeholder anchors, blocked material-count surfaces, and future live promotions stay explicit instead of drifting into undocumented assumptions.
+- round-9 guild-order support now also validates a machine-readable `metadata.task_support.daily_ui.guild_order_submit.scene_contract` packet so placeholder anchors, promoted live surfaces, and remaining blocked failure states stay explicit instead of drifting into undocumented assumptions.
 
 Validation only enforces rules that are already part of the documented contracts:
 
@@ -132,7 +132,7 @@ The readiness report is intentionally stricter than raw filesystem validation:
 - `get_primary_curation_reference()` and `resolve_curation_reference_path()` expose the first GUI-facing baseline image for one curated anchor.
 - `resolve_claim_rewards_catalog_path()`, `get_claim_rewards_golden_catalog()`, `get_claim_rewards_anchor_golden()`, and `list_claim_rewards_supporting_captures()` expose the claim-rewards golden catalog and its supporting live evidence without forcing callers to parse raw JSON.
 - `get_claim_rewards_post_tap_contract()` exposes the manifest-level Route-A decision packet for post-tap behavior.
-- `get_guild_order_scene_contract()` exposes the manifest-level placeholder/blocked guild-order scene contract for `daily_ui.guild_order_submit`.
+- `get_guild_order_scene_contract()` exposes the manifest-level guild-order scene contract for `daily_ui.guild_order_submit`, including partial live-evidence promotions and remaining blocked scenes.
 - `get_task_support()` returns manifest-level `metadata.task_support` without forcing callers to read the raw manifest dict.
 
 ## GUI Panels
@@ -176,8 +176,8 @@ Current sample coverage:
 - `docs/vision/guild_order_material_logic/raw/` now keeps the supporting reviewed route and submit-result trail for live guild-order navigation
 - `assets/templates/daily_ui/goldens/claim_rewards/live/` now also carries supporting live negative-case captures for a non-claimable daily-sign-in panel, the wrong reward surface, a non-reward confirmation modal, and one alternate post-tap reward overlay
 - `daily_ui.guild_check_in_button` placeholder template now exists under `assets/templates/daily_ui/`
-- `daily_ui.guild_order_submit` now has a truthful first-cut placeholder-only scene contract covering the guild hub entry, order list/detail, submit/refresh affordances, unavailable state, insufficient-material feedback, and submit-result state
-- material requirement labels, required quantities, and available-count surfaces remain blocked in the shipped manifest until reviewed live evidence is promoted into the contract
+- `daily_ui.guild_order_submit` now has a truthful partial-live scene contract covering the guild hub route, order list/detail, submit affordance, visible material surfaces, and submit-result state while leaving unproven failure scenes blocked
+- material requirement labels, required quantities, available-count surfaces, and submit-result visibility are now promoted in the shipped manifest from reviewed live evidence on `127.0.0.1:16480`
 - `odin.start_button` placeholder template exists
 - the current asset inventory in this worktree aligns with the shipped claim-rewards anchors, so readiness no longer needs a special-case mismatch note for `daily_ui.claim_reward`
 
@@ -247,35 +247,32 @@ The reward-panel baseline and claim-button baseline are now both promoted to liv
   - `insufficient_material_feedback`
   - `submit_result_state`
 
-The current `scene_contract` is intentionally conservative:
+The current `scene_contract` is intentionally conservative about what remains unproven:
 
 - `ready_anchor_ids`: empty
 - `placeholder_anchor_ids`: all eight current guild-order anchors
 - `blocked_anchor_ids`: empty
-- `evidence_state`: `placeholder_only`
-- `decision_surface_state`: `blocked_by_missing_material_evidence`
-- blocked material surfaces:
-  - `guild_order_requirement_material`
-  - `guild_order_required_quantity`
-  - `guild_order_available_material_count`
+- `evidence_state`: `partial_reviewed_live_evidence`
+- `decision_surface_state`: `submit_decision_surfaces_captured_failure_states_pending`
+- `blocked_scene_ids`: empty
 
 The same contract now also carries a finer-grained truth matrix:
 
 - `scene_truth`
   - each required guild-order scene records:
     - which anchor ids currently stand in for that scene
-    - whether it is still only `placeholder_anchor_only`
-    - whether the reviewed live probe still reports the scene as `missing`
+    - whether it is still only `placeholder_anchor_only` or a placeholder anchor already backed by reviewed live evidence
+    - whether the reviewed route reports the scene as `missing` or `captured`
     - a one-line evidence summary
 - `surface_truth`
-  - each blocked material surface records:
-    - that it is `blocked_missing_live_evidence`
-    - that the reviewed live probe still reports it as `missing`
-    - why the current evidence is still not strong enough to promote it
+  - each tracked material surface records:
+    - whether it is still blocked or already promoted from reviewed live evidence
+    - whether the reviewed route reports it as `missing` or `captured`
+    - why the current evidence is or is not strong enough to support the manifest
 
-This lets the vision layer expose the full first-cut state inventory without pretending that live guild-order material evidence already exists in this worktree. The placeholder anchors are valid scaffolding for readiness, inspection, and future GUI/runtime wiring, but they must not be treated as promoted live proof until Engine E lands reviewed guild-order evidence.
+This lets the vision layer expose the full first-cut state inventory without pretending that placeholder anchors are already promoted templates. The placeholder anchors are still scaffolding for readiness, inspection, and future GUI/runtime wiring, while the manifest now truthfully records which scenes and surfaces already have reviewed live backing.
 
-Engine E has now landed a reviewed live packet under `docs/vision/guild_order_material_logic/` that reaches the guild panel, the guild Activity cards, the guild-order list/detail scene, the submit affordance, the material label, the required quantity, the available count, and a stable submitted result state on `127.0.0.1:16480`. The manifest contract remains `placeholder_only` in this pass because the evidence-promotion step was intentionally left to follow-up work.
+Engine E has now landed a reviewed live packet under `docs/vision/guild_order_material_logic/` that reaches the guild panel, the guild Activity cards, the guild-order list/detail scene, the submit affordance, the material label, the required quantity, the available count, and a stable submitted result state on `127.0.0.1:16480`. The shipped manifest now promotes those proven scenes and surfaces, while `scene_truth` and the contract summary still mark refresh, unavailable, and insufficient-material feedback as missing follow-up evidence.
 
 `catalog.json` is the machine-readable index for the three shipped claim-rewards baselines. It records:
 
