@@ -403,6 +403,39 @@ class GuildOrderSubmitFoundationsTests(unittest.TestCase):
         self.assertEqual(decision.decision, GuildOrderDecisionValue.REFRESH)
         self.assertEqual(decision.reason_id, "custom_order_selected_candidate_missing")
 
+    def test_evaluates_custom_order_refresh_when_selected_candidate_exceeds_inspection_cap(self) -> None:
+        decision = evaluate_guild_order_submit_decision(
+            slot_index=9,
+            order_kind=GuildOrderOrderKind.CUSTOM,
+            policy=GuildOrderMaterialPolicy(
+                custom_order_enabled=True,
+                custom_order_selected_candidate_index=2,
+                custom_order_max_candidates_to_inspect=1,
+                refresh_allowed=True,
+                max_refresh_attempts_per_run=1,
+            ),
+            custom_options=[
+                GuildOrderCustomOption(
+                    candidate_index=1,
+                    material_label="Iron Ore",
+                    normalized_material_id="iron_ore",
+                    required_quantity=10,
+                    available_quantity=0,
+                ),
+                GuildOrderCustomOption(
+                    candidate_index=2,
+                    material_label="Copper Ore",
+                    normalized_material_id="copper_ore",
+                    required_quantity=10,
+                    available_quantity=20,
+                ),
+            ],
+        )
+
+        self.assertEqual(decision.decision, GuildOrderDecisionValue.REFRESH)
+        self.assertEqual(decision.reason_id, "custom_order_selected_candidate_missing")
+        self.assertIsNone(decision.selected_custom_option)
+
     def test_evaluates_custom_order_refresh_when_selected_candidate_is_blocked(self) -> None:
         decision = evaluate_guild_order_submit_decision(
             slot_index=9,
