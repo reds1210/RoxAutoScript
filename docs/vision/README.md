@@ -259,6 +259,20 @@ The current `scene_contract` is intentionally conservative:
   - `guild_order_required_quantity`
   - `guild_order_available_material_count`
 
+The same contract now also carries a finer-grained truth matrix:
+
+- `scene_truth`
+  - each required guild-order scene records:
+    - which anchor ids currently stand in for that scene
+    - whether it is still only `placeholder_anchor_only`
+    - whether the reviewed live probe still reports the scene as `missing`
+    - a one-line evidence summary
+- `surface_truth`
+  - each blocked material surface records:
+    - that it is `blocked_missing_live_evidence`
+    - that the reviewed live probe still reports it as `missing`
+    - why the current evidence is still not strong enough to promote it
+
 This lets the vision layer expose the full first-cut state inventory without pretending that live guild-order material evidence already exists in this worktree. The placeholder anchors are valid scaffolding for readiness, inspection, and future GUI/runtime wiring, but they must not be treated as promoted live proof until Engine E lands reviewed guild-order evidence.
 
 Engine E has now landed an initial reviewed live probe packet under `docs/vision/guild_order_material_logic/`, but that packet truthfully records only pre-guild navigation surfaces from `神殿聖域2F`. No guild-order list/detail/submit/refresh/result scene or material-count surface was reached in that pass, so the contract remains `placeholder_only` and the material surfaces remain blocked.

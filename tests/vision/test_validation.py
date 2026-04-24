@@ -115,9 +115,16 @@ class TemplateValidationTests(unittest.TestCase):
         self.assertNotIn("guild_order_scene_contract_placeholder_blocked_overlap", issue_codes)
         self.assertNotIn("unknown_guild_order_scene_contract_anchor", issue_codes)
         self.assertNotIn("missing_guild_order_scene_contract_required_scenes", issue_codes)
+        self.assertNotIn("missing_guild_order_scene_contract_scene_truth", issue_codes)
+        self.assertNotIn("missing_guild_order_scene_contract_surface_truth", issue_codes)
         self.assertNotIn("missing_guild_order_scene_contract_evidence_state", issue_codes)
         self.assertNotIn("missing_guild_order_scene_contract_decision_surface_state", issue_codes)
         self.assertNotIn("missing_guild_order_scene_contract_summary", issue_codes)
+        self.assertNotIn("missing_guild_order_scene_truth_entry", issue_codes)
+        self.assertNotIn("invalid_guild_order_scene_truth_entry", issue_codes)
+        self.assertNotIn("unknown_guild_order_scene_truth_anchor", issue_codes)
+        self.assertNotIn("missing_guild_order_surface_truth_entry", issue_codes)
+        self.assertNotIn("invalid_guild_order_surface_truth_entry", issue_codes)
         self.assertNotIn("guild_order_placeholder_anchor_missing_from_scene_contract", issue_codes)
         self.assertNotIn("guild_order_ready_anchor_marked_placeholder", issue_codes)
         self.assertNotIn("guild_order_placeholder_anchor_not_placeholder", issue_codes)
@@ -136,6 +143,8 @@ class TemplateValidationTests(unittest.TestCase):
                 for anchor_id in contract["placeholder_anchor_ids"]
                 if anchor_id != "daily_ui.guild_order_hub_entry"
             ]
+            del contract["scene_truth"]["guild_order_submit_result_state"]
+            contract["surface_truth"]["guild_order_required_quantity"]["summary"] = ""
             contract["summary"] = ""
             manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
@@ -145,6 +154,8 @@ class TemplateValidationTests(unittest.TestCase):
         self.assertFalse(report.is_valid)
         self.assertIn("guild_order_placeholder_anchor_missing_from_scene_contract", issue_codes)
         self.assertIn("guild_order_ready_anchor_marked_placeholder", issue_codes)
+        self.assertIn("missing_guild_order_scene_truth_entry", issue_codes)
+        self.assertIn("invalid_guild_order_surface_truth_entry", issue_codes)
         self.assertIn("missing_guild_order_scene_contract_summary", issue_codes)
 
     def test_validate_template_repository_rejects_claim_rewards_catalog_hash_drift(self) -> None:
@@ -582,6 +593,30 @@ class TemplateValidationTests(unittest.TestCase):
                 "guild_order_required_quantity",
                 "guild_order_available_material_count",
             ],
+        )
+        self.assertEqual(
+            report.metadata["guild_order_scene_contract"]["scene_truth"]["guild_order_submit_result_state"][
+                "contract_state"
+            ],
+            "placeholder_anchor_only",
+        )
+        self.assertEqual(
+            report.metadata["guild_order_scene_contract"]["scene_truth"]["guild_order_submit_result_state"][
+                "live_probe_status"
+            ],
+            "missing",
+        )
+        self.assertEqual(
+            report.metadata["guild_order_scene_contract"]["surface_truth"]["guild_order_available_material_count"][
+                "contract_state"
+            ],
+            "blocked_missing_live_evidence",
+        )
+        self.assertEqual(
+            report.metadata["guild_order_scene_contract"]["surface_truth"]["guild_order_available_material_count"][
+                "truth_basis"
+            ],
+            "reviewed_probe_without_detail_scene",
         )
         self.assertEqual(
             report.metadata["guild_order_scene_contract"]["placeholder_anchor_ids"],
