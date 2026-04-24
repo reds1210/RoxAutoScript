@@ -23,6 +23,7 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
                 "daily_ui.claim_rewards",
                 "daily_ui.guild_check_in",
                 "daily_ui.guild_order_submit",
+                "daily_ui.merchant_commission_meow",
                 "odin.preset_entry",
             ],
         )
@@ -32,6 +33,7 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
                 "daily_ui.claim_rewards": "fixtured",
                 "daily_ui.guild_check_in": "spec_only",
                 "daily_ui.guild_order_submit": "spec_only",
+                "daily_ui.merchant_commission_meow": "spec_only",
                 "odin.preset_entry": "spec_only",
             },
         )
@@ -48,7 +50,7 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
         profiles = self.repository.discover_fixture_profiles()
         convention = self.repository.load_golden_convention()
 
-        self.assertEqual(len(profiles), 3)
+        self.assertEqual(len(profiles), 4)
         self.assertEqual(profiles[0].locale, "zh-TW")
         self.assertEqual(convention.required_variants, ["baseline", "failure"])
         self.assertEqual(profiles[0].metadata["region"], "tw")
@@ -94,6 +96,34 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
             "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_seam",
         )
         self.assertEqual(built.records[0].metadata["signal_contract_version"], "claim_rewards.v2")
+        meow_record = next(record for record in curated.records if record.task_id == "daily_ui.merchant_commission_meow")
+        self.assertEqual(meow_record.fixture_profile_paths, ["fixture_profiles/default_tw_merchant.fixture.json"])
+        self.assertEqual(
+            meow_record.metadata["merchant_commission_meow_loop_contract"]["preferred_reentry_mode"],
+            "left_task_list",
+        )
+        self.assertTrue(
+            meow_record.metadata["merchant_commission_meow_submission_policy"]["allow_immediate_buy"]
+        )
+        self.assertEqual(
+            meow_record.metadata["merchant_commission_meow_decision_contract"]["allowed_decisions"],
+            ["direct_submit", "immediate_buy_then_submit", "stop_for_operator"],
+        )
+        self.assertEqual(
+            meow_record.metadata["merchant_commission_meow_handoff_fields"],
+            [
+                "decision",
+                "reason_id",
+                "merchant_group_label",
+                "round_index",
+                "round_limit",
+                "material_label",
+                "material_progress",
+                "buy_required",
+                "zeny_cost",
+                "reentry_mode",
+            ],
+        )
 
     def test_discovers_pack_catalogs(self) -> None:
         catalogs = self.repository.discover_pack_catalogs()
@@ -118,6 +148,11 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
         self.assertEqual(
             catalogs[0].entries[2].metadata["signal_contract_version"],
             "guild_order_submit.v2",
+        )
+        self.assertEqual(catalogs[0].entries[3].task_id, "daily_ui.merchant_commission_meow")
+        self.assertEqual(
+            catalogs[0].entries[3].metadata["signal_contract_version"],
+            "merchant_commission_meow.v1",
         )
 
     def test_builds_asset_inventory(self) -> None:
@@ -185,6 +220,26 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
         self.assertEqual(
             records["daily_ui.guild_order_submit:golden:order_list"].status.value,
             "planned",
+        )
+        self.assertEqual(
+            records["daily_ui.merchant_commission_meow:template:daily_ui.merchant_commission_poring_button"].status.value,
+            "missing",
+        )
+        self.assertEqual(
+            records["daily_ui.merchant_commission_meow:template:daily_ui.merchant_commission_empty_inventory_feedback"].metadata[
+                "requirement_level"
+            ],
+            "supporting",
+        )
+        self.assertEqual(
+            records["daily_ui.merchant_commission_meow:golden:merchant_group_list"].status.value,
+            "planned",
+        )
+        self.assertEqual(
+            records["daily_ui.merchant_commission_meow:golden:meow_empty_submit_panel"].metadata[
+                "requirement_level"
+            ],
+            "supporting",
         )
         self.assertEqual(
             records["odin.preset_entry:golden:odin_idle_state"].status.value,
@@ -260,6 +315,56 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
             ["submit", "skip", "refresh"],
         )
         self.assertEqual(
+            by_task["daily_ui.merchant_commission_meow"].asset_requirement_ids,
+            [
+                "asset.daily_ui.merchant_commission_poring_button",
+                "asset.daily_ui.merchant_commission_carnival_entry",
+                "asset.daily_ui.merchant_commission_detail_modal",
+                "asset.daily_ui.merchant_commission_go_now_button",
+                "asset.daily_ui.merchant_commission_npc_dialog",
+                "asset.daily_ui.merchant_commission_list_panel",
+                "asset.daily_ui.merchant_commission_meow_accept_button",
+                "asset.daily_ui.merchant_commission_task_list_entry",
+                "asset.daily_ui.merchant_commission_meow_submit_option",
+                "asset.daily_ui.merchant_commission_submit_item_panel",
+                "asset.daily_ui.merchant_commission_buy_now_button",
+                "asset.daily_ui.merchant_commission_buy_confirmation_dialog",
+                "asset.daily_ui.merchant_commission_buy_confirm_button",
+                "asset.daily_ui.merchant_commission_submit_button",
+            ],
+        )
+        self.assertEqual(
+            by_task["daily_ui.merchant_commission_meow"].metadata["merchant_commission_meow_loop_contract"][
+                "preferred_reentry_mode"
+            ],
+            "left_task_list",
+        )
+        self.assertTrue(
+            by_task["daily_ui.merchant_commission_meow"].metadata["merchant_commission_meow_submission_policy"][
+                "allow_immediate_buy"
+            ]
+        )
+        self.assertEqual(
+            by_task["daily_ui.merchant_commission_meow"].metadata["merchant_commission_meow_decision_contract"][
+                "allowed_decisions"
+            ],
+            ["direct_submit", "immediate_buy_then_submit", "stop_for_operator"],
+        )
+        self.assertEqual(
+            by_task["daily_ui.merchant_commission_meow"].metadata["merchant_commission_meow_route_contract"][
+                "entry_checkpoint_ids"
+            ],
+            [
+                "idle_prontera_fountain",
+                "event_poring_menu",
+                "carnival_map",
+                "merchant_commission_detail_modal",
+                "merchant_autopath_to_npc",
+                "merchant_npc_dialog_initial",
+                "merchant_commission_list",
+            ],
+        )
+        self.assertEqual(
             by_task["odin.preset_entry"].calibration_requirement_ids,
             ["calibration.odin.idle_state_profile"],
         )
@@ -315,6 +420,33 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
                 "foundation.daily_ui.guild_order_custom_option_contract",
             ],
         )
+        self.assertEqual(
+            by_task["daily_ui.merchant_commission_meow"].builder_readiness_state.value,
+            "blocked_by_asset",
+        )
+        self.assertEqual(
+            by_task["daily_ui.merchant_commission_meow"].implementation_readiness_state.value,
+            "blocked_by_asset",
+        )
+        self.assertEqual(
+            [item.requirement_id for item in by_task["daily_ui.merchant_commission_meow"].builder_requirements],
+            [
+                "asset.daily_ui.merchant_commission_poring_button",
+                "asset.daily_ui.merchant_commission_carnival_entry",
+                "asset.daily_ui.merchant_commission_detail_modal",
+                "asset.daily_ui.merchant_commission_go_now_button",
+                "asset.daily_ui.merchant_commission_npc_dialog",
+                "asset.daily_ui.merchant_commission_list_panel",
+                "asset.daily_ui.merchant_commission_meow_accept_button",
+                "asset.daily_ui.merchant_commission_task_list_entry",
+                "asset.daily_ui.merchant_commission_meow_submit_option",
+                "asset.daily_ui.merchant_commission_submit_item_panel",
+                "asset.daily_ui.merchant_commission_buy_now_button",
+                "asset.daily_ui.merchant_commission_buy_confirmation_dialog",
+                "asset.daily_ui.merchant_commission_buy_confirm_button",
+                "asset.daily_ui.merchant_commission_submit_button",
+            ],
+        )
         self.assertEqual(by_task["odin.preset_entry"].builder_readiness_state.value, "ready")
         self.assertEqual(
             by_task["odin.preset_entry"].implementation_readiness_state.value,
@@ -325,10 +457,13 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
         readiness = self.repository.load_readiness_report()
 
         self.assertEqual(readiness.report_id, "pre_gate_3_task_readiness")
-        self.assertEqual(len(readiness.reports), 4)
+        self.assertEqual(len(readiness.reports), 5)
         claim_rewards = next(report for report in readiness.reports if report.task_id == "daily_ui.claim_rewards")
         guild_order_submit = next(
             report for report in readiness.reports if report.task_id == "daily_ui.guild_order_submit"
+        )
+        merchant_commission_meow = next(
+            report for report in readiness.reports if report.task_id == "daily_ui.merchant_commission_meow"
         )
         self.assertEqual(claim_rewards.implementation_readiness_state.value, "ready")
         self.assertEqual(self.repository.build_readiness_collection().to_dict(), readiness.to_dict())
@@ -341,6 +476,7 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
             ["supporting"],
         )
         self.assertEqual(guild_order_submit.builder_readiness_state.value, "blocked_by_foundation")
+        self.assertEqual(merchant_commission_meow.builder_readiness_state.value, "blocked_by_asset")
 
     def test_guild_order_foundation_checks_ignore_golden_records(self) -> None:
         from roxauto.tasks.models import TaskAssetKind, TaskAssetRecord, TaskAssetStatus

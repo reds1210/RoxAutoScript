@@ -467,12 +467,13 @@ class TemplateValidationTests(unittest.TestCase):
         guild_dependency = dependency_by_anchor["daily_ui.guild_check_in_button"]
         claim_dependency = dependency_by_anchor["daily_ui.claim_reward"]
         guild_order_dependency = dependency_by_anchor["daily_ui.guild_order_list_panel"]
+        merchant_commission_dependency = dependency_by_anchor["daily_ui.merchant_commission_poring_button"]
         guild_order_custom_dependency = dependency_by_anchor["daily_ui.guild_order_custom_list_button"]
 
-        self.assertEqual(report.template_dependency_count, 26)
-        self.assertEqual(report.ready_count, 8)
+        self.assertEqual(report.template_dependency_count, 45)
+        self.assertEqual(report.ready_count, 9)
         self.assertEqual(report.placeholder_count, 9)
-        self.assertEqual(report.missing_count, 9)
+        self.assertEqual(report.missing_count, 27)
         self.assertEqual(report.inventory_mismatch_count, 0)
         self.assertEqual(guild_dependency.readiness_status, TemplateReadinessStatus.PLACEHOLDER)
         self.assertTrue(guild_dependency.anchor_present)
@@ -500,6 +501,10 @@ class TemplateValidationTests(unittest.TestCase):
         self.assertEqual(claim_dependency.curation_reference_count, 1)
         self.assertTrue(claim_dependency.golden_catalog_path.endswith("goldens\\claim_rewards\\catalog.json"))
         self.assertEqual(claim_dependency.selected_golden_id, "reward_panel_claimable_baseline_v1")
+        self.assertEqual(merchant_commission_dependency.readiness_status, TemplateReadinessStatus.MISSING)
+        self.assertFalse(merchant_commission_dependency.anchor_present)
+        self.assertFalse(merchant_commission_dependency.asset_exists)
+        self.assertFalse(merchant_commission_dependency.inventory_mismatch)
         self.assertTrue(
             claim_dependency.selected_golden_image_path.endswith(
                 "daily_ui_claim_rewards__claim_button__baseline__v1.png"

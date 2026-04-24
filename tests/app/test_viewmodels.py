@@ -96,7 +96,7 @@ class ConsoleSnapshotTests(unittest.TestCase):
         self.assertIn("pause routed", state.manual_controls.last_command_summary)
         self.assertIsNotNone(state.selected_inspection_result)
         self.assertEqual(state.task_readiness.blocked_by_runtime_count, 0)
-        self.assertEqual(state.task_readiness.blocked_by_asset_count, 1)
+        self.assertEqual(state.task_readiness.blocked_by_asset_count, 2)
         self.assertEqual(state.claim_rewards.workflow_status, "queued")
         self.assertEqual(state.claim_rewards.selected_scope_summary, "instance=mumu-9 | active")
         self.assertEqual(state.vision.workspace.selected_repository_id, "common")
@@ -163,7 +163,7 @@ class ConsoleSnapshotTests(unittest.TestCase):
 
         self.assertEqual(pane.total_tasks, len(reports))
         self.assertEqual(pane.builder_ready_count, 2)
-        self.assertEqual(pane.blocked_by_asset_count, 1)
+        self.assertEqual(pane.blocked_by_asset_count, 2)
         self.assertEqual(pane.blocked_by_runtime_count, 0)
         self.assertEqual(pane.blocked_by_calibration_count, 1)
         self.assertEqual(pane.selected_task_ids, ["daily_ui.claim_rewards"])

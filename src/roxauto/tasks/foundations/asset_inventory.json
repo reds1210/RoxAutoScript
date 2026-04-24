@@ -670,6 +670,457 @@
       "task_id": "daily_ui.guild_order_submit"
     },
     {
+      "asset_id": "daily_ui.merchant_commission_meow:fixture:default_tw_merchant.fixture",
+      "asset_kind": "fixture_profile",
+      "metadata": {
+        "source": "fixture_profile"
+      },
+      "pack_id": "daily_ui",
+      "source_path": "fixture_profiles/default_tw_merchant.fixture.json",
+      "status": "present",
+      "task_id": "daily_ui.merchant_commission_meow"
+    },
+    {
+      "asset_id": "daily_ui.merchant_commission_meow:template:common.close_button",
+      "asset_kind": "template",
+      "metadata": {
+        "anchor_id": "common.close_button",
+        "curation_status": "",
+        "placeholder": false,
+        "requirement_level": "required",
+        "source": "template_manifest",
+        "template_path": "anchors/common_close_button.svg"
+      },
+      "pack_id": "daily_ui",
+      "source_path": "assets/templates/common/manifest.json#common.close_button",
+      "status": "present",
+      "task_id": "daily_ui.merchant_commission_meow"
+    },
+    {
+      "asset_id": "daily_ui.merchant_commission_meow:template:daily_ui.merchant_commission_poring_button",
+      "asset_kind": "template",
+      "metadata": {
+        "anchor_id": "daily_ui.merchant_commission_poring_button",
+        "curation_status": "",
+        "placeholder": false,
+        "requirement_level": "required",
+        "source": "template_manifest",
+        "template_path": ""
+      },
+      "pack_id": "daily_ui",
+      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_poring_button",
+      "status": "missing",
+      "task_id": "daily_ui.merchant_commission_meow"
+    },
+    {
+      "asset_id": "daily_ui.merchant_commission_meow:template:daily_ui.merchant_commission_carnival_entry",
+      "asset_kind": "template",
+      "metadata": {
+        "anchor_id": "daily_ui.merchant_commission_carnival_entry",
+        "curation_status": "",
+        "placeholder": false,
+        "requirement_level": "required",
+        "source": "template_manifest",
+        "template_path": ""
+      },
+      "pack_id": "daily_ui",
+      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_carnival_entry",
+      "status": "missing",
+      "task_id": "daily_ui.merchant_commission_meow"
+    },
+    {
+      "asset_id": "daily_ui.merchant_commission_meow:template:daily_ui.merchant_commission_detail_modal",
+      "asset_kind": "template",
+      "metadata": {
+        "anchor_id": "daily_ui.merchant_commission_detail_modal",
+        "curation_status": "",
+        "placeholder": false,
+        "requirement_level": "required",
+        "source": "template_manifest",
+        "template_path": ""
+      },
+      "pack_id": "daily_ui",
+      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_detail_modal",
+      "status": "missing",
+      "task_id": "daily_ui.merchant_commission_meow"
+    },
+    {
+      "asset_id": "daily_ui.merchant_commission_meow:template:daily_ui.merchant_commission_go_now_button",
+      "asset_kind": "template",
+      "metadata": {
+        "anchor_id": "daily_ui.merchant_commission_go_now_button",
+        "curation_status": "",
+        "placeholder": false,
+        "requirement_level": "required",
+        "source": "template_manifest",
+        "template_path": ""
+      },
+      "pack_id": "daily_ui",
+      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_go_now_button",
+      "status": "missing",
+      "task_id": "daily_ui.merchant_commission_meow"
+    },
+    {
+      "asset_id": "daily_ui.merchant_commission_meow:template:daily_ui.merchant_commission_npc_dialog",
+      "asset_kind": "template",
+      "metadata": {
+        "anchor_id": "daily_ui.merchant_commission_npc_dialog",
+        "curation_status": "",
+        "placeholder": false,
+        "requirement_level": "required",
+        "source": "template_manifest",
+        "template_path": ""
+      },
+      "pack_id": "daily_ui",
+      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_npc_dialog",
+      "status": "missing",
+      "task_id": "daily_ui.merchant_commission_meow"
+    },
+    {
+      "asset_id": "daily_ui.merchant_commission_meow:template:daily_ui.merchant_commission_list_panel",
+      "asset_kind": "template",
+      "metadata": {
+        "anchor_id": "daily_ui.merchant_commission_list_panel",
+        "curation_status": "",
+        "placeholder": false,
+        "requirement_level": "required",
+        "source": "template_manifest",
+        "template_path": ""
+      },
+      "pack_id": "daily_ui",
+      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_list_panel",
+      "status": "missing",
+      "task_id": "daily_ui.merchant_commission_meow"
+    },
+    {
+      "asset_id": "daily_ui.merchant_commission_meow:template:daily_ui.merchant_commission_meow_accept_button",
+      "asset_kind": "template",
+      "metadata": {
+        "anchor_id": "daily_ui.merchant_commission_meow_accept_button",
+        "curation_status": "",
+        "placeholder": false,
+        "requirement_level": "required",
+        "source": "template_manifest",
+        "template_path": ""
+      },
+      "pack_id": "daily_ui",
+      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_meow_accept_button",
+      "status": "missing",
+      "task_id": "daily_ui.merchant_commission_meow"
+    },
+    {
+      "asset_id": "daily_ui.merchant_commission_meow:template:daily_ui.merchant_commission_task_list_entry",
+      "asset_kind": "template",
+      "metadata": {
+        "anchor_id": "daily_ui.merchant_commission_task_list_entry",
+        "curation_status": "",
+        "placeholder": false,
+        "requirement_level": "required",
+        "source": "template_manifest",
+        "template_path": ""
+      },
+      "pack_id": "daily_ui",
+      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_task_list_entry",
+      "status": "missing",
+      "task_id": "daily_ui.merchant_commission_meow"
+    },
+    {
+      "asset_id": "daily_ui.merchant_commission_meow:template:daily_ui.merchant_commission_meow_submit_option",
+      "asset_kind": "template",
+      "metadata": {
+        "anchor_id": "daily_ui.merchant_commission_meow_submit_option",
+        "curation_status": "",
+        "placeholder": false,
+        "requirement_level": "required",
+        "source": "template_manifest",
+        "template_path": ""
+      },
+      "pack_id": "daily_ui",
+      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_meow_submit_option",
+      "status": "missing",
+      "task_id": "daily_ui.merchant_commission_meow"
+    },
+    {
+      "asset_id": "daily_ui.merchant_commission_meow:template:daily_ui.merchant_commission_submit_item_panel",
+      "asset_kind": "template",
+      "metadata": {
+        "anchor_id": "daily_ui.merchant_commission_submit_item_panel",
+        "curation_status": "",
+        "placeholder": false,
+        "requirement_level": "required",
+        "source": "template_manifest",
+        "template_path": ""
+      },
+      "pack_id": "daily_ui",
+      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_submit_item_panel",
+      "status": "missing",
+      "task_id": "daily_ui.merchant_commission_meow"
+    },
+    {
+      "asset_id": "daily_ui.merchant_commission_meow:template:daily_ui.merchant_commission_buy_now_button",
+      "asset_kind": "template",
+      "metadata": {
+        "anchor_id": "daily_ui.merchant_commission_buy_now_button",
+        "curation_status": "",
+        "placeholder": false,
+        "requirement_level": "required",
+        "source": "template_manifest",
+        "template_path": ""
+      },
+      "pack_id": "daily_ui",
+      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_buy_now_button",
+      "status": "missing",
+      "task_id": "daily_ui.merchant_commission_meow"
+    },
+    {
+      "asset_id": "daily_ui.merchant_commission_meow:template:daily_ui.merchant_commission_buy_confirmation_dialog",
+      "asset_kind": "template",
+      "metadata": {
+        "anchor_id": "daily_ui.merchant_commission_buy_confirmation_dialog",
+        "curation_status": "",
+        "placeholder": false,
+        "requirement_level": "required",
+        "source": "template_manifest",
+        "template_path": ""
+      },
+      "pack_id": "daily_ui",
+      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_buy_confirmation_dialog",
+      "status": "missing",
+      "task_id": "daily_ui.merchant_commission_meow"
+    },
+    {
+      "asset_id": "daily_ui.merchant_commission_meow:template:daily_ui.merchant_commission_buy_confirm_button",
+      "asset_kind": "template",
+      "metadata": {
+        "anchor_id": "daily_ui.merchant_commission_buy_confirm_button",
+        "curation_status": "",
+        "placeholder": false,
+        "requirement_level": "required",
+        "source": "template_manifest",
+        "template_path": ""
+      },
+      "pack_id": "daily_ui",
+      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_buy_confirm_button",
+      "status": "missing",
+      "task_id": "daily_ui.merchant_commission_meow"
+    },
+    {
+      "asset_id": "daily_ui.merchant_commission_meow:template:daily_ui.merchant_commission_submit_button",
+      "asset_kind": "template",
+      "metadata": {
+        "anchor_id": "daily_ui.merchant_commission_submit_button",
+        "curation_status": "",
+        "placeholder": false,
+        "requirement_level": "required",
+        "source": "template_manifest",
+        "template_path": ""
+      },
+      "pack_id": "daily_ui",
+      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_submit_button",
+      "status": "missing",
+      "task_id": "daily_ui.merchant_commission_meow"
+    },
+    {
+      "asset_id": "daily_ui.merchant_commission_meow:template:daily_ui.merchant_commission_round_counter",
+      "asset_kind": "template",
+      "metadata": {
+        "anchor_id": "daily_ui.merchant_commission_round_counter",
+        "curation_status": "",
+        "placeholder": false,
+        "requirement_level": "supporting",
+        "source": "template_manifest",
+        "template_path": ""
+      },
+      "pack_id": "daily_ui",
+      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_round_counter",
+      "status": "missing",
+      "task_id": "daily_ui.merchant_commission_meow"
+    },
+    {
+      "asset_id": "daily_ui.merchant_commission_meow:template:daily_ui.merchant_commission_material_label",
+      "asset_kind": "template",
+      "metadata": {
+        "anchor_id": "daily_ui.merchant_commission_material_label",
+        "curation_status": "",
+        "placeholder": false,
+        "requirement_level": "supporting",
+        "source": "template_manifest",
+        "template_path": ""
+      },
+      "pack_id": "daily_ui",
+      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_material_label",
+      "status": "missing",
+      "task_id": "daily_ui.merchant_commission_meow"
+    },
+    {
+      "asset_id": "daily_ui.merchant_commission_meow:template:daily_ui.merchant_commission_material_progress",
+      "asset_kind": "template",
+      "metadata": {
+        "anchor_id": "daily_ui.merchant_commission_material_progress",
+        "curation_status": "",
+        "placeholder": false,
+        "requirement_level": "supporting",
+        "source": "template_manifest",
+        "template_path": ""
+      },
+      "pack_id": "daily_ui",
+      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_material_progress",
+      "status": "missing",
+      "task_id": "daily_ui.merchant_commission_meow"
+    },
+    {
+      "asset_id": "daily_ui.merchant_commission_meow:template:daily_ui.merchant_commission_empty_inventory_feedback",
+      "asset_kind": "template",
+      "metadata": {
+        "anchor_id": "daily_ui.merchant_commission_empty_inventory_feedback",
+        "curation_status": "",
+        "placeholder": false,
+        "requirement_level": "supporting",
+        "source": "template_manifest",
+        "template_path": ""
+      },
+      "pack_id": "daily_ui",
+      "source_path": "assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_empty_inventory_feedback",
+      "status": "missing",
+      "task_id": "daily_ui.merchant_commission_meow"
+    },
+    {
+      "asset_id": "daily_ui.merchant_commission_meow:golden:carnival_entry",
+      "asset_kind": "golden_screenshot",
+      "metadata": {
+        "requirement_level": "required",
+        "source": "golden_convention",
+        "variant": "baseline",
+        "variants": [
+          "baseline",
+          "failure"
+        ]
+      },
+      "pack_id": "daily_ui",
+      "source_path": "daily_ui/daily_ui_merchant_commission_meow/carnival_entry/daily_ui_merchant_commission_meow__carnival_entry__baseline__v1.png",
+      "status": "planned",
+      "task_id": "daily_ui.merchant_commission_meow"
+    },
+    {
+      "asset_id": "daily_ui.merchant_commission_meow:golden:commission_detail_modal",
+      "asset_kind": "golden_screenshot",
+      "metadata": {
+        "requirement_level": "required",
+        "source": "golden_convention",
+        "variant": "baseline",
+        "variants": [
+          "baseline",
+          "failure"
+        ]
+      },
+      "pack_id": "daily_ui",
+      "source_path": "daily_ui/daily_ui_merchant_commission_meow/commission_detail_modal/daily_ui_merchant_commission_meow__commission_detail_modal__baseline__v1.png",
+      "status": "planned",
+      "task_id": "daily_ui.merchant_commission_meow"
+    },
+    {
+      "asset_id": "daily_ui.merchant_commission_meow:golden:merchant_group_list",
+      "asset_kind": "golden_screenshot",
+      "metadata": {
+        "requirement_level": "required",
+        "source": "golden_convention",
+        "variant": "baseline",
+        "variants": [
+          "baseline",
+          "failure"
+        ]
+      },
+      "pack_id": "daily_ui",
+      "source_path": "daily_ui/daily_ui_merchant_commission_meow/merchant_group_list/daily_ui_merchant_commission_meow__merchant_group_list__baseline__v1.png",
+      "status": "planned",
+      "task_id": "daily_ui.merchant_commission_meow"
+    },
+    {
+      "asset_id": "daily_ui.merchant_commission_meow:golden:meow_task_list_round",
+      "asset_kind": "golden_screenshot",
+      "metadata": {
+        "requirement_level": "required",
+        "source": "golden_convention",
+        "variant": "baseline",
+        "variants": [
+          "baseline",
+          "failure"
+        ]
+      },
+      "pack_id": "daily_ui",
+      "source_path": "daily_ui/daily_ui_merchant_commission_meow/meow_task_list_round/daily_ui_merchant_commission_meow__meow_task_list_round__baseline__v1.png",
+      "status": "planned",
+      "task_id": "daily_ui.merchant_commission_meow"
+    },
+    {
+      "asset_id": "daily_ui.merchant_commission_meow:golden:meow_submit_panel",
+      "asset_kind": "golden_screenshot",
+      "metadata": {
+        "requirement_level": "required",
+        "source": "golden_convention",
+        "variant": "baseline",
+        "variants": [
+          "baseline",
+          "failure"
+        ]
+      },
+      "pack_id": "daily_ui",
+      "source_path": "daily_ui/daily_ui_merchant_commission_meow/meow_submit_panel/daily_ui_merchant_commission_meow__meow_submit_panel__baseline__v1.png",
+      "status": "planned",
+      "task_id": "daily_ui.merchant_commission_meow"
+    },
+    {
+      "asset_id": "daily_ui.merchant_commission_meow:golden:meow_empty_submit_panel",
+      "asset_kind": "golden_screenshot",
+      "metadata": {
+        "requirement_level": "supporting",
+        "source": "golden_convention",
+        "variant": "baseline",
+        "variants": [
+          "baseline",
+          "failure"
+        ]
+      },
+      "pack_id": "daily_ui",
+      "source_path": "daily_ui/daily_ui_merchant_commission_meow/meow_empty_submit_panel/daily_ui_merchant_commission_meow__meow_empty_submit_panel__baseline__v1.png",
+      "status": "planned",
+      "task_id": "daily_ui.merchant_commission_meow"
+    },
+    {
+      "asset_id": "daily_ui.merchant_commission_meow:golden:meow_buy_confirmation",
+      "asset_kind": "golden_screenshot",
+      "metadata": {
+        "requirement_level": "required",
+        "source": "golden_convention",
+        "variant": "baseline",
+        "variants": [
+          "baseline",
+          "failure"
+        ]
+      },
+      "pack_id": "daily_ui",
+      "source_path": "daily_ui/daily_ui_merchant_commission_meow/meow_buy_confirmation/daily_ui_merchant_commission_meow__meow_buy_confirmation__baseline__v1.png",
+      "status": "planned",
+      "task_id": "daily_ui.merchant_commission_meow"
+    },
+    {
+      "asset_id": "daily_ui.merchant_commission_meow:golden:meow_round_progression",
+      "asset_kind": "golden_screenshot",
+      "metadata": {
+        "requirement_level": "supporting",
+        "source": "golden_convention",
+        "variant": "baseline",
+        "variants": [
+          "baseline",
+          "failure"
+        ]
+      },
+      "pack_id": "daily_ui",
+      "source_path": "daily_ui/daily_ui_merchant_commission_meow/meow_round_progression/daily_ui_merchant_commission_meow__meow_round_progression__baseline__v1.png",
+      "status": "planned",
+      "task_id": "daily_ui.merchant_commission_meow"
+    },
+    {
       "asset_id": "odin.preset_entry:fixture:default_tw_odin.fixture",
       "asset_kind": "fixture_profile",
       "metadata": {

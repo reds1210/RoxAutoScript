@@ -105,6 +105,118 @@ _REQUIREMENT_SPECS: dict[str, _RequirementSpec] = {
         implementation_blocking=True,
         asset_anchor_id="daily_ui.guild_order_refresh_button",
     ),
+    "asset.daily_ui.merchant_commission_poring_button": _RequirementSpec(
+        requirement_id="asset.daily_ui.merchant_commission_poring_button",
+        domain=TaskGapDomain.ASSET,
+        summary="Merchant commission meow still requires a truthful Poring activity entry anchor.",
+        builder_blocking=True,
+        implementation_blocking=True,
+        asset_anchor_id="daily_ui.merchant_commission_poring_button",
+    ),
+    "asset.daily_ui.merchant_commission_carnival_entry": _RequirementSpec(
+        requirement_id="asset.daily_ui.merchant_commission_carnival_entry",
+        domain=TaskGapDomain.ASSET,
+        summary="Merchant commission meow still requires a truthful Carnival entry anchor.",
+        builder_blocking=True,
+        implementation_blocking=True,
+        asset_anchor_id="daily_ui.merchant_commission_carnival_entry",
+    ),
+    "asset.daily_ui.merchant_commission_detail_modal": _RequirementSpec(
+        requirement_id="asset.daily_ui.merchant_commission_detail_modal",
+        domain=TaskGapDomain.ASSET,
+        summary="Merchant commission meow still requires a truthful merchant commission detail modal anchor.",
+        builder_blocking=True,
+        implementation_blocking=True,
+        asset_anchor_id="daily_ui.merchant_commission_detail_modal",
+    ),
+    "asset.daily_ui.merchant_commission_go_now_button": _RequirementSpec(
+        requirement_id="asset.daily_ui.merchant_commission_go_now_button",
+        domain=TaskGapDomain.ASSET,
+        summary="Merchant commission meow still requires a truthful `立即前往` anchor.",
+        builder_blocking=True,
+        implementation_blocking=True,
+        asset_anchor_id="daily_ui.merchant_commission_go_now_button",
+    ),
+    "asset.daily_ui.merchant_commission_npc_dialog": _RequirementSpec(
+        requirement_id="asset.daily_ui.merchant_commission_npc_dialog",
+        domain=TaskGapDomain.ASSET,
+        summary="Merchant commission meow still requires a truthful merchant NPC dialog anchor.",
+        builder_blocking=True,
+        implementation_blocking=True,
+        asset_anchor_id="daily_ui.merchant_commission_npc_dialog",
+    ),
+    "asset.daily_ui.merchant_commission_list_panel": _RequirementSpec(
+        requirement_id="asset.daily_ui.merchant_commission_list_panel",
+        domain=TaskGapDomain.ASSET,
+        summary="Merchant commission meow still requires a truthful merchant group list anchor.",
+        builder_blocking=True,
+        implementation_blocking=True,
+        asset_anchor_id="daily_ui.merchant_commission_list_panel",
+    ),
+    "asset.daily_ui.merchant_commission_meow_accept_button": _RequirementSpec(
+        requirement_id="asset.daily_ui.merchant_commission_meow_accept_button",
+        domain=TaskGapDomain.ASSET,
+        summary="Merchant commission meow still requires a truthful Meow Group accept-button anchor.",
+        builder_blocking=True,
+        implementation_blocking=True,
+        asset_anchor_id="daily_ui.merchant_commission_meow_accept_button",
+    ),
+    "asset.daily_ui.merchant_commission_task_list_entry": _RequirementSpec(
+        requirement_id="asset.daily_ui.merchant_commission_task_list_entry",
+        domain=TaskGapDomain.ASSET,
+        summary="Merchant commission meow still requires a truthful left task-list re-entry anchor.",
+        builder_blocking=True,
+        implementation_blocking=True,
+        asset_anchor_id="daily_ui.merchant_commission_task_list_entry",
+    ),
+    "asset.daily_ui.merchant_commission_meow_submit_option": _RequirementSpec(
+        requirement_id="asset.daily_ui.merchant_commission_meow_submit_option",
+        domain=TaskGapDomain.ASSET,
+        summary="Merchant commission meow still requires a truthful NPC top submit-option anchor.",
+        builder_blocking=True,
+        implementation_blocking=True,
+        asset_anchor_id="daily_ui.merchant_commission_meow_submit_option",
+    ),
+    "asset.daily_ui.merchant_commission_submit_item_panel": _RequirementSpec(
+        requirement_id="asset.daily_ui.merchant_commission_submit_item_panel",
+        domain=TaskGapDomain.ASSET,
+        summary="Merchant commission meow still requires a truthful submit-item panel anchor.",
+        builder_blocking=True,
+        implementation_blocking=True,
+        asset_anchor_id="daily_ui.merchant_commission_submit_item_panel",
+    ),
+    "asset.daily_ui.merchant_commission_buy_now_button": _RequirementSpec(
+        requirement_id="asset.daily_ui.merchant_commission_buy_now_button",
+        domain=TaskGapDomain.ASSET,
+        summary="Merchant commission meow still requires a truthful immediate-buy anchor.",
+        builder_blocking=True,
+        implementation_blocking=True,
+        asset_anchor_id="daily_ui.merchant_commission_buy_now_button",
+    ),
+    "asset.daily_ui.merchant_commission_buy_confirmation_dialog": _RequirementSpec(
+        requirement_id="asset.daily_ui.merchant_commission_buy_confirmation_dialog",
+        domain=TaskGapDomain.ASSET,
+        summary="Merchant commission meow still requires a truthful buy-confirmation dialog anchor.",
+        builder_blocking=True,
+        implementation_blocking=True,
+        asset_anchor_id="daily_ui.merchant_commission_buy_confirmation_dialog",
+    ),
+    "asset.daily_ui.merchant_commission_buy_confirm_button": _RequirementSpec(
+        requirement_id="asset.daily_ui.merchant_commission_buy_confirm_button",
+        domain=TaskGapDomain.ASSET,
+        summary="Merchant commission meow still requires a truthful buy-confirm button anchor.",
+        builder_blocking=True,
+        implementation_blocking=True,
+        asset_anchor_id="daily_ui.merchant_commission_buy_confirm_button",
+    ),
+    "asset.daily_ui.merchant_commission_submit_button": _RequirementSpec(
+        requirement_id="asset.daily_ui.merchant_commission_submit_button",
+        domain=TaskGapDomain.ASSET,
+        summary="Merchant commission meow still requires a truthful submit button anchor.",
+        builder_blocking=True,
+        implementation_blocking=True,
+        asset_anchor_id="daily_ui.merchant_commission_submit_button",
+    ),
     "foundation.daily_ui.guild_order_visible_quantity_contract": _RequirementSpec(
         requirement_id="foundation.daily_ui.guild_order_visible_quantity_contract",
         domain=TaskGapDomain.FOUNDATION,
@@ -668,6 +780,7 @@ class TaskFoundationRepository:
             metadata["post_claim_resolution"] = dict(post_claim_resolution)
         metadata.update(self._claim_rewards_contract_metadata(blueprint))
         metadata.update(self._guild_order_contract_metadata(blueprint))
+        metadata.update(self._merchant_commission_meow_contract_metadata(blueprint))
         return metadata
 
     def _signal_contract_version(self, blueprint: TaskBlueprint) -> str:
@@ -1035,6 +1148,28 @@ class TaskFoundationRepository:
             "guild_order_visibility_contract",
             "guild_order_handoff_fields",
             "guild_order_spec_builders",
+        ):
+            value = blueprint.metadata.get(key)
+            if isinstance(value, dict):
+                metadata[key] = dict(value)
+            elif isinstance(value, list):
+                metadata[key] = [str(item) for item in value]
+        return metadata
+
+    def _merchant_commission_meow_contract_metadata(
+        self,
+        blueprint: TaskBlueprint,
+    ) -> dict[str, Any]:
+        if blueprint.task_id != "daily_ui.merchant_commission_meow":
+            return {}
+        metadata: dict[str, Any] = {}
+        for key in (
+            "merchant_commission_meow_route_contract",
+            "merchant_commission_meow_loop_contract",
+            "merchant_commission_meow_submission_policy",
+            "merchant_commission_meow_decision_contract",
+            "merchant_commission_meow_spec_builders",
+            "merchant_commission_meow_handoff_fields",
         ):
             value = blueprint.metadata.get(key)
             if isinstance(value, dict):
