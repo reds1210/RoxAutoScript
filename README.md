@@ -19,12 +19,14 @@ Docs to read before starting work:
 5. `docs/tracks/README.md`
 6. `docs/autonomy-loop.md`
 7. `docs/codex-subscription-setup.md`
+8. `docs/plain-language-glossary.md` for a Chinese-first plain-language reference
 
 Parallel development docs:
 
 - `docs/engine-roster.md`: fixed 4-engine roster, model policy, and current engine branch lineup
 - `docs/worktree-playbook.md`: branch, worktree, ownership, merge, and handoff rules
 - `docs/architecture-contracts.md`: shared interfaces and dependency boundaries
+- `docs/plain-language-glossary.md`: Chinese-first plain-language glossary for repo workflow and task names
 - `docs/tracks/`: concrete briefs for each worktree track
 - `docs/templates/worktree-handoff-template.md`: handoff format for commits and PRs
 
