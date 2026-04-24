@@ -1,13 +1,13 @@
 {
   "task_id": "daily_ui.guild_order_submit",
   "workflow": "daily-ui-guild-order-submit",
-  "reviewed_at": "2026-04-23",
+  "reviewed_at": "2026-04-24",
   "capture_round": "round-9",
   "adb_serial_reservations": {
     "primary_reserved_serial": "127.0.0.1:16480",
-    "fallback_reserved_serial": "127.0.0.1:16416",
-    "other_round_9_serials_not_used": [
-      "127.0.0.1:16448",
+    "primary_reserved_window_title": "healer-reds.wang",
+    "other_visible_serials_not_used": [
+      "127.0.0.1:16416",
       "127.0.0.1:16512"
     ]
   },
@@ -17,266 +17,145 @@
       "adb_visible_before_probe": true,
       "get_state": "device",
       "connect_attempt_required": false,
-      "observed_location": "sanctuary_2f",
-      "result": "reachable_but_no_guild_order_scene"
-    },
-    {
-      "adb_serial": "127.0.0.1:16416",
-      "adb_visible_before_probe": true,
-      "get_state": "device",
-      "connect_attempt_required": false,
-      "observed_location": "sanctuary_2f",
-      "result": "reachable_but_no_guild_order_scene"
+      "mapped_mumu_window_title": "healer-reds.wang",
+      "observed_location": "prontera",
+      "result": "reached_live_guild_order_submit_scene"
     }
   ],
   "current_truth": {
-    "guild_order_scene_status": "still_missing_live_target_scenes",
-    "navigation_status": "blocked_before_guild_hub_entry",
-    "material_surface_status": "not_capturable_from_this_probe",
-    "summary": "Both reserved devices were live and reachable, but the probe only captured pre-guild navigation surfaces from sanctuary_2f and did not reach any guild-order target UI."
+    "guild_order_scene_status": "reached_live_guild_order_submit_scene",
+    "navigation_status": "operator_route_confirmed_on_live_device",
+    "material_surface_status": "captured_live_material_label_required_quantity_available_count",
+    "submit_result_status": "captured_live_submit_result_state",
+    "summary": "The reserved healer MuMu on 127.0.0.1:16480 followed the reviewed live route from the top-right collapsible icon into Carnival, then into the guild panel Activity tab, and reached the guild-order submit screen with all four requested live surfaces captured."
   },
-  "capturable_probe_states": [
+  "reviewed_route": [
     {
-      "state_id": "world_combat_state",
-      "scene_type": "precondition_only",
-      "captured_on": [
-        {
-          "adb_serial": "127.0.0.1:16480",
-          "capture_path": "raw/127.0.0.1-16480-current.png"
-        },
-        {
-          "adb_serial": "127.0.0.1:16416",
-          "capture_path": "raw/127.0.0.1-16416-current.png"
-        }
-      ],
-      "notes": "Both devices started inside sanctuary_2f in an active combat-ready world state."
-    },
-    {
-      "state_id": "team_panel",
-      "scene_type": "navigation_probe_only",
-      "captured_on": [
-        {
-          "adb_serial": "127.0.0.1:16480",
-          "capture_path": "raw/127.0.0.1-16480-after-organize-tap.png"
-        },
-        {
-          "adb_serial": "127.0.0.1:16416",
-          "capture_path": "raw/127.0.0.1-16416-leftprobe-385.png"
-        }
-      ],
-      "notes": "The left-side Organize/Team entry reliably opened the team panel, not any guild-order surface."
-    },
-    {
-      "state_id": "character_profile_panel",
-      "scene_type": "navigation_probe_only",
-      "captured_on": [
-        {
-          "adb_serial": "127.0.0.1:16480",
-          "capture_path": "raw/127.0.0.1-16480-after-avatar-tap.png"
-        },
-        {
-          "adb_serial": "127.0.0.1:16416",
-          "capture_path": "raw/127.0.0.1-16416-char-sidebar-scroll-2.png"
-        }
-      ],
-      "notes": "Avatar taps opened character/profile panels only; no visible guild-order shortcut was exposed during this probe."
-    },
-    {
-      "state_id": "character_home_profile_page",
-      "scene_type": "navigation_probe_only",
-      "captured_on": [
-        {
-          "adb_serial": "127.0.0.1:16480",
-          "capture_path": "raw/127.0.0.1-16480-after-char-home.png"
-        }
-      ],
-      "notes": "The visible profile home route inside character info still did not expose guild-order UI."
-    },
-    {
-      "state_id": "map_info_panel",
-      "scene_type": "navigation_probe_only",
-      "captured_on": [
-        {
-          "adb_serial": "127.0.0.1:16480",
-          "capture_path": "raw/127.0.0.1-16480-after-map-tap.png"
-        },
-        {
-          "adb_serial": "127.0.0.1:16416",
-          "capture_path": "raw/127.0.0.1-16416-worldmap-probe.png"
-        }
-      ],
-      "notes": "Map taps consistently opened the current-floor map info panel for sanctuary_2f."
-    },
-    {
-      "state_id": "current_map_npc_panel",
-      "scene_type": "navigation_probe_only",
-      "captured_on": [
-        {
-          "adb_serial": "127.0.0.1:16480",
-          "capture_path": "raw/127.0.0.1-16480-after-map-npc-expand.png"
-        }
-      ],
-      "notes": "Expanding the current-map NPC panel did not reveal a guild-order NPC or guild-hub shortcut from the observed floor."
-    },
-    {
-      "state_id": "line_switch_panel",
-      "scene_type": "navigation_probe_only",
-      "captured_on": [
-        {
-          "adb_serial": "127.0.0.1:16416",
-          "capture_path": "raw/127.0.0.1-16416-after-house-tap.png"
-        }
-      ],
-      "notes": "The top-right house icon opened a line-switch panel for sanctuary_2f, not a guild or return-home action."
-    },
-    {
-      "state_id": "right_side_quick_item_drawer",
-      "scene_type": "navigation_probe_only",
-      "captured_on": [
-        {
-          "adb_serial": "127.0.0.1:16480",
-          "capture_path": "raw/127.0.0.1-16480-after-right-drawer.png"
-        }
-      ],
-      "notes": "The right-edge drawer exposed quick item slots only."
-    }
-  ],
-  "navigation_probes": [
-    {
-      "adb_serial": "127.0.0.1:16480",
-      "action": "tap_right_book_icon",
-      "capture_path": "raw/127.0.0.1-16480-after-book-tap.png",
-      "outcome": "no_useful_transition"
-    },
-    {
-      "adb_serial": "127.0.0.1:16480",
-      "action": "tap_left_organize_entry",
-      "capture_path": "raw/127.0.0.1-16480-after-organize-tap.png",
-      "outcome": "opened_team_panel"
-    },
-    {
-      "adb_serial": "127.0.0.1:16480",
-      "action": "send_android_menu_key",
-      "capture_path": "raw/127.0.0.1-16480-after-menu-key.png",
-      "outcome": "no_guild_menu_exposed"
-    },
-    {
-      "adb_serial": "127.0.0.1:16480",
-      "action": "tap_avatar_then_main_profile_routes",
+      "step_id": "expand_top_right_entry",
       "capture_paths": [
-        "raw/127.0.0.1-16480-after-avatar-tap.png",
-        "raw/127.0.0.1-16480-after-char-home.png",
-        "raw/127.0.0.1-16480-after-char-star.png"
+        "raw/127.0.0.1-16480-step14-before-expand-reroute.png",
+        "raw/127.0.0.1-16480-step14-after-expand-reroute.png"
       ],
-      "outcome": "opened_character_panels_only"
+      "outcome": "opened_collapsible_entry_grid"
     },
     {
-      "adb_serial": "127.0.0.1:16480",
-      "action": "tap_map_then_probe_npc_and_worldmap",
+      "step_id": "enter_carnival",
+      "capture_path": "raw/127.0.0.1-16480-step15-after-carnival-reroute.png",
+      "outcome": "reached_carnival_hub"
+    },
+    {
+      "step_id": "open_guild_order_card",
+      "capture_path": "raw/127.0.0.1-16480-step16-after-guild-order-card-reroute.png",
+      "outcome": "opened_guild_order_entry_modal"
+    },
+    {
+      "step_id": "enter_guild_panel",
+      "capture_path": "raw/127.0.0.1-16480-step17-after-go-guild-panel-reroute.png",
+      "outcome": "reached_guild_panel_with_three_tabs"
+    },
+    {
+      "step_id": "switch_to_activity_tab",
+      "capture_path": "raw/127.0.0.1-16480-step18-after-activity-tab.png",
+      "outcome": "reached_guild_activity_cards"
+    },
+    {
+      "step_id": "open_guild_order_submit_scene",
+      "capture_path": "raw/127.0.0.1-16480-step19-after-guild-order-go.png",
+      "outcome": "reached_live_guild_order_list_and_detail_scene"
+    },
+    {
+      "step_id": "submit_one_order",
       "capture_paths": [
-        "raw/127.0.0.1-16480-after-map-tap.png",
-        "raw/127.0.0.1-16480-after-map-npc-expand.png",
-        "raw/127.0.0.1-16480-after-map-task-expand.png",
-        "raw/127.0.0.1-16480-after-worldmap-tap.png",
-        "raw/127.0.0.1-16480-after-worldmap-tap-2.png"
+        "raw/127.0.0.1-16480-step20-after-submit-once.png",
+        "raw/127.0.0.1-16480-step21-stable-submitted-state.png"
       ],
-      "outcome": "remained_on_current_floor_map"
-    },
-    {
-      "adb_serial": "127.0.0.1:16480",
-      "action": "dump_uiautomator_tree",
-      "capture_path": "raw/127.0.0.1-16480-ui.xml",
-      "outcome": "unity_surface_only_no_clickable_game_nodes"
-    },
-    {
-      "adb_serial": "127.0.0.1:16416",
-      "action": "tap_house_icon",
-      "capture_path": "raw/127.0.0.1-16416-after-house-tap.png",
-      "outcome": "opened_line_switch_panel"
-    },
-    {
-      "adb_serial": "127.0.0.1:16416",
-      "action": "tap_avatar_then_scroll_sidebar",
-      "capture_paths": [
-        "raw/127.0.0.1-16416-char-sidebar-scroll.png",
-        "raw/127.0.0.1-16416-char-sidebar-scroll-2.png"
-      ],
-      "outcome": "no_guild_route_found"
-    },
-    {
-      "adb_serial": "127.0.0.1:16416",
-      "action": "tap_left_team_entry",
-      "capture_path": "raw/127.0.0.1-16416-leftprobe-385.png",
-      "outcome": "opened_team_panel"
-    },
-    {
-      "adb_serial": "127.0.0.1:16416",
-      "action": "tap_map_then_probe_worldmap",
-      "capture_path": "raw/127.0.0.1-16416-worldmap-probe.png",
-      "outcome": "remained_on_current_floor_map"
+      "outcome": "captured_live_submit_result_state"
     }
   ],
   "guild_order_target_states": [
     {
       "state_id": "guild_hub_entry",
-      "status": "missing",
-      "reason": "No probe in this pass reached a guild hub or guild-hall entry surface."
+      "status": "captured",
+      "capture_path": "raw/127.0.0.1-16480-step17-after-go-guild-panel-reroute.png",
+      "reason": "The guild panel with the three top tabs is visible before switching to Activity."
     },
     {
       "state_id": "guild_order_list",
-      "status": "missing",
-      "reason": "Guild-order list UI was never reached."
+      "status": "captured",
+      "capture_path": "raw/127.0.0.1-16480-step19-after-guild-order-go.png",
+      "reason": "The live guild-order grid is visible with multiple order cards."
     },
     {
       "state_id": "guild_order_detail",
-      "status": "missing",
-      "reason": "Guild-order detail UI was never reached."
+      "status": "captured",
+      "capture_path": "raw/127.0.0.1-16480-step19-after-guild-order-go.png",
+      "reason": "The right-side detail panel is visible at the same time as the grid."
     },
     {
       "state_id": "submit_affordance",
-      "status": "missing",
-      "reason": "No guild-order submit button or equivalent live affordance became visible."
+      "status": "captured",
+      "capture_path": "raw/127.0.0.1-16480-step19-after-guild-order-go.png",
+      "reason": "A live green submit button is visible on the right-side detail panel."
     },
     {
       "state_id": "refresh_affordance",
       "status": "missing",
-      "reason": "No guild-order refresh affordance became visible."
+      "reason": "This pass stayed on the first live order and did not probe refresh."
     },
     {
       "state_id": "unavailable_state",
       "status": "missing",
-      "reason": "No already-complete or unavailable guild-order state became visible."
+      "reason": "No unavailable or already-closed order state was probed in this pass."
     },
     {
       "state_id": "insufficient_material_feedback",
       "status": "missing",
-      "reason": "No insufficient-materials feedback state became visible."
+      "reason": "The reviewed order had enough materials, so insufficient-material feedback was not triggered."
     },
     {
       "state_id": "submit_result_state",
-      "status": "missing",
-      "reason": "No submit-result or accepted-order result state became visible."
+      "status": "captured",
+      "capture_paths": [
+        "raw/127.0.0.1-16480-step20-after-submit-once.png",
+        "raw/127.0.0.1-16480-step21-stable-submitted-state.png"
+      ],
+      "reason": "The submitted order shows a live submitted badge and the order selection advances to the next live requirement."
     }
   ],
   "material_surfaces": [
     {
       "surface_id": "guild_order_requirement_material",
-      "status": "missing",
-      "reason": "No guild-order detail panel was reached."
+      "status": "captured",
+      "capture_path": "raw/127.0.0.1-16480-step19-after-guild-order-go.png",
+      "observed_value": "\u67d3\u8840\u5de8\u89d2"
     },
     {
       "surface_id": "guild_order_required_quantity",
-      "status": "missing",
-      "reason": "No guild-order detail panel was reached."
+      "status": "captured",
+      "capture_path": "raw/127.0.0.1-16480-step19-after-guild-order-go.png",
+      "observed_value": "50"
     },
     {
       "surface_id": "guild_order_available_material_count",
-      "status": "missing",
-      "reason": "No stable material-count surface became visible."
+      "status": "captured",
+      "capture_path": "raw/127.0.0.1-16480-step19-after-guild-order-go.png",
+      "observed_value": "5512"
     }
   ],
+  "successful_submit_result": {
+    "submitted_material": "\u67d3\u8840\u5de8\u89d2",
+    "required_quantity": 50,
+    "available_before_submit": 5512,
+    "available_after_submit_card": 5462,
+    "result_evidence": "The previously selected order turns into a dimmed submitted card while the detail panel advances to the next order."
+  },
+  "remaining_gaps": [
+    "guild_order_refresh_affordance",
+    "guild_order_unavailable_state",
+    "guild_order_insufficient_material_feedback"
+  ],
   "recommended_next_step": {
-    "kind": "capture_or_operator_followup",
-    "summary": "Keep the contract blocked until a reserved device can actually reach guild hub or guild-order UI. The cleanest next evidence target is a device parked at or near Guild Hall before the probe starts."
+    "kind": "contract_promotion_or_additional_live_probe",
+    "summary": "Engine C can now review live captures for guild hub entry, guild-order list/detail, submit affordance, material label, required quantity, available count, and submit-result state. Refresh, unavailable, and insufficient-material states still need a separate reviewed pass."
   }
 }

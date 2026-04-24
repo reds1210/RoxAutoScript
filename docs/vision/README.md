@@ -172,12 +172,12 @@ Current sample coverage:
 - `daily_ui.claim_reward` now ships as a curated PNG crop plus one approved live zh-TW ROX baseline image for the tappable claim button scene, with live negative-case supporting evidence tracked in the golden catalog
 - `daily_ui.reward_confirm_state` now ships as a curated PNG crop plus one curated screenshot-style baseline image for the confirmation modal scene
 - `docs/vision/claim_rewards_live/raw/` now keeps the supporting live capture trail for this task only
-- `docs/vision/guild_order_material_logic/guild_order_live_evidence_packet.json` now records the first reviewed round-9 Engine E live probe on reserved serials `127.0.0.1:16480` and `127.0.0.1:16416`
-- `docs/vision/guild_order_material_logic/raw/` now keeps the supporting probe trail for guild-order navigation, even though this pass did not reach any target guild-order scene
+- `docs/vision/guild_order_material_logic/guild_order_live_evidence_packet.json` now records a reviewed successful round-9 Engine E route on reserved serial `127.0.0.1:16480`
+- `docs/vision/guild_order_material_logic/raw/` now keeps the supporting reviewed route and submit-result trail for live guild-order navigation
 - `assets/templates/daily_ui/goldens/claim_rewards/live/` now also carries supporting live negative-case captures for a non-claimable daily-sign-in panel, the wrong reward surface, a non-reward confirmation modal, and one alternate post-tap reward overlay
 - `daily_ui.guild_check_in_button` placeholder template now exists under `assets/templates/daily_ui/`
 - `daily_ui.guild_order_submit` now has a truthful first-cut placeholder-only scene contract covering the guild hub entry, order list/detail, submit/refresh affordances, unavailable state, insufficient-material feedback, and submit-result state
-- material requirement labels, required quantities, and available-count surfaces remain explicitly blocked until reviewed live evidence lands
+- material requirement labels, required quantities, and available-count surfaces remain blocked in the shipped manifest until reviewed live evidence is promoted into the contract
 - `odin.start_button` placeholder template exists
 - the current asset inventory in this worktree aligns with the shipped claim-rewards anchors, so readiness no longer needs a special-case mismatch note for `daily_ui.claim_reward`
 
@@ -275,7 +275,7 @@ The same contract now also carries a finer-grained truth matrix:
 
 This lets the vision layer expose the full first-cut state inventory without pretending that live guild-order material evidence already exists in this worktree. The placeholder anchors are valid scaffolding for readiness, inspection, and future GUI/runtime wiring, but they must not be treated as promoted live proof until Engine E lands reviewed guild-order evidence.
 
-Engine E has now landed an initial reviewed live probe packet under `docs/vision/guild_order_material_logic/`, but that packet truthfully records only pre-guild navigation surfaces from `神殿聖域2F`. No guild-order list/detail/submit/refresh/result scene or material-count surface was reached in that pass, so the contract remains `placeholder_only` and the material surfaces remain blocked.
+Engine E has now landed a reviewed live packet under `docs/vision/guild_order_material_logic/` that reaches the guild panel, the guild Activity cards, the guild-order list/detail scene, the submit affordance, the material label, the required quantity, the available count, and a stable submitted result state on `127.0.0.1:16480`. The manifest contract remains `placeholder_only` in this pass because the evidence-promotion step was intentionally left to follow-up work.
 
 `catalog.json` is the machine-readable index for the three shipped claim-rewards baselines. It records:
 

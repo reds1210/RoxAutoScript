@@ -1,120 +1,94 @@
 # Guild Order Material Logic Notes
 
-This folder documents the current Engine C vision contract for `daily_ui.guild_order_submit`.
+This folder documents the reviewed live evidence currently available for `daily_ui.guild_order_submit`.
 
-## 2026-04-23 Engine E Live Probe
+## 2026-04-24 Reviewed Live Evidence
 
 Machine-readable evidence packet:
 
 - `guild_order_live_evidence_packet.json`
 
-Reserved serials used in this pass:
+Reserved serial used in this pass:
 
 - primary:
   - `127.0.0.1:16480`
-- fallback:
-  - `127.0.0.1:16416`
+  - MuMu window label: `healer-reds.wang`
 
-Current truthful outcome from the live probe:
+Current truthful outcome from the reviewed live route:
 
-- both reserved devices were reachable through `adb`
-- both reserved devices started in `sanctuary_2f`
-- this pass captured only pre-guild navigation surfaces:
-  - world/combat state
-  - team panel
-  - character profile or home panel
-  - map info
-  - current-map NPC list
-  - line-switch panel
-- no live guild-order target scene was reached
-- no live material label, required-quantity, or available-count surface was reached
+- the reserved healer MuMu was reachable through `adb`
+- the pass started from a live world scene in `prontera`
+- the reviewed route successfully reached:
+  - the top-right collapsible entry grid
+  - the Carnival hub
+  - the guild panel with three tabs
+  - the guild Activity tab
+  - the live guild-order submit scene
+- this pass captured the four requested live surfaces:
+  - material name
+  - required quantity
+  - available quantity
+  - submit result state
 
-Reviewed raw probe trail:
+Reviewed raw trail for the successful route:
 
-- `raw/127.0.0.1-16480-current.png`
-- `raw/127.0.0.1-16480-after-organize-tap.png`
-- `raw/127.0.0.1-16480-after-avatar-tap.png`
-- `raw/127.0.0.1-16480-after-char-home.png`
-- `raw/127.0.0.1-16480-after-map-tap.png`
-- `raw/127.0.0.1-16480-after-map-npc-expand.png`
-- `raw/127.0.0.1-16480-after-right-drawer.png`
-- `raw/127.0.0.1-16480-ui.xml`
-- `raw/127.0.0.1-16416-current.png`
-- `raw/127.0.0.1-16416-leftprobe-385.png`
-- `raw/127.0.0.1-16416-char-sidebar-scroll-2.png`
-- `raw/127.0.0.1-16416-after-house-tap.png`
-- `raw/127.0.0.1-16416-worldmap-probe.png`
+- `raw/127.0.0.1-16480-step14-before-expand-reroute.png`
+- `raw/127.0.0.1-16480-step14-after-expand-reroute.png`
+- `raw/127.0.0.1-16480-step15-after-carnival-reroute.png`
+- `raw/127.0.0.1-16480-step16-after-guild-order-card-reroute.png`
+- `raw/127.0.0.1-16480-step17-after-go-guild-panel-reroute.png`
+- `raw/127.0.0.1-16480-step18-after-activity-tab.png`
+- `raw/127.0.0.1-16480-step19-after-guild-order-go.png`
+- `raw/127.0.0.1-16480-step20-after-submit-once.png`
+- `raw/127.0.0.1-16480-step21-stable-submitted-state.png`
 
 ## Current Truthful Status
 
-- a reviewed Engine E guild-order evidence packet now exists in this worktree
-- that packet still proves no guild-order target scene has been reached yet
-- the current contract is `placeholder_only`
-- material-driven decision surfaces remain blocked instead of being guessed
+- a reviewed Engine E guild-order evidence packet now exists for a successful live route
+- the current packet proves the worktree now has live evidence for:
+  - guild hub entry
+  - guild-order list and detail
+  - submit affordance
+  - material label
+  - required quantity
+  - available quantity
+  - submit result state
+- this pass did not probe:
+  - refresh affordance
+  - unavailable state
+  - insufficient-material feedback
 
-## Current Scene Contract
+## Current Manifest Contract
 
 Manifest source:
 
 - `assets/templates/daily_ui/manifest.json`
 - `metadata.task_support["daily_ui.guild_order_submit"].scene_contract`
 
-Machine-readable state:
+Machine-readable state still shipped in code:
 
 - `evidence_state`: `placeholder_only`
 - `decision_surface_state`: `blocked_by_missing_material_evidence`
-- `ready_anchor_ids`: none
-- `blocked_anchor_ids`: none
 
-Placeholder anchors:
+That contract has not been promoted in this pass. This branch intentionally adds reviewed live evidence only; it does not yet change the manifest-level placeholder or blocked partitions.
 
-- `daily_ui.guild_order_hub_entry`
-- `daily_ui.guild_order_list_panel`
-- `daily_ui.guild_order_detail_panel`
-- `daily_ui.guild_order_submit_button`
-- `daily_ui.guild_order_refresh_button`
-- `daily_ui.guild_order_unavailable_state`
-- `daily_ui.guild_order_insufficient_material_feedback`
-- `daily_ui.guild_order_submit_result_state`
+## What The New Evidence Proves
 
-Required first-cut scenes:
-
-- `guild_hub_entry`
-- `guild_order_list`
-- `guild_order_detail`
-- `guild_order_submit_affordance`
-- `guild_order_refresh_affordance`
-- `guild_order_unavailable_state`
-- `guild_order_insufficient_material_feedback`
-- `guild_order_submit_result_state`
-
-Explicitly blocked material surfaces:
-
-- `guild_order_requirement_material`
-- `guild_order_required_quantity`
-- `guild_order_available_material_count`
-
-Per-scene and per-surface truth status:
-
-- `scene_truth`
-  - all eight required guild-order scenes currently resolve to `placeholder_anchor_only`
-  - this includes `guild_order_submit_result_state`; it has a placeholder scaffold, but the reviewed live probe still records the scene as `missing`
-- `surface_truth`
-  - `guild_order_requirement_material`
-  - `guild_order_required_quantity`
-  - `guild_order_available_material_count`
-  - all three currently resolve to `blocked_missing_live_evidence`
-  - the reviewed live probe still records each one as `missing`
-
-## Why The Contract Stays Blocked
-
-- the new Engine E packet shows only pre-guild navigation surfaces from `sanctuary_2f`
-- without reviewed live guild-order target captures, Engine C can only ship truthful scaffolding
-- visible material labels and counts are important to `submit` versus `refresh` semantics, so they stay blocked until live proof exists
+- the live route `top-right entry -> Carnival -> guild-order card -> go -> guild panel -> Activity tab -> guild-order go` is reproducible on the reserved healer MuMu
+- the guild-order screen can show list and detail at the same time
+- one reviewed live order showed:
+  - a stable zh-TW material label on the selected order, recorded in `step19`
+  - required quantity: `50`
+  - available quantity before submit: `5512`
+- after one live submit:
+  - the previously selected order changed into a submitted state, recorded in `step20` and `step21`
+  - the grid advanced to the next live order
 
 ## Expected Follow-Up
 
-- Engine E has now landed a reviewed live probe with exact device provenance, but it did not reach guild-order target scenes
-- the next Engine E pass should start from a reserved device that can actually reach Guild Hall or another confirmed guild-order entry route
-- once real captures exist, Engine C can move anchors from `placeholder_anchor_ids` into `ready_anchor_ids` or `blocked_anchor_ids`
-- Engine D should keep task readiness aligned with this contract and must not assume material-count visibility before the evidence exists
+- Engine C can now review and promote the scenes or surfaces that are truly proven in `guild_order_live_evidence_packet.json`
+- Engine D can stop treating material name, required quantity, available quantity, and submit-result visibility as unsupported once Engine C promotion lands
+- a later Engine E pass should still capture:
+  - refresh affordance
+  - unavailable state
+  - insufficient-material feedback
