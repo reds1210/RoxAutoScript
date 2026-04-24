@@ -1,29 +1,44 @@
 from __future__ import annotations
 
+from pathlib import Path
 import unittest
 
 import tests._bootstrap  # noqa: F401
 from roxauto.tasks import TaskFoundationRepository, TaskReadinessState
 from roxauto.tasks.daily_ui import (
+    MerchantCommissionMeowActiveRoundResolution,
+    MerchantCommissionMeowActiveRoundNavigationPlan,
     MerchantCommissionMeowDecisionReason,
     MerchantCommissionMeowDecisionValue,
+    MerchantCommissionMeowEntryNavigationPlan,
+    MerchantCommissionMeowFullRunNavigationPlan,
     MerchantCommissionMeowRoundEvidence,
     MerchantCommissionMeowLoopContract,
     MerchantCommissionMeowRouteContract,
     MerchantCommissionMeowSubmissionPolicy,
+    MerchantCommissionMeowSubmitPanelNavigationPlan,
+    MerchantCommissionMeowSubmitPanelInspection,
+    MerchantCommissionMeowSubmitPanelResolution,
+    MerchantCommissionMeowSubmitPanelProgressState,
     build_merchant_commission_meow_specification,
     evaluate_merchant_commission_meow_round_decision,
+    inspect_merchant_commission_meow_submit_panel_progress,
     load_merchant_commission_meow_blueprint,
     load_merchant_commission_meow_decision_contract,
     load_merchant_commission_meow_loop_contract,
     load_merchant_commission_meow_route_contract,
     load_merchant_commission_meow_submission_policy,
+    resolve_merchant_commission_meow_active_round,
+    resolve_merchant_commission_meow_entry_accept,
+    resolve_merchant_commission_meow_from_main_screen,
+    resolve_merchant_commission_meow_submit_panel,
 )
 
 
 class MerchantCommissionMeowFoundationsTests(unittest.TestCase):
     def setUp(self) -> None:
         self.repository = TaskFoundationRepository.load_default()
+        self.fixture_root = Path(__file__).resolve().parents[2] / "fixtures" / "merchant_commission_meow"
 
     def test_loads_merchant_commission_meow_blueprint_and_contracts(self) -> None:
         blueprint = load_merchant_commission_meow_blueprint(self.repository)
@@ -272,3 +287,284 @@ class MerchantCommissionMeowFoundationsTests(unittest.TestCase):
         self.assertEqual(restored_loop_contract.merchant_group_label, "Meow Group")
         self.assertEqual(restored_loop_contract.round_limit, 10)
         self.assertEqual(restored_loop_contract.verified_material_labels, ["ore_extract", "amber"])
+
+    def test_inspects_submit_panel_progress_as_incomplete_for_partial_inventory(self) -> None:
+        inspection = inspect_merchant_commission_meow_submit_panel_progress(
+            self.fixture_root / "submit_panel_partial_7_of_15.png"
+        )
+
+        self.assertEqual(
+            inspection.progress_state,
+            MerchantCommissionMeowSubmitPanelProgressState.INCOMPLETE,
+        )
+        self.assertGreater(inspection.numerator_ink, 40)
+        self.assertGreater(inspection.denominator_ink, 40)
+        self.assertLess(inspection.normalized_similarity, 0.5)
+
+    def test_inspects_submit_panel_progress_as_full_for_ready_inventory(self) -> None:
+        inspection = inspect_merchant_commission_meow_submit_panel_progress(
+            self.fixture_root / "submit_panel_full_15_of_15.png"
+        )
+
+        self.assertEqual(
+            inspection.progress_state,
+            MerchantCommissionMeowSubmitPanelProgressState.FULL,
+        )
+        self.assertGreaterEqual(inspection.normalized_similarity, 0.5)
+
+    def test_inspects_submit_panel_progress_as_incomplete_for_empty_inventory_feedback(self) -> None:
+        inspection = inspect_merchant_commission_meow_submit_panel_progress(
+            self.fixture_root / "submit_panel_empty_0_of_15.png"
+        )
+
+        self.assertEqual(
+            inspection.progress_state,
+            MerchantCommissionMeowSubmitPanelProgressState.INCOMPLETE,
+        )
+        self.assertGreaterEqual(
+            float(inspection.metadata.get("empty_feedback_score", 0.0)),
+            0.9,
+        )
+
+    def test_resolve_submit_panel_buys_then_submits_for_incomplete_inventory(self) -> None:
+        adapter = _FakeSubmitPanelAdapter(
+            self.fixture_root / "submit_panel_partial_7_of_15.png"
+        )
+
+        resolution = resolve_merchant_commission_meow_submit_panel(
+            adapter=adapter,
+            instance=object(),
+            navigation_plan=MerchantCommissionMeowSubmitPanelNavigationPlan(
+                buy_now_point=(1, 2),
+                buy_confirm_point=(3, 4),
+                submit_point=(5, 6),
+                wait_after_buy_sec=0.0,
+                wait_after_confirm_sec=0.0,
+            ),
+            sleep_fn=lambda seconds: None,
+        )
+
+        self.assertEqual(
+            resolution.decision,
+            MerchantCommissionMeowDecisionValue.IMMEDIATE_BUY_THEN_SUBMIT,
+        )
+        self.assertEqual(adapter.taps, [(1, 2), (3, 4), (5, 6)])
+
+    def test_resolve_submit_panel_direct_submits_for_full_inventory(self) -> None:
+        adapter = _FakeSubmitPanelAdapter(
+            self.fixture_root / "submit_panel_full_15_of_15.png"
+        )
+
+        resolution = resolve_merchant_commission_meow_submit_panel(
+            adapter=adapter,
+            instance=object(),
+            navigation_plan=MerchantCommissionMeowSubmitPanelNavigationPlan(
+                buy_now_point=(1, 2),
+                buy_confirm_point=(3, 4),
+                submit_point=(5, 6),
+            ),
+            sleep_fn=lambda seconds: None,
+        )
+
+        self.assertEqual(
+            resolution.decision,
+            MerchantCommissionMeowDecisionValue.DIRECT_SUBMIT,
+        )
+        self.assertEqual(adapter.taps, [(5, 6)])
+
+    def test_resolve_active_round_enters_task_then_resolves_submit_panel(self) -> None:
+        adapter = _FakeSubmitPanelAdapter(
+            self.fixture_root / "submit_panel_partial_7_of_15.png"
+        )
+
+        resolution = resolve_merchant_commission_meow_active_round(
+            adapter=adapter,
+            instance=object(),
+            navigation_plan=MerchantCommissionMeowActiveRoundNavigationPlan(
+                task_entry_point=(10, 11),
+                submit_option_point=(12, 13),
+                wait_after_task_entry_sec=0.0,
+                wait_after_submit_option_sec=0.0,
+                submit_panel_plan=MerchantCommissionMeowSubmitPanelNavigationPlan(
+                    buy_now_point=(1, 2),
+                    buy_confirm_point=(3, 4),
+                    submit_point=(5, 6),
+                    wait_after_buy_sec=0.0,
+                    wait_after_confirm_sec=0.0,
+                ),
+            ),
+            sleep_fn=lambda seconds: None,
+        )
+
+        self.assertEqual(
+            resolution.submit_panel_resolution.decision,
+            MerchantCommissionMeowDecisionValue.IMMEDIATE_BUY_THEN_SUBMIT,
+        )
+        self.assertEqual(adapter.taps, [(10, 11), (12, 13), (1, 2), (3, 4), (5, 6)])
+
+    def test_round_trips_active_round_resolution(self) -> None:
+        resolution = MerchantCommissionMeowActiveRoundResolution(
+            submit_panel_resolution=MerchantCommissionMeowSubmitPanelResolution(
+                decision=MerchantCommissionMeowDecisionValue.DIRECT_SUBMIT,
+                inspection=MerchantCommissionMeowSubmitPanelInspection(
+                    screenshot_path="submit.png",
+                    progress_state=MerchantCommissionMeowSubmitPanelProgressState.FULL,
+                    numerator_ink=88,
+                    denominator_ink=90,
+                    normalized_similarity=0.95,
+                    metadata={"fixture": "full"},
+                ),
+                executed_points=[(5, 6)],
+                metadata={"path": "submit_only"},
+            ),
+            executed_points=[(10, 11), (12, 13), (5, 6)],
+            metadata={"step": "active_round"},
+        )
+
+        restored = MerchantCommissionMeowActiveRoundResolution.from_dict(
+            resolution.to_dict()
+        )
+
+        self.assertEqual(
+            restored.submit_panel_resolution.decision,
+            MerchantCommissionMeowDecisionValue.DIRECT_SUBMIT,
+        )
+        self.assertEqual(restored.executed_points, [(10, 11), (12, 13), (5, 6)])
+        self.assertEqual(restored.metadata, {"step": "active_round"})
+
+    def test_resolve_entry_accept_follows_validated_meow_route(self) -> None:
+        adapter = _FakeSubmitPanelAdapter(
+            self.fixture_root / "submit_panel_partial_7_of_15.png"
+        )
+
+        resolution = resolve_merchant_commission_meow_entry_accept(
+            adapter=adapter,
+            instance=object(),
+            navigation_plan=MerchantCommissionMeowEntryNavigationPlan(
+                activity_button_point=(1, 2),
+                carnival_entry_point=(3, 4),
+                merchant_commission_icon_point=(5, 6),
+                go_now_point=(7, 8),
+                npc_commission_option_point=(9, 10),
+                meow_accept_point=(11, 12),
+                close_list_point=(13, 14),
+                expand_task_tab_point=(15, 16),
+                task_list_swipe_start=(17, 18),
+                task_list_swipe_end=(19, 20),
+                task_list_swipe_duration_ms=321,
+                wait_after_activity_open_sec=0.0,
+                wait_after_carnival_sec=0.0,
+                wait_after_merchant_detail_sec=0.0,
+                wait_after_go_now_sec=0.0,
+                wait_after_npc_option_sec=0.0,
+                wait_after_accept_sec=0.0,
+                wait_after_close_list_sec=0.0,
+                wait_after_expand_task_tab_sec=0.0,
+                wait_after_task_swipe_sec=0.0,
+            ),
+            sleep_fn=lambda seconds: None,
+        )
+
+        self.assertEqual(
+            adapter.taps,
+            [(1, 2), (3, 4), (5, 6), (7, 8), (9, 10), (11, 12), (13, 14), (15, 16)],
+        )
+        self.assertEqual(adapter.swipes, [((17, 18), (19, 20), 321)])
+        self.assertEqual(
+            resolution.executed_points,
+            [(1, 2), (3, 4), (5, 6), (7, 8), (9, 10), (11, 12), (13, 14), (15, 16)],
+        )
+
+    def test_resolve_from_main_screen_accepts_then_completes_one_round(self) -> None:
+        adapter = _FakeSubmitPanelAdapter(
+            self.fixture_root / "submit_panel_partial_7_of_15.png"
+        )
+
+        resolution = resolve_merchant_commission_meow_from_main_screen(
+            adapter=adapter,
+            instance=object(),
+            navigation_plan=MerchantCommissionMeowFullRunNavigationPlan(
+                entry_plan=MerchantCommissionMeowEntryNavigationPlan(
+                    activity_button_point=(1, 2),
+                    carnival_entry_point=(3, 4),
+                    merchant_commission_icon_point=(5, 6),
+                    go_now_point=(7, 8),
+                    npc_commission_option_point=(9, 10),
+                    meow_accept_point=(11, 12),
+                    close_list_point=(13, 14),
+                    expand_task_tab_point=(15, 16),
+                    task_list_swipe_start=(17, 18),
+                    task_list_swipe_end=(19, 20),
+                    task_list_swipe_duration_ms=321,
+                    wait_after_activity_open_sec=0.0,
+                    wait_after_carnival_sec=0.0,
+                    wait_after_merchant_detail_sec=0.0,
+                    wait_after_go_now_sec=0.0,
+                    wait_after_npc_option_sec=0.0,
+                    wait_after_accept_sec=0.0,
+                    wait_after_close_list_sec=0.0,
+                    wait_after_expand_task_tab_sec=0.0,
+                    wait_after_task_swipe_sec=0.0,
+                ),
+                active_round_plan=MerchantCommissionMeowActiveRoundNavigationPlan(
+                    task_entry_point=(21, 22),
+                    submit_option_point=(23, 24),
+                    wait_after_task_entry_sec=0.0,
+                    wait_after_submit_option_sec=0.0,
+                    submit_panel_plan=MerchantCommissionMeowSubmitPanelNavigationPlan(
+                        buy_now_point=(25, 26),
+                        buy_confirm_point=(27, 28),
+                        submit_point=(29, 30),
+                        wait_after_buy_sec=0.0,
+                        wait_after_confirm_sec=0.0,
+                    ),
+                ),
+            ),
+            sleep_fn=lambda seconds: None,
+        )
+
+        self.assertEqual(
+            resolution.active_round_resolution.submit_panel_resolution.decision,
+            MerchantCommissionMeowDecisionValue.IMMEDIATE_BUY_THEN_SUBMIT,
+        )
+        self.assertEqual(
+            adapter.taps,
+            [
+                (1, 2),
+                (3, 4),
+                (5, 6),
+                (7, 8),
+                (9, 10),
+                (11, 12),
+                (13, 14),
+                (15, 16),
+                (21, 22),
+                (23, 24),
+                (25, 26),
+                (27, 28),
+                (29, 30),
+            ],
+        )
+        self.assertEqual(adapter.swipes, [((17, 18), (19, 20), 321)])
+
+
+class _FakeSubmitPanelAdapter:
+    def __init__(self, screenshot_path: Path) -> None:
+        self._screenshot_path = screenshot_path
+        self.taps: list[tuple[int, int]] = []
+        self.swipes: list[tuple[tuple[int, int], tuple[int, int], int]] = []
+
+    def capture_screenshot(self, instance: object) -> Path:
+        return self._screenshot_path
+
+    def tap(self, instance: object, point: tuple[int, int]) -> None:
+        self.taps.append(point)
+
+    def swipe(
+        self,
+        instance: object,
+        start: tuple[int, int],
+        end: tuple[int, int],
+        duration_ms: int = 250,
+    ) -> None:
+        self.swipes.append((start, end, duration_ms))
