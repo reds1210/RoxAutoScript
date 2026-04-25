@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from importlib import import_module
 from json import loads
 from pathlib import Path, PurePosixPath
 from typing import Any, Self
@@ -463,6 +464,7 @@ class TaskFoundationRepository:
             requirement = self._evaluate_requirement(
                 requirement_id,
                 asset_records=asset_records,
+                builder_input=builder_input,
                 blocking=True,
             )
             if requirement is not None:
@@ -473,6 +475,7 @@ class TaskFoundationRepository:
             requirement = self._evaluate_requirement(
                 requirement_id,
                 asset_records=asset_records,
+                builder_input=builder_input,
                 blocking=True,
             )
             if requirement is not None:
@@ -482,6 +485,7 @@ class TaskFoundationRepository:
             requirement = self._evaluate_requirement(
                 requirement_id,
                 asset_records=asset_records,
+                builder_input=builder_input,
                 blocking=True,
             )
             if requirement is not None:
@@ -491,6 +495,7 @@ class TaskFoundationRepository:
             requirement = self._evaluate_requirement(
                 requirement_id,
                 asset_records=asset_records,
+                builder_input=builder_input,
                 blocking=True,
             )
             if requirement is not None:
@@ -622,6 +627,7 @@ class TaskFoundationRepository:
         requirement_id: str,
         *,
         asset_records: list[TaskAssetRecord],
+        builder_input: TaskRuntimeBuilderInput,
         blocking: bool,
     ) -> TaskReadinessRequirement | None:
         spec = _REQUIREMENT_SPECS.get(requirement_id)
@@ -634,8 +640,17 @@ class TaskFoundationRepository:
                 blocking=blocking,
                 details="Requirement id is not registered in the task foundation catalog.",
             )
-        satisfied = self._requirement_satisfied(spec, asset_records)
-        details = self._requirement_details(spec, asset_records, satisfied)
+        satisfied = self._requirement_satisfied(
+            spec,
+            asset_records,
+            builder_input=builder_input,
+        )
+        details = self._requirement_details(
+            spec,
+            asset_records,
+            satisfied,
+            builder_input=builder_input,
+        )
         return TaskReadinessRequirement(
             requirement_id=spec.requirement_id,
             domain=spec.domain,
@@ -650,6 +665,8 @@ class TaskFoundationRepository:
         self,
         spec: _RequirementSpec,
         asset_records: list[TaskAssetRecord],
+        *,
+        builder_input: TaskRuntimeBuilderInput,
     ) -> bool:
         if spec.domain is TaskGapDomain.ASSET and spec.asset_anchor_id:
             record = self._template_anchor_record(asset_records, spec.asset_anchor_id)
@@ -685,11 +702,15 @@ class TaskFoundationRepository:
                 ],
             )
         if spec.requirement_id == "runtime.daily_ui.dispatch_bridge":
-            try:
-                from roxauto.tasks.daily_ui import has_claim_rewards_runtime_bridge
-            except ImportError:
+            probe_path = self._runtime_bridge_probe_path(builder_input)
+            if not probe_path:
                 return False
-            return has_claim_rewards_runtime_bridge()
+            try:
+                module_path, attribute_name = probe_path.rsplit(".", 1)
+                probe = getattr(import_module(module_path), attribute_name)
+            except (AttributeError, ImportError, ValueError):
+                return False
+            return bool(probe())
         return False
 
     def _requirement_details(
@@ -697,6 +718,8 @@ class TaskFoundationRepository:
         spec: _RequirementSpec,
         asset_records: list[TaskAssetRecord],
         satisfied: bool,
+        *,
+        builder_input: TaskRuntimeBuilderInput,
     ) -> str:
         if spec.domain is TaskGapDomain.ASSET and spec.asset_anchor_id:
             record = self._template_anchor_record(asset_records, spec.asset_anchor_id)
@@ -726,12 +749,14 @@ class TaskFoundationRepository:
             )
         if spec.requirement_id == "runtime.daily_ui.dispatch_bridge":
             status = "implemented" if satisfied else "missing"
+            runtime_seam = self._runtime_seam_metadata(builder_input)
             return (
                 "runtime_bridge="
                 f"{status} "
-                "runtime_input_builder=roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_input "
-                "runtime_seam_builder=roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_seam "
-                "task_spec_builder=roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_task_spec"
+                f"runtime_input_builder={runtime_seam.get('runtime_input_builder', '')} "
+                f"runtime_seam_builder={runtime_seam.get('runtime_seam_builder', '')} "
+                f"task_spec_builder={runtime_seam.get('task_spec_builder', '')} "
+                f"runtime_bridge_probe={runtime_seam.get('runtime_bridge_probe', '')}"
             )
         return "Requirement is not yet satisfied by current task foundations."
 
@@ -797,6 +822,16 @@ class TaskFoundationRepository:
                 if value:
                     return value
         return str(blueprint.manifest.metadata.get("signal_contract_version", "")).strip()
+
+    def _runtime_seam_metadata(self, builder_input: TaskRuntimeBuilderInput) -> dict[str, Any]:
+        runtime_seam = builder_input.metadata.get("runtime_seam", {})
+        if isinstance(runtime_seam, dict):
+            return dict(runtime_seam)
+        return {}
+
+    def _runtime_bridge_probe_path(self, builder_input: TaskRuntimeBuilderInput) -> str:
+        runtime_seam = self._runtime_seam_metadata(builder_input)
+        return str(runtime_seam.get("runtime_bridge_probe", "")).strip()
 
     def _resolve_golden_asset(
         self,

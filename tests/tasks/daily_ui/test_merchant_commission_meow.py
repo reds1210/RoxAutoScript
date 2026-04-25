@@ -1,27 +1,37 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 import unittest
 
 import tests._bootstrap  # noqa: F401
+from roxauto.core.models import InstanceState, InstanceStatus, TaskRunStatus
+from roxauto.core.runtime import TaskExecutionContext, TaskRunner
 from roxauto.tasks import TaskFoundationRepository, TaskReadinessState
 from roxauto.tasks.daily_ui import (
     MerchantCommissionMeowActiveRoundResolution,
     MerchantCommissionMeowActiveRoundNavigationPlan,
+    MerchantCommissionMeowCheckpointInspection,
     MerchantCommissionMeowDecisionReason,
     MerchantCommissionMeowDecisionValue,
     MerchantCommissionMeowEntryNavigationPlan,
     MerchantCommissionMeowFullRunNavigationPlan,
     MerchantCommissionMeowRoundEvidence,
     MerchantCommissionMeowLoopContract,
+    MerchantCommissionMeowObservedTextEvidence,
     MerchantCommissionMeowRouteContract,
     MerchantCommissionMeowSubmissionPolicy,
     MerchantCommissionMeowSubmitPanelNavigationPlan,
     MerchantCommissionMeowSubmitPanelInspection,
     MerchantCommissionMeowSubmitPanelResolution,
     MerchantCommissionMeowSubmitPanelProgressState,
+    MerchantCommissionMeowTaskFailureReason,
+    build_merchant_commission_meow_runtime_input,
+    build_merchant_commission_meow_runtime_seam,
     build_merchant_commission_meow_specification,
+    build_merchant_commission_meow_task_spec,
     evaluate_merchant_commission_meow_round_decision,
+    has_merchant_commission_meow_runtime_bridge,
     inspect_merchant_commission_meow_submit_panel_progress,
     load_merchant_commission_meow_blueprint,
     load_merchant_commission_meow_decision_contract,
@@ -48,7 +58,7 @@ class MerchantCommissionMeowFoundationsTests(unittest.TestCase):
         decision_contract = load_merchant_commission_meow_decision_contract(self.repository)
 
         self.assertEqual(blueprint.task_id, "daily_ui.merchant_commission_meow")
-        self.assertEqual(blueprint.implementation_state.value, "spec_only")
+        self.assertEqual(blueprint.implementation_state.value, "fixtured")
         self.assertEqual(
             blueprint.required_anchors,
             [
@@ -128,7 +138,7 @@ class MerchantCommissionMeowFoundationsTests(unittest.TestCase):
 
         self.assertEqual(specification.task_id, "daily_ui.merchant_commission_meow")
         self.assertEqual(specification.fixture_profile.fixture_id, "fixture.tw.merchant.default")
-        self.assertEqual(specification.metadata["signal_contract_version"], "merchant_commission_meow.v1")
+        self.assertEqual(specification.metadata["signal_contract_version"], "merchant_commission_meow.v2")
         self.assertEqual(
             specification.metadata["merchant_commission_meow_handoff_fields"],
             [
@@ -548,6 +558,305 @@ class MerchantCommissionMeowFoundationsTests(unittest.TestCase):
         self.assertEqual(adapter.swipes, [((17, 18), (19, 20), 321)])
 
 
+class MerchantCommissionMeowRuntimeBridgeTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.repository = TaskFoundationRepository.load_default()
+        self.fixture_root = Path(__file__).resolve().parents[2] / "fixtures" / "merchant_commission_meow"
+        self.instance = InstanceState(
+            instance_id="mumu-0",
+            label="MuMu 0",
+            adb_serial="127.0.0.1:16384",
+            status=InstanceStatus.READY,
+        )
+        self.navigation_plan = _runtime_navigation_plan()
+
+    def test_builds_runtime_input_and_runtime_seam(self) -> None:
+        builder_input = self.repository.build_runtime_builder_input("daily_ui.merchant_commission_meow")
+        readiness = self.repository.evaluate_task_readiness("daily_ui.merchant_commission_meow")
+
+        runtime_input = build_merchant_commission_meow_runtime_input(
+            builder_input=builder_input,
+            readiness_report=readiness,
+            foundation_repository=self.repository,
+        )
+        runtime_seam = build_merchant_commission_meow_runtime_seam(runtime_input=runtime_input)
+
+        self.assertTrue(has_merchant_commission_meow_runtime_bridge())
+        self.assertEqual(runtime_input.task_id, "daily_ui.merchant_commission_meow")
+        self.assertEqual(runtime_input.readiness_report.implementation_readiness_state.value, "blocked_by_asset")
+        self.assertEqual(runtime_input.blueprint.implementation_state.value, "fixtured")
+        self.assertEqual(runtime_input.fixture_profile.fixture_id, "fixture.tw.merchant.default")
+        self.assertEqual(
+            runtime_input.builder_input.runtime_requirement_ids,
+            ["runtime.daily_ui.dispatch_bridge"],
+        )
+        self.assertEqual(
+            [step.step_id for step in runtime_input.step_specs],
+            [
+                "open_merchant_commission_entry",
+                "accept_meow_group_commission",
+                "reenter_from_daily_task_list",
+                "resolve_round_material_submission",
+                "verify_round_progression",
+            ],
+        )
+        self.assertEqual(runtime_input.metadata["signal_contract_version"], "merchant_commission_meow.v2")
+        self.assertEqual(
+            runtime_input.metadata["runtime_seam"]["runtime_input_builder"],
+            "roxauto.tasks.daily_ui.merchant_commission_meow.build_merchant_commission_meow_runtime_input",
+        )
+        self.assertEqual(
+            runtime_seam.metadata["runtime_bridge_probe"],
+            "roxauto.tasks.daily_ui.merchant_commission_meow.has_merchant_commission_meow_runtime_bridge",
+        )
+        self.assertEqual(
+            runtime_seam.result_signal_keys,
+            [
+                "anchor_id",
+                "decision",
+                "failure_reason_id",
+                "inspection_attempts",
+                "matched_anchor_ids",
+                "outcome_code",
+                "round_index",
+                "step_outcome",
+                "task_action",
+                "telemetry",
+                "text_evidence",
+            ],
+        )
+
+    def test_runtime_task_spec_completes_full_meow_slice(self) -> None:
+        adapter = _ScriptedMerchantRuntimeAdapter(
+            self.fixture_root / "submit_panel_partial_7_of_15.png"
+        )
+        gateway = _ScriptedMerchantVisionGateway(
+            [
+                _inspection("open_merchant_commission_entry"),
+                _inspection("open_merchant_commission_entry", matched_anchor_ids=["daily_ui.merchant_commission_detail_modal"]),
+                _inspection("accept_meow_group_commission"),
+                _inspection(
+                    "accept_meow_group_commission",
+                    matched_anchor_ids=[
+                        "daily_ui.merchant_commission_list_panel",
+                        "daily_ui.merchant_commission_meow_accept_button",
+                    ],
+                ),
+                _inspection(
+                    "accept_meow_group_commission",
+                    matched_anchor_ids=[
+                        "daily_ui.merchant_commission_task_list_entry",
+                        "daily_ui.merchant_commission_round_counter",
+                    ],
+                    text_evidence=[_text_evidence("(1/10)", 0.97)],
+                    round_index=1,
+                ),
+                _inspection(
+                    "reenter_from_daily_task_list",
+                    matched_anchor_ids=[
+                        "daily_ui.merchant_commission_task_list_entry",
+                        "daily_ui.merchant_commission_round_counter",
+                    ],
+                    text_evidence=[_text_evidence("(1/10)", 0.98)],
+                    round_index=1,
+                ),
+                _inspection(
+                    "reenter_from_daily_task_list",
+                    matched_anchor_ids=["daily_ui.merchant_commission_meow_submit_option"],
+                ),
+                _inspection("resolve_round_material_submission"),
+                _inspection(
+                    "resolve_round_material_submission",
+                    matched_anchor_ids=[
+                        "daily_ui.merchant_commission_submit_item_panel",
+                        "daily_ui.merchant_commission_buy_now_button",
+                    ],
+                ),
+                _inspection(
+                    "resolve_round_material_submission",
+                    matched_anchor_ids=[
+                        "daily_ui.merchant_commission_buy_confirmation_dialog",
+                        "daily_ui.merchant_commission_buy_confirm_button",
+                    ],
+                ),
+                _inspection(
+                    "resolve_round_material_submission",
+                    matched_anchor_ids=[
+                        "daily_ui.merchant_commission_submit_item_panel",
+                        "daily_ui.merchant_commission_submit_button",
+                    ],
+                ),
+                _inspection(
+                    "verify_round_progression",
+                    matched_anchor_ids=[
+                        "daily_ui.merchant_commission_task_list_entry",
+                        "daily_ui.merchant_commission_round_counter",
+                    ],
+                    text_evidence=[_text_evidence("(2/10)", 0.99)],
+                    round_index=2,
+                ),
+            ]
+        )
+
+        runtime_input = build_merchant_commission_meow_runtime_input(
+            foundation_repository=self.repository
+        )
+        runtime_seam = build_merchant_commission_meow_runtime_seam(runtime_input=runtime_input)
+        spec = build_merchant_commission_meow_task_spec(
+            adapter=adapter,
+            vision_gateway=gateway,
+            navigation_plan=self.navigation_plan,
+            runtime_seam=runtime_seam,
+        )
+
+        run = TaskRunner().run_task(
+            spec=spec,
+            context=TaskExecutionContext(instance=self.instance),
+        )
+
+        self.assertEqual(run.status, TaskRunStatus.SUCCEEDED)
+        self.assertEqual(
+            [result.step_id for result in run.step_results],
+            [
+                "open_merchant_commission_entry",
+                "accept_meow_group_commission",
+                "reenter_from_daily_task_list",
+                "resolve_round_material_submission",
+                "verify_round_progression",
+            ],
+        )
+        self.assertEqual(
+            adapter.taps,
+            [
+                (101, 102),
+                (103, 104),
+                (105, 106),
+                (107, 108),
+                (109, 110),
+                (111, 112),
+                (113, 114),
+                (115, 116),
+                (201, 202),
+                (203, 204),
+                (301, 302),
+                (303, 304),
+                (305, 306),
+            ],
+        )
+        self.assertEqual(adapter.swipes, [((117, 118), (119, 120), 321)])
+        self.assertEqual(run.step_results[2].data["round_index"], 1)
+        self.assertEqual(
+            run.step_results[3].data["decision"],
+            MerchantCommissionMeowDecisionValue.IMMEDIATE_BUY_THEN_SUBMIT.value,
+        )
+        self.assertEqual(
+            run.step_results[3].data["reason_id"],
+            MerchantCommissionMeowDecisionReason.BUY_REQUIRED.value,
+        )
+        self.assertEqual(run.step_results[4].data["round_index"], 2)
+        self.assertEqual(run.step_results[4].data["outcome_code"], "round_progression_verified")
+        self.assertEqual(run.step_results[4].data["text_evidence"][0]["raw_text"], "(1/10)")
+        self.assertEqual(run.step_results[4].data["text_evidence"][1]["raw_text"], "(2/10)")
+        self.assertEqual(spec.metadata["runtime_seam"]["signal_contract_version"], "merchant_commission_meow.v2")
+
+    def test_runtime_task_spec_blocks_low_confidence_progression_text(self) -> None:
+        adapter = _ScriptedMerchantRuntimeAdapter(
+            self.fixture_root / "submit_panel_full_15_of_15.png"
+        )
+        gateway = _ScriptedMerchantVisionGateway(
+            [
+                _inspection("open_merchant_commission_entry"),
+                _inspection("open_merchant_commission_entry", matched_anchor_ids=["daily_ui.merchant_commission_detail_modal"]),
+                _inspection("accept_meow_group_commission"),
+                _inspection(
+                    "accept_meow_group_commission",
+                    matched_anchor_ids=[
+                        "daily_ui.merchant_commission_list_panel",
+                        "daily_ui.merchant_commission_meow_accept_button",
+                    ],
+                ),
+                _inspection(
+                    "accept_meow_group_commission",
+                    matched_anchor_ids=[
+                        "daily_ui.merchant_commission_task_list_entry",
+                        "daily_ui.merchant_commission_round_counter",
+                    ],
+                    text_evidence=[_text_evidence("(1/10)", 0.96)],
+                    round_index=1,
+                ),
+                _inspection(
+                    "reenter_from_daily_task_list",
+                    matched_anchor_ids=[
+                        "daily_ui.merchant_commission_task_list_entry",
+                        "daily_ui.merchant_commission_round_counter",
+                    ],
+                    text_evidence=[_text_evidence("(1/10)", 0.97)],
+                    round_index=1,
+                ),
+                _inspection(
+                    "reenter_from_daily_task_list",
+                    matched_anchor_ids=["daily_ui.merchant_commission_meow_submit_option"],
+                ),
+                _inspection("resolve_round_material_submission"),
+                _inspection(
+                    "resolve_round_material_submission",
+                    matched_anchor_ids=[
+                        "daily_ui.merchant_commission_submit_item_panel",
+                        "daily_ui.merchant_commission_submit_button",
+                    ],
+                ),
+                _inspection(
+                    "verify_round_progression",
+                    matched_anchor_ids=[
+                        "daily_ui.merchant_commission_task_list_entry",
+                        "daily_ui.merchant_commission_round_counter",
+                    ],
+                    text_evidence=[_text_evidence("(2/10)", 0.41)],
+                    round_index=2,
+                ),
+            ]
+        )
+
+        spec = build_merchant_commission_meow_task_spec(
+            adapter=adapter,
+            vision_gateway=gateway,
+            navigation_plan=self.navigation_plan,
+            runtime_input=build_merchant_commission_meow_runtime_input(
+                foundation_repository=self.repository
+            ),
+        )
+
+        run = TaskRunner().run_task(
+            spec=spec,
+            context=TaskExecutionContext(instance=self.instance),
+        )
+
+        self.assertEqual(run.status, TaskRunStatus.FAILED)
+        self.assertEqual(run.step_results[-1].step_id, "verify_round_progression")
+        self.assertEqual(
+            run.step_results[-1].data["failure_reason_id"],
+            MerchantCommissionMeowTaskFailureReason.PROGRESSION_LOW_CONFIDENCE.value,
+        )
+        text_evidence = run.step_results[-1].data["text_evidence"]
+        self.assertEqual(len(text_evidence), 2)
+        self.assertEqual(
+            sorted(text_evidence[0].keys()),
+            [
+                "bbox",
+                "confidence",
+                "normalized_text",
+                "raw_text",
+                "reader",
+                "screenshot_ref",
+                "source_type",
+            ],
+        )
+        self.assertEqual(
+            run.step_results[3].data["decision"],
+            MerchantCommissionMeowDecisionValue.DIRECT_SUBMIT.value,
+        )
+
+
 class _FakeSubmitPanelAdapter:
     def __init__(self, screenshot_path: Path) -> None:
         self._screenshot_path = screenshot_path
@@ -568,3 +877,120 @@ class _FakeSubmitPanelAdapter:
         duration_ms: int = 250,
     ) -> None:
         self.swipes.append((start, end, duration_ms))
+
+
+class _ScriptedMerchantRuntimeAdapter:
+    def __init__(self, screenshot_path: Path) -> None:
+        self._screenshot_path = screenshot_path
+        self.taps: list[tuple[int, int]] = []
+        self.swipes: list[tuple[tuple[int, int], tuple[int, int], int]] = []
+
+    def capture_screenshot(self, instance: object) -> Path:
+        return self._screenshot_path
+
+    def tap(self, instance: object, point: tuple[int, int]) -> None:
+        self.taps.append(point)
+
+    def swipe(
+        self,
+        instance: object,
+        start: tuple[int, int],
+        end: tuple[int, int],
+        duration_ms: int = 250,
+    ) -> None:
+        self.swipes.append((start, end, duration_ms))
+
+
+class _ScriptedMerchantVisionGateway:
+    def __init__(self, inspections: list[MerchantCommissionMeowCheckpointInspection]) -> None:
+        self._inspections = list(inspections)
+        self.calls: list[dict[str, object]] = []
+
+    def inspect(
+        self,
+        *,
+        instance: InstanceState,
+        screenshot_path: Path,
+        step_id: str,
+        signal_anchor_ids,
+        metadata=None,
+    ) -> MerchantCommissionMeowCheckpointInspection:
+        inspection = self._inspections[len(self.calls)]
+        self.calls.append(
+            {
+                "instance_id": instance.instance_id,
+                "step_id": step_id,
+                "screenshot_path": str(screenshot_path),
+                "signal_anchor_ids": list(signal_anchor_ids),
+                "metadata": dict(metadata or {}),
+            }
+        )
+        return replace(inspection, screenshot_path=str(screenshot_path))
+
+
+def _runtime_navigation_plan() -> MerchantCommissionMeowFullRunNavigationPlan:
+    return MerchantCommissionMeowFullRunNavigationPlan(
+        entry_plan=MerchantCommissionMeowEntryNavigationPlan(
+            activity_button_point=(101, 102),
+            carnival_entry_point=(103, 104),
+            merchant_commission_icon_point=(105, 106),
+            go_now_point=(107, 108),
+            npc_commission_option_point=(109, 110),
+            meow_accept_point=(111, 112),
+            close_list_point=(113, 114),
+            expand_task_tab_point=(115, 116),
+            task_list_swipe_start=(117, 118),
+            task_list_swipe_end=(119, 120),
+            task_list_swipe_duration_ms=321,
+            wait_after_activity_open_sec=0.0,
+            wait_after_carnival_sec=0.0,
+            wait_after_merchant_detail_sec=0.0,
+            wait_after_go_now_sec=0.0,
+            wait_after_npc_option_sec=0.0,
+            wait_after_accept_sec=0.0,
+            wait_after_close_list_sec=0.0,
+            wait_after_expand_task_tab_sec=0.0,
+            wait_after_task_swipe_sec=0.0,
+        ),
+        active_round_plan=MerchantCommissionMeowActiveRoundNavigationPlan(
+            task_entry_point=(201, 202),
+            submit_option_point=(203, 204),
+            wait_after_task_entry_sec=0.0,
+            wait_after_submit_option_sec=0.0,
+            submit_panel_plan=MerchantCommissionMeowSubmitPanelNavigationPlan(
+                buy_now_point=(301, 302),
+                buy_confirm_point=(303, 304),
+                submit_point=(305, 306),
+                wait_after_buy_sec=0.0,
+                wait_after_confirm_sec=0.0,
+            ),
+        ),
+    )
+
+
+def _inspection(
+    checkpoint_id: str,
+    *,
+    matched_anchor_ids: list[str] | None = None,
+    text_evidence: list[MerchantCommissionMeowObservedTextEvidence] | None = None,
+    round_index: int | None = None,
+) -> MerchantCommissionMeowCheckpointInspection:
+    return MerchantCommissionMeowCheckpointInspection(
+        checkpoint_id=checkpoint_id,
+        screenshot_path="",
+        matched_anchor_ids=list(matched_anchor_ids or []),
+        text_evidence=list(text_evidence or []),
+        round_index=round_index,
+    )
+
+
+def _text_evidence(raw_text: str, confidence: float) -> MerchantCommissionMeowObservedTextEvidence:
+    return MerchantCommissionMeowObservedTextEvidence(
+        source_type="ocr",
+        raw_text=raw_text,
+        normalized_text=raw_text.replace(" ", ""),
+        bbox=(12, 24, 144, 28),
+        confidence=confidence,
+        screenshot_ref="captures/task-list-round.png",
+        reader="mock_ocr",
+    )

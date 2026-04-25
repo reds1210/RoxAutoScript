@@ -251,6 +251,7 @@
       "task_spec_builder": "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_task_spec",
       "task_preset_builder": "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_task_preset",
       "task_display_builder": "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_task_display_model",
+      "runtime_bridge_probe": "roxauto.tasks.daily_ui.claim_rewards.has_claim_rewards_runtime_bridge",
       "signal_contract_version": "claim_rewards.v2",
       "result_signal_keys": [
         "failure_reason_id",
