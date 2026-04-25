@@ -124,10 +124,10 @@ class TaskFixtureExamplesTests(unittest.TestCase):
             by_task["daily_ui.claim_rewards"].implementation_requirements[0].details,
         )
         self.assertEqual(by_task["daily_ui.guild_check_in"].builder_readiness_state.value, "blocked_by_asset")
-        self.assertEqual(by_task["daily_ui.guild_order_submit"].builder_readiness_state.value, "blocked_by_foundation")
+        self.assertEqual(by_task["daily_ui.guild_order_submit"].builder_readiness_state.value, "ready")
         self.assertEqual(
             by_task["daily_ui.guild_order_submit"].implementation_readiness_state.value,
-            "blocked_by_foundation",
+            "ready",
         )
         self.assertEqual(by_task["daily_ui.merchant_commission_meow"].builder_readiness_state.value, "blocked_by_asset")
         self.assertEqual(

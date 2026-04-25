@@ -1,5 +1,38 @@
 # Merchant Commission Meow Route Notes
 
+## Runtime Delivery Status
+
+The bounded delivery slice now has a concrete task id and runtime seam:
+
+- task id:
+  - `daily_ui.merchant_commission_meow`
+- signal contract:
+  - `merchant_commission_meow.v2`
+- runtime bridge coverage:
+  - main-screen entry
+  - Meow Group acceptance
+  - left task-list re-entry
+  - one bounded buy-or-submit round resolution
+  - round progression verification
+
+## OCR Evidence Contract
+
+Fixed UI checkpoints should still prefer anchor or template matching.
+
+OCR is allowed only as bounded text evidence, and every emitted record should preserve:
+
+- `source_type`
+- `raw_text`
+- `normalized_text`
+- `bbox`
+- `confidence`
+- `screenshot_ref`
+- `reader`
+
+Low-confidence OCR must not directly drive risky actions.
+
+For the current Meow slice, OCR is retained for round-counter verification, while high-risk taps remain gated by anchor/template-confirmed checkpoints.
+
 This folder documents the current truthful exploration result for the first validated `商會委託` route:
 
 - `商會委託 -> 喵手商團`

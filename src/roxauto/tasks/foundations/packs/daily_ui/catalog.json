@@ -48,6 +48,7 @@
           "task_spec_builder": "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_task_spec",
           "task_preset_builder": "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_task_preset",
           "task_display_builder": "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_task_display_model",
+          "runtime_bridge_probe": "roxauto.tasks.daily_ui.claim_rewards.has_claim_rewards_runtime_bridge",
           "signal_contract_version": "claim_rewards.v2",
           "result_signal_keys": [
             "failure_reason_id",
@@ -115,6 +116,32 @@
           "completed_state",
           "submit_result"
         ],
+        "runtime_seam": {
+          "runtime_input_builder": "roxauto.tasks.daily_ui.guild_order_submit.build_guild_order_submit_runtime_input",
+          "runtime_seam_builder": "roxauto.tasks.daily_ui.guild_order_submit.build_guild_order_submit_runtime_seam",
+          "task_spec_builder": "roxauto.tasks.daily_ui.guild_order_submit.build_guild_order_submit_task_spec",
+          "runtime_bridge_probe": "roxauto.tasks.daily_ui.guild_order_submit.has_guild_order_submit_runtime_bridge",
+          "signal_contract_version": "guild_order_submit.v2",
+          "result_signal_keys": [
+            "decision",
+            "reason_id",
+            "slot_index",
+            "order_kind",
+            "requirements",
+            "availability",
+            "custom_options",
+            "selected_custom_option",
+            "refresh_attempted",
+            "verification_state",
+            "failure_reason_id",
+            "inspection_attempts",
+            "outcome_code",
+            "step_outcome",
+            "task_action",
+            "telemetry",
+            "text_evidence"
+          ]
+        },
         "guild_order_spec_builders": {
           "task_specification_builder": "roxauto.tasks.daily_ui.guild_order_submit.build_guild_order_submit_specification",
           "material_policy_loader": "roxauto.tasks.daily_ui.guild_order_submit.load_guild_order_submit_material_policy",
@@ -161,7 +188,7 @@
       ],
       "metadata": {
         "phase": "merchant_commission_transition",
-        "signal_contract_version": "merchant_commission_meow.v1",
+        "signal_contract_version": "merchant_commission_meow.v2",
         "supporting_anchor_ids": [
           "daily_ui.merchant_commission_round_counter",
           "daily_ui.merchant_commission_material_label",
@@ -172,6 +199,26 @@
           "meow_empty_submit_panel",
           "meow_round_progression"
         ],
+        "runtime_seam": {
+          "runtime_input_builder": "roxauto.tasks.daily_ui.merchant_commission_meow.build_merchant_commission_meow_runtime_input",
+          "runtime_seam_builder": "roxauto.tasks.daily_ui.merchant_commission_meow.build_merchant_commission_meow_runtime_seam",
+          "task_spec_builder": "roxauto.tasks.daily_ui.merchant_commission_meow.build_merchant_commission_meow_task_spec",
+          "runtime_bridge_probe": "roxauto.tasks.daily_ui.merchant_commission_meow.has_merchant_commission_meow_runtime_bridge",
+          "signal_contract_version": "merchant_commission_meow.v2",
+          "result_signal_keys": [
+            "anchor_id",
+            "decision",
+            "failure_reason_id",
+            "inspection_attempts",
+            "matched_anchor_ids",
+            "outcome_code",
+            "round_index",
+            "step_outcome",
+            "task_action",
+            "telemetry",
+            "text_evidence"
+          ]
+        },
         "merchant_commission_meow_spec_builders": {
           "task_specification_builder": "roxauto.tasks.daily_ui.merchant_commission_meow.build_merchant_commission_meow_specification",
           "submission_policy_loader": "roxauto.tasks.daily_ui.merchant_commission_meow.load_merchant_commission_meow_submission_policy",

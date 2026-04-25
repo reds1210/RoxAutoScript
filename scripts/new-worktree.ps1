@@ -1,17 +1,32 @@
 param(
-    [Parameter(Mandatory = $true)]
     [string]$Track,
-
     [string]$BaseBranch = "main",
-
-    [string]$ParentDir = ".."
+    [string]$ParentDir = "..",
+    [switch]$AllowLegacyWorktree
 )
 
 $ErrorActionPreference = "Stop"
 
+if (-not $AllowLegacyWorktree) {
+    Write-Warning "scripts/new-worktree.ps1 is a legacy helper. The repo now defaults to one local working directory with branch-first delivery."
+    Write-Host "Branch-first quick start:"
+    Write-Host "  git status"
+    Write-Host "  git switch main"
+    Write-Host "  git pull --ff-only"
+    Write-Host "  git switch -c codex/<branch-name>"
+    Write-Host ""
+    Write-Host "If you truly need the retired worktree flow, rerun this script with -AllowLegacyWorktree."
+    exit 1
+}
+
+if ([string]::IsNullOrWhiteSpace($Track)) {
+    throw "Track is required when -AllowLegacyWorktree is used."
+}
+
 $sanitized = $Track -replace "/", "-"
 $worktreePath = Join-Path $ParentDir ("RoxAutoScript-wt-" + ($sanitized -replace "^codex-", ""))
 
+Write-Warning "Running legacy worktree creation flow."
 Write-Host "Track: $Track"
 Write-Host "Base branch: $BaseBranch"
 Write-Host "Worktree path: $worktreePath"
@@ -33,5 +48,4 @@ else {
     git worktree add $worktreePath -b $Track $BaseBranch
 }
 
-Write-Host "Worktree created."
-
+Write-Host "Legacy worktree created."

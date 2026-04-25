@@ -1,23 +1,22 @@
 # Track Briefs
 
-These files describe what each parallel worktree is expected to deliver.
+These files describe what each active branch is expected to deliver.
 
-Engine mapping:
+The current branch-first briefs are:
 
-- `Engine A`: `docs/tracks/core-runtime.md`
-- `Engine B`: `docs/tracks/gui-console.md`
-- `Engine C`: `docs/tracks/vision-lab.md`
-- `Engine D`: `docs/tracks/task-daily-ui.md` and `docs/tracks/task-odin.md`
+- `docs/tracks/feature-merchant-commission.md`
+- `docs/tracks/feature-guild-order.md`
+- `docs/tracks/shared-entry-navigation.md`
+- `docs/tracks/shared-material-catalog.md`
 
-Read exactly one of these as your primary brief:
+Read exactly one of the files above as your primary brief for new work.
 
-- `docs/tracks/core-runtime.md`
-- `docs/tracks/gui-console.md`
-- `docs/tracks/vision-lab.md`
-- `docs/tracks/task-daily-ui.md`
-- `docs/tracks/task-odin.md`
+Legacy note:
+
+- older engine-style briefs remain in this folder for historical reference only
+- those older files describe the retired local worktree model unless they are explicitly revised
+- use `docs/engine-roster.md` and `docs/worktree-playbook.md` as the current authority
 
 Rule:
 
-- if your scope does not match one of these briefs, define a new brief before starting implementation
-- task-track briefs are standby until platform Gate 3 is complete
+- if your scope does not match one of the active briefs, define a new branch brief before starting implementation

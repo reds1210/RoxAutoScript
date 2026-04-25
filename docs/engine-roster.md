@@ -1,111 +1,129 @@
 # Engine Roster
 
-This repo currently uses a fixed 4-engine parallel model plus one optional support engine.
+This repo now uses a branch-first delivery model.
 
-The most recent wave is `round-9 guild-order material logic`, which is currently paused pending a restart brief aligned with operator-provided UI truth.
+The word `engine` is retained for historical continuity, but the active repo workflow is:
+
+- one local working directory: `C:\code\RoxAutoScript`
+- one active local coding branch at a time
+- feature branches for complete game features
+- shared branches only after at least two feature branches prove real reuse
 
 ## Model Policy
 
 - default delegated model: `gpt-5.4`
-- do not use mini variants for engine work unless the user explicitly asks for them
-- each engine keeps a stable specialization
-- for round 9, reuse the existing worktree and branch for the same engine instead of creating a new one
+- do not use mini variants for primary feature or shared branch work unless the user explicitly asks for them
+- feature branches may cross `tasks`, `vision`, `runtime`, `tests`, and docs when the edits all serve one feature outcome
+- shared branches must not invent feature semantics; they only extract already-proven reuse
 
-## Standard Engine Lineup
+## Standard Branch Lineup
 
-### Engine A: Runtime
+### Governance Branch
 
-- model: `gpt-5.4`
-- branch: `codex/core-runtime-step-telemetry`
-- worktree: `C:\code\RoxAutoScript-wt-core-runtime-step-telemetry`
-- owns: `src/roxauto/core/`, `src/roxauto/emulator/`, `src/roxauto/logs/`, `src/roxauto/profiles/`, `tests/core/`, `tests/emulator/`, `tests/profiles/`
-- may edit: `docs/architecture-contracts.md`
+- branch: `codex/branch-model-feature-first`
+- role: repo workflow, branch rules, dispatch rules, briefs, prompts, and legacy-script positioning
+- owns:
+  - `AGENTS.md`
+  - `README.md`
+  - `docs/engine-roster.md`
+  - `docs/worktree-playbook.md`
+  - `docs/dispatch-workflow.md`
+  - `docs/tracks/`
+  - `docs/prompts/`
+  - legacy helper scripts that still mention worktrees
 
-### Engine B: GUI
+### Feature Branch: Merchant Commission Meow
 
-- model: `gpt-5.4`
-- branch: `codex/gui-claim-rewards-production-telemetry`
-- worktree: `C:\code\RoxAutoScript-wt-gui-claim-rewards-production`
-- owns: `src/roxauto/app/`, `assets/ui/`, `tests/app/`
+- branch: `codex/feature-merchant-commission-meow`
+- role: full `merchant commission -> meow group` delivery slice
+- owns:
+  - `merchant_commission_*` task/runtime/vision surfaces
+  - merchant-commission-specific assets, tests, docs, and handoffs
+- keeps local feature-specific control of:
+  - route contract
+  - submit-panel inspection
+  - round decision
+  - progression verification
 
-### Engine C: Vision
+### Feature Branch: Guild Order Submit
 
-- model: `gpt-5.4`
-- branch: `codex/vision-claim-rewards-live-captures`
-- worktree: `C:\code\RoxAutoScript-wt-vision-claim-rewards-live`
-- owns: `src/roxauto/vision/`, `assets/templates/`, `docs/vision/`, `tests/vision/`
+- branch: `codex/feature-guild-order-submit`
+- role: full `guild order submit` delivery slice
+- owns:
+  - `guild_order_*` task/runtime/vision surfaces
+  - guild-order-specific assets, tests, docs, and handoffs
+- first-cut boundary:
+  - `submit`
+  - `skip`
+  - `refresh`
+- keeps local feature-specific control of:
+  - material policy
+  - decision contract
+  - custom-order logic
+  - verification results
 
-### Engine D: Tasks
+### Shared Branch: Entry Navigation
 
-- model: `gpt-5.4`
-- branch: `codex/task-claim-rewards-runtime-seam`
-- worktree: `C:\code\RoxAutoScript-wt-task-claim-rewards-runtime`
-- owns: `src/roxauto/tasks/`, `tests/tasks/`, task-specific foundations and task assets
+- branch: `codex/shared-entry-navigation`
+- role: extract reusable entry, re-entry, close, back, go-button, and checkpoint behavior
+- opens only after:
+  - merchant commission and guild order both prove the same navigation segment is truly reusable
+- owns:
+  - shared entry-route contracts
+  - shared checkpoint definitions
+  - navigation helpers used by multiple features
 
-### Optional Engine E: Goldens
+### Shared Branch: Material Catalog
 
-- model: `gpt-5.4`
-- branch: `codex/claim-rewards-goldens`
-- worktree: `C:\code\RoxAutoScript-wt-claim-rewards-goldens`
-- owns: `assets/templates/`, `tests/tasks/fixtures/`, `docs/vision/`
-- open only when live screenshots or goldens become the primary blocker
+- branch: `codex/shared-material-catalog`
+- role: extract reusable material definitions and evidence formats
+- opens only after:
+  - merchant commission and guild order both prove the same material or text-evidence surfaces are reusable
+- owns:
+  - shared material ids and aliases
+  - normalization rules for text evidence
+  - OCR/evidence record formats
+  - shared material definitions and supporting fixtures
 
-## Active Order
+## Launch Order
 
-Default round-9 start order when this wave is resumed:
+Default launch order for the current branch-first model:
 
-1. `Engine E`
-2. `Engine D`
-3. `Engine C`
-4. `Engine A`
-5. `Engine B`
+1. `codex/branch-model-feature-first`
+2. `codex/feature-merchant-commission-meow`
+3. `codex/feature-guild-order-submit`
+4. `codex/shared-entry-navigation`
+5. `codex/shared-material-catalog`
 
-Default round-9 merge order when this wave is resumed:
+Rule:
 
-1. `Engine E`
-2. `Engine C`
-3. `Engine D`
-4. `Engine A`
-5. `Engine B`
+- do not open shared branches before reuse is proven by at least two feature branches
 
-## Current Capture Rule
+## Merge Policy
 
-Round 9 may still use multiple ADB-visible devices for evidence work.
+- merge the governance branch first when the workflow itself changes
+- merge feature branches one bounded outcome at a time
+- merge shared branches only after the source feature behavior has already been validated and documented
+- before switching to a new local branch, the current working tree must be clean
 
-When a worker captures live evidence, the handoff should record the exact ADB serial used.
+## Current Device Rule
 
-## Current Device Inventory
+- assign emulator work by exact ADB serial, not by window title alone
+- do not let two active workers use the same serial at the same time
+- if a branch captures live evidence, record the exact serial in the handoff
 
-Validated locally on `2026-04-23`:
+Validated local ADB serial inventory remains:
 
 - `127.0.0.1:16416`
 - `127.0.0.1:16448`
 - `127.0.0.1:16480`
 - `127.0.0.1:16512`
 
-Observed MuMu window titles on the same machine:
-
-- `舞孃-nxa`
-- `Android Device-1-3`
-- `鐵匠-zippoluo0202`
-- `補師-reds.wang`
-
-Rule:
-
-- dispatch and worker handoffs should assign devices by ADB serial, not by window title alone, unless the title-to-serial mapping is explicitly revalidated in that handoff
-- do not let two active workers use the same ADB serial at the same time
-
-## Reuse Policy
-
-- do not create a new worktree just because a new round started
-- each engine should continue on its existing round-6/round-7/round-8/round-9 branch and worktree until the user explicitly asks for a branch rollover
-- before starting a new thread on one of these engines, sync that worktree with `main`
-
 ## Non-Negotiable Rules
 
-- maximum active primary engines: `4`
-- optional support engine: `1`
-- maximum active worktrees per engine: `1`
-- each engine keeps its owned paths
-- do not start new round-9 worker threads until dispatch publishes a restart brief
-- round 9 stays scoped to the first-cut guild-order flow only when resumed
+- one local repo directory
+- one active local coding branch at a time
+- keep the working tree clean before switching branches
+- feature branches own complete feature outcomes, not just one technical layer
+- shared branches must stay strictly reusable and feature-agnostic
+- do not reopen the retired local multi-worktree model unless the repo owner explicitly asks for it

@@ -10,6 +10,11 @@ It is not an active repo wave yet.
 
 Use this document to start one dedicated exploration thread before any parallel implementation split.
 
+Model note:
+
+- the product and route content in this file is still useful
+- any branch/worktree launch instructions below are legacy and are superseded by `docs/engine-roster.md` and `docs/worktree-playbook.md`
+
 ## Local Repo Research
 
 Research performed on `2026-04-23`:

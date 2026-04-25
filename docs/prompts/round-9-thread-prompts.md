@@ -1,5 +1,10 @@
 # Round 9 Thread Prompts
 
+Legacy note:
+
+- this prompt pack still describes the retired engine/worktree launch model for historical round-9 reference
+- use `docs/engine-roster.md`, `docs/worktree-playbook.md`, and `docs/prompts/feature-branch-thread-prompts.md` for new branch-first work
+
 Use these prompts only if dispatch explicitly resumes the round-9 guild-order material-logic wave.
 
 This prompt pack is reference-only while `docs/round-9-guild-order-material-logic.md` remains paused.

@@ -2,7 +2,7 @@
 
 ## 1. Purpose
 
-This file defines the shared contracts that all worktrees must respect.
+This file defines the shared contracts that all delivery branches must respect.
 
 It is intentionally small. If a contract is missing, add it here before multiple tracks build against different assumptions.
 
@@ -336,6 +336,91 @@ Minimum fields:
 - `confidence`
 - `bbox`
 - `source_image`
+
+### `ObservedTextEvidence`
+
+Minimum fields:
+
+- `source_type`
+- `raw_text`
+- `normalized_text`
+- `bbox`
+- `confidence`
+- `screenshot_ref`
+- `reader`
+
+Rules:
+
+- OCR or other text readers may populate this shape when a feature needs text evidence
+- low-confidence text evidence must not directly trigger risky actions without a stronger checkpoint or explicit fallback policy
+- `source_type` should tell the truth about how the text was produced, such as `ocr`, `ui_xml`, or another bounded reader
+
+### `MaterialDefinition`
+
+Minimum fields:
+
+- `material_id`
+- `display_label`
+- `label_aliases`
+- `source_feature`
+- `metadata`
+
+Rules:
+
+- shared material definitions should only merge labels that are proven to describe the same in-game material
+- if equivalence is still ambiguous, preserve aliases or feature-local labels instead of forcing one canonical id too early
+
+### `MaterialEvidenceRecord`
+
+Minimum fields:
+
+- `material_id` optional
+- `feature_id`
+- `display_label`
+- `required_quantity` optional
+- `available_quantity` optional
+- `unit_cost` optional
+- `text_evidence`
+- `screenshot_ref`
+- `metadata`
+
+Rules:
+
+- feature branches may emit this record before a shared material id is settled
+- `text_evidence` should preserve one or more `ObservedTextEvidence` payloads when text-driven fields are involved
+- shared-material tooling should normalize these records without discarding the original evidence
+
+### `SharedEntryRouteContract`
+
+Minimum fields:
+
+- `route_id`
+- `entry_checkpoints`
+- `reentry_checkpoints`
+- `blocked_click_notes`
+- `feature_overrides`
+- `metadata`
+
+Rules:
+
+- shared entry routes should only describe navigation proven reusable by multiple features
+- feature-specific policy or feature-specific stop conditions should stay outside the shared route contract
+
+### `SharedCheckpointPack`
+
+Minimum fields:
+
+- `pack_id`
+- `feature_ids`
+- `checkpoint_ids`
+- `required_anchor_ids`
+- `supporting_anchor_ids`
+- `metadata`
+
+Rules:
+
+- checkpoint packs should remain machine-readable so multiple features can verify the same route segments consistently
+- packs should not pretend a placeholder or exploratory checkpoint is production-ready
 
 ### `PreviewFrame`
 
@@ -774,7 +859,7 @@ Forbidden import directions:
 
 ## 9. Contract Change Rule
 
-If a worktree changes:
+If a branch changes:
 
 - shared types
 - event names

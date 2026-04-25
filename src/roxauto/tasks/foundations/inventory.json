@@ -109,6 +109,7 @@
             "telemetry",
             "task_action"
           ],
+          "runtime_bridge_probe": "roxauto.tasks.daily_ui.claim_rewards.has_claim_rewards_runtime_bridge",
           "runtime_input_builder": "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_input",
           "runtime_seam_builder": "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_seam",
           "signal_contract_version": "claim_rewards.v2",
@@ -162,23 +163,14 @@
       "task_id": "daily_ui.guild_check_in"
     },
     {
-      "asset_requirement_ids": [
-        "asset.daily_ui.guild_order_list",
-        "asset.daily_ui.guild_order_detail",
-        "asset.daily_ui.guild_order_submit_button",
-        "asset.daily_ui.guild_order_refresh_button"
-      ],
+      "asset_requirement_ids": [],
       "calibration_requirement_ids": [],
       "fixture_profile_paths": [
         "fixture_profiles/default_tw_guild.fixture.json"
       ],
-      "foundation_requirement_ids": [
-        "foundation.daily_ui.guild_order_visible_quantity_contract",
-        "foundation.daily_ui.guild_order_result_state_contract",
-        "foundation.daily_ui.guild_order_custom_option_contract"
-      ],
+      "foundation_requirement_ids": [],
       "golden_root": "daily_ui/daily_ui_guild_order_submit/{screen_slug}",
-      "implementation_state": "spec_only",
+      "implementation_state": "fixtured",
       "manifest_path": "packs/daily_ui/guild_order_submit.task.json",
       "metadata": {
         "guild_order_decision_contract": {
@@ -188,9 +180,9 @@
             "refresh"
           ],
           "decision_rules": {
-            "refresh": "Visible order or self-select option set is unsuitable and one bounded refresh remains allowed by policy.",
-            "skip": "Visible order is already completed, self-select support is unavailable or disabled, refresh is disallowed, or no truthful bounded action remains after policy evaluation.",
-            "submit": "Visible standard requirements are allowed and sufficiently stocked, or a visible self-select option is chosen truthfully under the same material policy."
+            "refresh": "Visible standard-order evidence is unsuitable and one bounded refresh remains allowed by policy.",
+            "skip": "Visible order is already completed, the state is still ambiguous, custom-order handling is disabled, refresh is disallowed, or no truthful bounded action remains after policy evaluation.",
+            "submit": "Visible standard requirements are allowed and sufficiently stocked from bounded evidence only."
           },
           "decision_signal_keys": [
             "decision",
@@ -214,7 +206,7 @@
             "available_quantity",
             "sufficiency"
           ],
-          "notes": "Unknown order state should fail honestly instead of inventing a fourth hidden action path. Self-select orders stay inside the same submit / skip / refresh decision envelope as a first-round bonus path, must record the chosen option explicitly, and should preserve truthful failure reasons when an operator-selected candidate index is missing, blocked, or insufficient.",
+          "notes": "Unknown order state must fail or skip honestly instead of inventing a hidden action path. V1 keeps custom-order handling outside scope and records that surface as a truthful skip.",
           "reason_ids": [
             "materials_sufficient",
             "materials_insufficient",
@@ -224,12 +216,6 @@
             "refresh_not_allowed",
             "refresh_limit_reached",
             "custom_order_disabled",
-            "custom_order_list_unavailable",
-            "custom_order_no_viable_option",
-            "custom_order_option_selected",
-            "custom_order_selected_candidate_missing",
-            "custom_order_selected_candidate_blocked",
-            "custom_order_selected_candidate_insufficient",
             "submit_verification_failed",
             "refresh_verification_failed"
           ],
@@ -258,11 +244,11 @@
           "allowed_material_labels": [],
           "blocked_material_ids": [],
           "blocked_material_labels": [],
-          "custom_order_enabled": true,
+          "custom_order_enabled": false,
           "custom_order_max_candidates_to_inspect": 8,
           "custom_order_preferred_material_ids": [],
           "custom_order_preferred_material_labels": [],
-          "custom_order_selection_boundary": "visible_custom_order_candidate_evidence_only",
+          "custom_order_selection_boundary": "disabled_in_v1_runtime",
           "decision_boundary": "visible_material_evidence_only",
           "decision_priority": [
             "submit",
@@ -275,7 +261,7 @@
             "pathing"
           ],
           "max_refresh_attempts_per_run": 1,
-          "notes": "Guild-order submission now includes the bounded self-select order path. The self-select order is a first-round bonus card, not a second-round mode. The task may inspect visible custom-order candidates and choose one truthful option using the same material-policy rules, but it still must not hide crafting, gathering, or pathing as dependencies.",
+          "notes": "V1 supports standard-order submit / skip / refresh only. When a self-select custom order is visible, the runtime preserves evidence and records a truthful skip instead of widening into candidate selection.",
           "refresh_allowed": true,
           "reserve_quantity_by_material_id": {},
           "reserve_quantity_by_material_label": {}
@@ -292,18 +278,10 @@
             "slot_index",
             "material_label",
             "required_quantity",
-            "available_quantity",
-            "candidate_index",
-            "custom_option_material_label",
-            "custom_option_required_quantity",
-            "custom_option_available_quantity"
+            "available_quantity"
           ],
-          "foundation_requirement_ids": [
-            "foundation.daily_ui.guild_order_visible_quantity_contract",
-            "foundation.daily_ui.guild_order_result_state_contract",
-            "foundation.daily_ui.guild_order_custom_option_contract"
-          ],
-          "notes": "Guild-order submit remains blocked until visible quantities, self-select option surfaces, and post-decision result states are truthful and deterministic.",
+          "foundation_requirement_ids": [],
+          "notes": "V1 uses bounded runtime OCR evidence and signature-based verification instead of template-blocked quantity contracts, but still preserves truthful supporting scene metadata for future evidence work.",
           "required_anchor_ids": [
             "common.close_button",
             "daily_ui.guild_order_list_panel",
@@ -338,6 +316,32 @@
           ]
         },
         "phase": "round-9",
+        "runtime_seam": {
+          "result_signal_keys": [
+            "decision",
+            "reason_id",
+            "slot_index",
+            "order_kind",
+            "requirements",
+            "availability",
+            "custom_options",
+            "selected_custom_option",
+            "refresh_attempted",
+            "verification_state",
+            "failure_reason_id",
+            "inspection_attempts",
+            "outcome_code",
+            "step_outcome",
+            "task_action",
+            "telemetry",
+            "text_evidence"
+          ],
+          "runtime_bridge_probe": "roxauto.tasks.daily_ui.guild_order_submit.has_guild_order_submit_runtime_bridge",
+          "runtime_input_builder": "roxauto.tasks.daily_ui.guild_order_submit.build_guild_order_submit_runtime_input",
+          "runtime_seam_builder": "roxauto.tasks.daily_ui.guild_order_submit.build_guild_order_submit_runtime_seam",
+          "signal_contract_version": "guild_order_submit.v2",
+          "task_spec_builder": "roxauto.tasks.daily_ui.guild_order_submit.build_guild_order_submit_task_spec"
+        },
         "signal_contract_version": "guild_order_submit.v2",
         "source": "curated_inventory",
         "supporting_anchor_ids": [
@@ -370,7 +374,9 @@
         "daily_ui.guild_order_submit_button",
         "daily_ui.guild_order_refresh_button"
       ],
-      "runtime_requirement_ids": [],
+      "runtime_requirement_ids": [
+        "runtime.daily_ui.dispatch_bridge"
+      ],
       "task_id": "daily_ui.guild_order_submit"
     },
     {
@@ -396,7 +402,7 @@
       ],
       "foundation_requirement_ids": [],
       "golden_root": "daily_ui/daily_ui_merchant_commission_meow/{screen_slug}",
-      "implementation_state": "spec_only",
+      "implementation_state": "fixtured",
       "manifest_path": "packs/daily_ui/merchant_commission_meow.task.json",
       "metadata": {
         "merchant_commission_meow_decision_contract": {
@@ -509,7 +515,27 @@
           "verified_reentry_mode": "left_task_list"
         },
         "phase": "merchant_commission_transition",
-        "signal_contract_version": "merchant_commission_meow.v1",
+        "runtime_seam": {
+          "result_signal_keys": [
+            "anchor_id",
+            "decision",
+            "failure_reason_id",
+            "inspection_attempts",
+            "matched_anchor_ids",
+            "outcome_code",
+            "round_index",
+            "step_outcome",
+            "task_action",
+            "telemetry",
+            "text_evidence"
+          ],
+          "runtime_bridge_probe": "roxauto.tasks.daily_ui.merchant_commission_meow.has_merchant_commission_meow_runtime_bridge",
+          "runtime_input_builder": "roxauto.tasks.daily_ui.merchant_commission_meow.build_merchant_commission_meow_runtime_input",
+          "runtime_seam_builder": "roxauto.tasks.daily_ui.merchant_commission_meow.build_merchant_commission_meow_runtime_seam",
+          "signal_contract_version": "merchant_commission_meow.v2",
+          "task_spec_builder": "roxauto.tasks.daily_ui.merchant_commission_meow.build_merchant_commission_meow_task_spec"
+        },
+        "signal_contract_version": "merchant_commission_meow.v2",
         "source": "curated_inventory",
         "supporting_anchor_ids": [
           "daily_ui.merchant_commission_round_counter",
@@ -540,7 +566,9 @@
         "daily_ui.merchant_commission_buy_confirm_button",
         "daily_ui.merchant_commission_submit_button"
       ],
-      "runtime_requirement_ids": [],
+      "runtime_requirement_ids": [
+        "runtime.daily_ui.dispatch_bridge"
+      ],
       "task_id": "daily_ui.merchant_commission_meow"
     },
     {

@@ -589,11 +589,23 @@ class TemplateValidationTests(unittest.TestCase):
         )
         self.assertEqual(
             report.metadata["guild_order_scene_contract"]["decision_surface_state"],
-            "submit_decision_surfaces_captured_failure_states_pending",
+            "submit_refresh_decision_surfaces_captured_failure_states_pending",
         )
         self.assertEqual(
             report.metadata["guild_order_scene_contract"]["blocked_scene_ids"],
             [],
+        )
+        self.assertEqual(
+            report.metadata["guild_order_scene_contract"]["scene_truth"]["guild_order_refresh_affordance"][
+                "live_probe_status"
+            ],
+            "captured",
+        )
+        self.assertEqual(
+            report.metadata["guild_order_scene_contract"]["scene_truth"]["guild_order_refresh_affordance"][
+                "truth_basis"
+            ],
+            "reviewed_live_refresh_capture",
         )
         self.assertEqual(
             report.metadata["guild_order_scene_contract"]["scene_truth"]["guild_order_submit_result_state"][

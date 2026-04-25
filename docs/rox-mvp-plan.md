@@ -314,9 +314,14 @@ Success criterion:
 
 This phase only starts after MVP is stable.
 
-## 10. Worktree Parallelization Plan
+## 10. Branch-First Parallelization Plan
 
-Once the repo has the first code skeleton, the work can be split into separate git worktrees.
+The current repo policy is branch-first local delivery:
+
+- keep one local working directory
+- use one active local branch at a time
+- use feature branches for complete game features
+- open shared branches only after reuse is proven by multiple feature branches
 
 Recommended 4-engine split:
 
@@ -348,7 +353,7 @@ Recommended 4-engine split:
 
 Parallelization rule:
 
-- each worktree owns a disjoint write area
+- each branch owns a disjoint functional scope
 - shared contracts must be defined first
 - task packs cannot directly couple themselves to GUI widgets
 - delegated engine work should use `gpt-5.4` by default
