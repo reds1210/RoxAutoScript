@@ -5,7 +5,7 @@ ROX automation workspace focused on a Windows desktop control center for multipl
 Current status:
 
 - planning and architecture definition
-- git repo initialized for future `worktree`-based parallel development
+- git repo initialized for branch-first parallel development with one local working directory
 - MVP scope documented in `docs/rox-mvp-plan.md`
 - installable Python foundation with runnable CLI commands
 - shared runtime, registry, profile store, audit sink, and emulator discovery skeleton
@@ -23,11 +23,11 @@ Docs to read before starting work:
 
 Parallel development docs:
 
-- `docs/engine-roster.md`: fixed 4-engine roster, model policy, and current engine branch lineup
-- `docs/worktree-playbook.md`: branch, worktree, ownership, merge, and handoff rules
+- `docs/engine-roster.md`: branch-first feature roster, shared branch policy, and current launch order
+- `docs/worktree-playbook.md`: retained filename for compatibility; now documents the branch-first workflow, ownership, merge, and handoff rules
 - `docs/architecture-contracts.md`: shared interfaces and dependency boundaries
 - `docs/plain-language-glossary.md`: Chinese-first plain-language glossary for repo workflow and task names
-- `docs/tracks/`: concrete briefs for each worktree track
+- `docs/tracks/`: concrete briefs for each active feature branch and shared branch
 - `docs/templates/worktree-handoff-template.md`: handoff format for commits and PRs
 
 Foundation commands:
@@ -39,8 +39,8 @@ Foundation commands:
 Helper scripts:
 
 - `scripts/bootstrap-dev.ps1`
-- `scripts/new-worktree.ps1`
-- `scripts/bootstrap-four-engines.ps1`
+- `scripts/new-worktree.ps1` (legacy; branch-first workflow is the default)
+- `scripts/bootstrap-four-engines.ps1` (legacy; branch-first workflow is the default)
 - `scripts/run-autonomy-loop.ps1`
 
 Autonomy loop:
@@ -53,3 +53,9 @@ Subscription-only Codex note:
 
 - the default repo loop uses ChatGPT/Codex sign-in and does not require `OPENAI_API_KEY`
 - use Codex GitHub automatic review or `@codex review` on pull requests for official review flows
+
+Branch-first note:
+
+- local work happens in `C:\code\RoxAutoScript` on one active branch at a time
+- use feature branches such as `codex/feature-merchant-commission-meow` and `codex/feature-guild-order-submit` for full game features
+- use shared branches such as `codex/shared-entry-navigation` and `codex/shared-material-catalog` only after at least two feature branches prove the reuse

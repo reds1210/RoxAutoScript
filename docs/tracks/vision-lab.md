@@ -1,5 +1,10 @@
 # Track Brief: Vision Lab
 
+Legacy note:
+
+- this brief describes the retired engine/worktree model
+- use the branch-first briefs listed in `docs/tracks/README.md` for new work
+
 ## Branch
 
 - `codex/vision-lab`

@@ -10,6 +10,11 @@ Round 9 is now active in:
 
 Use this file as the deeper planning and dispatch reference for that active round.
 
+Model note:
+
+- the product and contract content in this file is still useful
+- any engine/worktree launch instructions below are legacy and are superseded by `docs/engine-roster.md` and `docs/worktree-playbook.md`
+
 ## Goal
 
 Prepare a truthful first implementation path for in-game guild orders with material-aware decision logic.

@@ -49,7 +49,8 @@ If you want to use Codex more like a team of parallel workers, use the dispatch 
 That workflow keeps:
 
 - one persistent main thread for user requests and task dispatch
-- multiple worker threads on separate branches/worktrees
+- multiple worker threads on separate `codex/*` branches
+- one local working directory by default, with cloud or external workers used only when extra parallelism is truly needed
 - PRs as the durable handoff surface
 - PR watch / merge reporting separate from coding work
 

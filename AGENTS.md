@@ -26,6 +26,8 @@ Read these files before editing:
 ## Non-Negotiable Rules
 
 - respect ownership and dependency rules in `docs/worktree-playbook.md`
+- use the repo's branch-first workflow with one local working directory unless the repo owner explicitly restores worktree-based delivery
+- keep the working tree clean before switching branches; commit or stash first
 - do not edit outside owned scope unless the task explicitly requires a shared-file update
 - rerun the autonomy quality gate after every substantive change
 - do not mark work ready if the quality gate fails
@@ -54,6 +56,7 @@ An autonomous pass is ready for the next stage when:
 
 - `quality-gate.json` reports `passed`
 - the branch stays within owned scope
+- the local working directory is clean before changing to another branch
 - tests added for new behavior are present when needed
 - the pull request has either repository-level Codex automatic review enabled or an explicit `@codex review` request
 

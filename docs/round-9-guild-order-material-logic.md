@@ -11,6 +11,11 @@ Reason:
 
 This file is now a paused reference brief, not an active launch order.
 
+Model note:
+
+- the product and evidence content in this file is still useful
+- any engine/worktree launch expectations should be treated as legacy and superseded by `docs/engine-roster.md` and `docs/worktree-playbook.md`
+
 ## Goal
 
 Start the next bounded MVP wave after `claim_rewards` and keep scope tight.

@@ -1,37 +1,52 @@
 param(
     [string]$BaseBranch = "main",
-    [string]$ParentDir = ".."
+    [string]$ParentDir = "..",
+    [switch]$AllowLegacyWorktree
 )
 
 $ErrorActionPreference = "Stop"
+
+if (-not $AllowLegacyWorktree) {
+    Write-Warning "scripts/bootstrap-four-engines.ps1 is a legacy helper. The repo now defaults to branch-first delivery in one local working directory."
+    Write-Host "Current branch-first roster:"
+    Write-Host "  codex/branch-model-feature-first"
+    Write-Host "  codex/feature-merchant-commission-meow"
+    Write-Host "  codex/feature-guild-order-submit"
+    Write-Host "  codex/shared-entry-navigation"
+    Write-Host "  codex/shared-material-catalog"
+    Write-Host ""
+    Write-Host "Use git branch switching instead of local worktree bootstrapping."
+    Write-Host "If you truly need the retired worktree bootstrap, rerun this script with -AllowLegacyWorktree."
+    exit 1
+}
 
 $engines = @(
     @{
         Name = "Engine A"
         Branch = "codex/core-runtime-orchestration"
         Folder = "RoxAutoScript-wt-engine-a-runtime"
-        Status = "active"
+        Status = "legacy"
         Model = "gpt-5.4"
     },
     @{
         Name = "Engine B"
         Branch = "codex/gui-console-operator"
         Folder = "RoxAutoScript-wt-engine-b-gui"
-        Status = "active"
+        Status = "legacy"
         Model = "gpt-5.4"
     },
     @{
         Name = "Engine C"
         Branch = "codex/vision-lab-calibration-tools"
         Folder = "RoxAutoScript-wt-engine-c-vision"
-        Status = "active"
+        Status = "legacy"
         Model = "gpt-5.4"
     },
     @{
         Name = "Engine D"
         Branch = "codex/task-daily-ui"
         Folder = "RoxAutoScript-wt-engine-d-tasks"
-        Status = "standby"
+        Status = "legacy"
         Model = "gpt-5.4"
     }
 )
@@ -55,6 +70,7 @@ function Get-ExistingWorktreeMap {
     return $map
 }
 
+Write-Warning "Running legacy four-engine worktree bootstrap."
 $existingWorktrees = Get-ExistingWorktreeMap
 
 foreach ($engine in $engines) {
@@ -85,4 +101,4 @@ foreach ($engine in $engines) {
 }
 
 Write-Host ""
-Write-Host "4-engine bootstrap complete."
+Write-Host "Legacy 4-engine worktree bootstrap complete."

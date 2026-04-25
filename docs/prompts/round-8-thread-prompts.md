@@ -1,5 +1,10 @@
 # Round 8 Thread Prompts
 
+Legacy note:
+
+- this prompt pack describes the retired engine/worktree model
+- use `docs/engine-roster.md`, `docs/worktree-playbook.md`, and `docs/prompts/feature-branch-thread-prompts.md` for new branch-first work
+
 Use these prompts for new top-level Codex threads during the round-8 `claim_rewards` four-device-capture-promotion wave.
 
 ## Shared Opening

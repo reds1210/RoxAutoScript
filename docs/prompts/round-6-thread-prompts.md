@@ -1,5 +1,10 @@
 # Round 6 Thread Prompts
 
+Legacy note:
+
+- this prompt pack describes the retired engine/worktree model
+- use `docs/engine-roster.md`, `docs/worktree-playbook.md`, and `docs/prompts/feature-branch-thread-prompts.md` for new branch-first work
+
 Use these prompts for new top-level Codex threads in the round-6 `claim_rewards` production-hardening wave.
 
 Model:
