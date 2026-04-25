@@ -1,14 +1,18 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import Enum
 from pathlib import Path
+import re
 import time
 from typing import Any, Protocol, Self
 
 import cv2
 import numpy as np
 
+from roxauto.core.models import InstanceState, TaskManifest, TaskSpec
+from roxauto.core.runtime import TaskExecutionContext, TaskStep, step_failure, step_success
+from roxauto.emulator.execution import EmulatorActionAdapter
 from roxauto.core.serde import to_primitive
 from roxauto.tasks.catalog import TaskFoundationRepository
 from roxauto.tasks.models import (
@@ -16,6 +20,7 @@ from roxauto.tasks.models import (
     TaskFixtureProfile,
     TaskReadinessReport,
     TaskRuntimeBuilderInput,
+    TaskStepBlueprint,
 )
 
 
@@ -326,6 +331,53 @@ _EMPTY_FEEDBACK_TEMPLATE_PATH = (
     / "anchors"
     / "merchant_commission_empty_feedback.png"
 )
+
+_CLOSE_BUTTON_ANCHOR_ID = "common.close_button"
+_PORING_BUTTON_ANCHOR_ID = "daily_ui.merchant_commission_poring_button"
+_CARNIVAL_ENTRY_ANCHOR_ID = "daily_ui.merchant_commission_carnival_entry"
+_DETAIL_MODAL_ANCHOR_ID = "daily_ui.merchant_commission_detail_modal"
+_GO_NOW_BUTTON_ANCHOR_ID = "daily_ui.merchant_commission_go_now_button"
+_NPC_DIALOG_ANCHOR_ID = "daily_ui.merchant_commission_npc_dialog"
+_LIST_PANEL_ANCHOR_ID = "daily_ui.merchant_commission_list_panel"
+_MEOW_ACCEPT_BUTTON_ANCHOR_ID = "daily_ui.merchant_commission_meow_accept_button"
+_TASK_LIST_ENTRY_ANCHOR_ID = "daily_ui.merchant_commission_task_list_entry"
+_MEOW_SUBMIT_OPTION_ANCHOR_ID = "daily_ui.merchant_commission_meow_submit_option"
+_SUBMIT_ITEM_PANEL_ANCHOR_ID = "daily_ui.merchant_commission_submit_item_panel"
+_BUY_NOW_BUTTON_ANCHOR_ID = "daily_ui.merchant_commission_buy_now_button"
+_BUY_CONFIRMATION_DIALOG_ANCHOR_ID = "daily_ui.merchant_commission_buy_confirmation_dialog"
+_BUY_CONFIRM_BUTTON_ANCHOR_ID = "daily_ui.merchant_commission_buy_confirm_button"
+_SUBMIT_BUTTON_ANCHOR_ID = "daily_ui.merchant_commission_submit_button"
+_ROUND_COUNTER_ANCHOR_ID = "daily_ui.merchant_commission_round_counter"
+_SIGNAL_CONTRACT_VERSION = "merchant_commission_meow.v2"
+_RUNTIME_INPUT_BUILDER_PATH = (
+    "roxauto.tasks.daily_ui.merchant_commission_meow.build_merchant_commission_meow_runtime_input"
+)
+_RUNTIME_SEAM_BUILDER_PATH = (
+    "roxauto.tasks.daily_ui.merchant_commission_meow.build_merchant_commission_meow_runtime_seam"
+)
+_TASK_SPEC_BUILDER_PATH = (
+    "roxauto.tasks.daily_ui.merchant_commission_meow.build_merchant_commission_meow_task_spec"
+)
+_RUNTIME_BRIDGE_PROBE_PATH = (
+    "roxauto.tasks.daily_ui.merchant_commission_meow.has_merchant_commission_meow_runtime_bridge"
+)
+_RESULT_SIGNAL_KEYS = (
+    "anchor_id",
+    "decision",
+    "failure_reason_id",
+    "inspection_attempts",
+    "matched_anchor_ids",
+    "outcome_code",
+    "round_index",
+    "step_outcome",
+    "task_action",
+    "telemetry",
+    "text_evidence",
+)
+_ACTION_DISPATCH_SUCCESS_STATUSES = frozenset({"completed", "partial", "executed", "routed"})
+_TEXT_EVIDENCE_CONFIDENCE_THRESHOLD = 0.85
+_DEFAULT_INSPECTION_RETRY_LIMIT = 2
+_PRE_SUBMIT_ROUND_CONTEXT_KEY = "daily_ui.merchant_commission_meow.pre_submit_round"
 
 
 @dataclass(slots=True)
@@ -748,6 +800,233 @@ class MerchantCommissionMeowSpecification:
         )
 
 
+class MerchantCommissionMeowTaskFailureReason(str, Enum):
+    ENTRY_MODAL_UNAVAILABLE = "entry_modal_unavailable"
+    MEOW_ACCEPT_UNAVAILABLE = "meow_accept_unavailable"
+    TASK_LIST_ENTRY_UNAVAILABLE = "task_list_entry_unavailable"
+    REENTRY_UNAVAILABLE = "reentry_unavailable"
+    SUBMIT_PANEL_UNAVAILABLE = "submit_panel_unavailable"
+    BUY_CONFIRMATION_UNAVAILABLE = "buy_confirmation_unavailable"
+    BUY_NOW_UNAVAILABLE = "buy_now_unavailable"
+    SUBMIT_BUTTON_UNAVAILABLE = "submit_button_unavailable"
+    PROGRESSION_UNVERIFIED = "progression_unverified"
+    PROGRESSION_LOW_CONFIDENCE = "progression_low_confidence"
+    RUNTIME_DISPATCH_FAILED = "runtime_dispatch_failed"
+
+
+@dataclass(slots=True)
+class MerchantCommissionMeowObservedTextEvidence:
+    source_type: str
+    raw_text: str
+    normalized_text: str
+    bbox: tuple[int, int, int, int]
+    confidence: float
+    screenshot_ref: str
+    reader: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return to_primitive(
+            {
+                "source_type": self.source_type,
+                "raw_text": self.raw_text,
+                "normalized_text": self.normalized_text,
+                "bbox": self.bbox,
+                "confidence": self.confidence,
+                "screenshot_ref": self.screenshot_ref,
+                "reader": self.reader,
+            }
+        )
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        return cls(
+            source_type=str(data.get("source_type", "")),
+            raw_text=str(data.get("raw_text", "")),
+            normalized_text=str(data.get("normalized_text", "")),
+            bbox=_tuple_int_quad(data.get("bbox")),
+            confidence=float(data.get("confidence", 0.0)),
+            screenshot_ref=str(data.get("screenshot_ref", "")),
+            reader=str(data.get("reader", "")),
+        )
+
+
+@dataclass(slots=True)
+class MerchantCommissionMeowCheckpointInspection:
+    checkpoint_id: str
+    screenshot_path: str
+    matched_anchor_ids: list[str] = field(default_factory=list)
+    anchor_points: dict[str, tuple[int, int]] = field(default_factory=dict)
+    text_evidence: list[MerchantCommissionMeowObservedTextEvidence] = field(default_factory=list)
+    round_index: int | None = None
+    message: str = ""
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return to_primitive(
+            {
+                "checkpoint_id": self.checkpoint_id,
+                "screenshot_path": self.screenshot_path,
+                "matched_anchor_ids": self.matched_anchor_ids,
+                "anchor_points": self.anchor_points,
+                "text_evidence": [item.to_dict() for item in self.text_evidence],
+                "round_index": self.round_index,
+                "message": self.message,
+                "metadata": self.metadata,
+            }
+        )
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        anchor_points = {
+            str(anchor_id): _tuple_int_pair(point)
+            for anchor_id, point in dict(data.get("anchor_points", {})).items()
+        }
+        return cls(
+            checkpoint_id=str(data.get("checkpoint_id", "")),
+            screenshot_path=str(data.get("screenshot_path", "")),
+            matched_anchor_ids=[str(item) for item in data.get("matched_anchor_ids", [])],
+            anchor_points=anchor_points,
+            text_evidence=[
+                MerchantCommissionMeowObservedTextEvidence.from_dict(dict(item))
+                for item in data.get("text_evidence", [])
+            ],
+            round_index=_optional_int(data.get("round_index")),
+            message=str(data.get("message", "")),
+            metadata=dict(data.get("metadata", {})),
+        )
+
+    def has_anchor(self, anchor_id: str) -> bool:
+        return anchor_id in self.matched_anchor_ids
+
+
+@dataclass(slots=True)
+class MerchantCommissionMeowRuntimeStepSpec:
+    step_id: str
+    action: str
+    description: str
+    display_name: str
+    success_condition: str
+    failure_condition: str = ""
+    notes: str = ""
+    summary: str = ""
+    anchor_id: str = ""
+    failure_reason_id: str = ""
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return to_primitive(
+            {
+                "step_id": self.step_id,
+                "action": self.action,
+                "description": self.description,
+                "display_name": self.display_name,
+                "success_condition": self.success_condition,
+                "failure_condition": self.failure_condition,
+                "notes": self.notes,
+                "summary": self.summary,
+                "anchor_id": self.anchor_id,
+                "failure_reason_id": self.failure_reason_id,
+                "metadata": self.metadata,
+            }
+        )
+
+
+@dataclass(slots=True)
+class MerchantCommissionMeowRuntimeInput:
+    task_id: str
+    pack_id: str
+    manifest_path: str
+    manifest: TaskManifest
+    builder_input: TaskRuntimeBuilderInput
+    readiness_report: TaskReadinessReport
+    blueprint: TaskBlueprint
+    fixture_profile_path: str
+    fixture_profile: TaskFixtureProfile
+    route_contract: MerchantCommissionMeowRouteContract
+    loop_contract: MerchantCommissionMeowLoopContract
+    submission_policy: MerchantCommissionMeowSubmissionPolicy
+    decision_contract: MerchantCommissionMeowDecisionContract
+    required_anchor_ids: list[str] = field(default_factory=list)
+    supporting_anchor_ids: list[str] = field(default_factory=list)
+    step_specs: list[MerchantCommissionMeowRuntimeStepSpec] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return to_primitive(
+            {
+                "task_id": self.task_id,
+                "pack_id": self.pack_id,
+                "manifest_path": self.manifest_path,
+                "fixture_profile_path": self.fixture_profile_path,
+                "fixture_id": self.fixture_profile.fixture_id,
+                "required_anchor_ids": self.required_anchor_ids,
+                "supporting_anchor_ids": self.supporting_anchor_ids,
+                "route_contract": self.route_contract.to_dict(),
+                "loop_contract": self.loop_contract.to_dict(),
+                "submission_policy": self.submission_policy.to_dict(),
+                "decision_contract": self.decision_contract.to_dict(),
+                "step_specs": [step.to_dict() for step in self.step_specs],
+                "builder_input": self.builder_input.to_dict(),
+                "implementation_readiness_state": self.readiness_report.implementation_readiness_state.value,
+                "warning_requirement_ids": [
+                    requirement.requirement_id
+                    for requirement in self.readiness_report.warning_requirements
+                ],
+                "metadata": self.metadata,
+            }
+        )
+
+
+@dataclass(slots=True)
+class MerchantCommissionMeowRuntimeSeam:
+    task_id: str
+    pack_id: str
+    runtime_input: MerchantCommissionMeowRuntimeInput
+    signal_contract_version: str
+    result_signal_keys: list[str] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return to_primitive(
+            {
+                "task_id": self.task_id,
+                "pack_id": self.pack_id,
+                "signal_contract_version": self.signal_contract_version,
+                "result_signal_keys": self.result_signal_keys,
+                "builder_input": self.runtime_input.builder_input.to_dict(),
+                "runtime_input": self.runtime_input.to_dict(),
+                "metadata": self.metadata,
+            }
+        )
+
+    def build_task_spec(
+        self,
+        *,
+        adapter: EmulatorActionAdapter,
+        vision_gateway: "MerchantCommissionMeowVisionGateway",
+        navigation_plan: MerchantCommissionMeowFullRunNavigationPlan | None = None,
+    ) -> TaskSpec:
+        return build_merchant_commission_meow_task_spec(
+            adapter=adapter,
+            vision_gateway=vision_gateway,
+            navigation_plan=navigation_plan,
+            runtime_seam=self,
+        )
+
+
+class MerchantCommissionMeowVisionGateway(Protocol):
+    def inspect(
+        self,
+        *,
+        instance: InstanceState,
+        screenshot_path: Path,
+        step_id: str,
+        signal_anchor_ids: list[str],
+        metadata: dict[str, Any] | None = None,
+    ) -> MerchantCommissionMeowCheckpointInspection:
+        """Inspect one merchant-commission surface and return bounded evidence."""
+
+
 def load_merchant_commission_meow_blueprint(
     repository: TaskFoundationRepository | None = None,
 ) -> TaskBlueprint:
@@ -1164,6 +1443,1506 @@ def resolve_merchant_commission_meow_from_main_screen(
     )
 
 
+def build_merchant_commission_meow_runtime_input(
+    *,
+    builder_input: TaskRuntimeBuilderInput | None = None,
+    readiness_report: TaskReadinessReport | None = None,
+    foundation_repository: TaskFoundationRepository | None = None,
+) -> MerchantCommissionMeowRuntimeInput:
+    repo = foundation_repository or TaskFoundationRepository.load_default()
+    specification = build_merchant_commission_meow_specification(
+        builder_input=builder_input,
+        readiness_report=readiness_report,
+        foundation_repository=repo,
+    )
+    runtime_seam_metadata = _resolve_runtime_seam_metadata(
+        builder_input=specification.builder_input,
+        blueprint=specification.blueprint,
+    )
+    return MerchantCommissionMeowRuntimeInput(
+        task_id=specification.task_id,
+        pack_id=specification.pack_id,
+        manifest_path=specification.manifest_path,
+        manifest=_build_runtime_manifest(specification.blueprint.manifest),
+        builder_input=specification.builder_input,
+        readiness_report=specification.readiness_report,
+        blueprint=specification.blueprint,
+        fixture_profile_path=specification.fixture_profile_path,
+        fixture_profile=specification.fixture_profile,
+        route_contract=specification.route_contract,
+        loop_contract=specification.loop_contract,
+        submission_policy=specification.submission_policy,
+        decision_contract=specification.decision_contract,
+        required_anchor_ids=list(specification.required_anchor_ids),
+        supporting_anchor_ids=list(specification.supporting_anchor_ids),
+        step_specs=_build_runtime_step_specs(specification.blueprint.steps),
+        metadata={
+            "implementation_state": specification.blueprint.implementation_state.value,
+            "runtime_bridge": "roxauto.tasks.daily_ui.merchant_commission_meow",
+            "golden_screen_slugs": [case.screen_slug for case in specification.blueprint.golden_cases],
+            "supporting_anchor_ids": list(specification.supporting_anchor_ids),
+            "supporting_golden_screen_slugs": list(specification.supporting_screen_slugs),
+            "signal_contract_version": str(
+                runtime_seam_metadata.get("signal_contract_version", _SIGNAL_CONTRACT_VERSION)
+            ),
+            "result_signal_keys": list(
+                runtime_seam_metadata.get("result_signal_keys", list(_RESULT_SIGNAL_KEYS))
+            ),
+            "runtime_seam": dict(runtime_seam_metadata),
+            "merchant_commission_meow_handoff_fields": _metadata_string_list(
+                specification.builder_input.metadata,
+                "merchant_commission_meow_handoff_fields",
+            ),
+        },
+    )
+
+
+def build_merchant_commission_meow_runtime_seam(
+    *,
+    runtime_input: MerchantCommissionMeowRuntimeInput | None = None,
+    builder_input: TaskRuntimeBuilderInput | None = None,
+    readiness_report: TaskReadinessReport | None = None,
+    foundation_repository: TaskFoundationRepository | None = None,
+) -> MerchantCommissionMeowRuntimeSeam:
+    resolved_runtime_input = runtime_input or build_merchant_commission_meow_runtime_input(
+        builder_input=builder_input,
+        readiness_report=readiness_report,
+        foundation_repository=foundation_repository,
+    )
+    runtime_seam_metadata = dict(
+        resolved_runtime_input.metadata.get("runtime_seam", _default_runtime_seam_metadata())
+    )
+    result_signal_keys = runtime_seam_metadata.get("result_signal_keys", list(_RESULT_SIGNAL_KEYS))
+    return MerchantCommissionMeowRuntimeSeam(
+        task_id=resolved_runtime_input.task_id,
+        pack_id=resolved_runtime_input.pack_id,
+        runtime_input=resolved_runtime_input,
+        signal_contract_version=str(
+            runtime_seam_metadata.get("signal_contract_version", _SIGNAL_CONTRACT_VERSION)
+        ),
+        result_signal_keys=(
+            [str(item) for item in result_signal_keys]
+            if isinstance(result_signal_keys, list)
+            else list(_RESULT_SIGNAL_KEYS)
+        ),
+        metadata={
+            **runtime_seam_metadata,
+            "implementation_state": str(
+                resolved_runtime_input.metadata.get("implementation_state", "")
+            ),
+            "required_anchor_ids": list(resolved_runtime_input.required_anchor_ids),
+            "supporting_anchor_ids": list(resolved_runtime_input.supporting_anchor_ids),
+        },
+    )
+
+
+def build_merchant_commission_meow_task_spec(
+    *,
+    adapter: EmulatorActionAdapter,
+    vision_gateway: MerchantCommissionMeowVisionGateway,
+    navigation_plan: MerchantCommissionMeowFullRunNavigationPlan | None = None,
+    runtime_seam: MerchantCommissionMeowRuntimeSeam | None = None,
+    runtime_input: MerchantCommissionMeowRuntimeInput | None = None,
+    foundation_repository: TaskFoundationRepository | None = None,
+) -> TaskSpec:
+    resolved_runtime_input = runtime_input or (
+        runtime_seam.runtime_input if runtime_seam is not None else None
+    ) or build_merchant_commission_meow_runtime_input(
+        foundation_repository=foundation_repository,
+    )
+    resolved_runtime_seam = runtime_seam or build_merchant_commission_meow_runtime_seam(
+        runtime_input=resolved_runtime_input,
+    )
+    resolved_navigation_plan = navigation_plan or MerchantCommissionMeowFullRunNavigationPlan()
+    bridge = _MerchantCommissionMeowTaskBridge(
+        adapter=adapter,
+        vision_gateway=vision_gateway,
+        runtime_input=resolved_runtime_input,
+        navigation_plan=resolved_navigation_plan,
+    )
+    handlers = {
+        "open_merchant_commission_entry": bridge.open_merchant_commission_entry,
+        "accept_meow_group_commission": bridge.accept_meow_group_commission,
+        "reenter_from_daily_task_list": bridge.reenter_from_daily_task_list,
+        "resolve_round_material_submission": bridge.resolve_round_material_submission,
+        "verify_round_progression": bridge.verify_round_progression,
+    }
+    manifest = resolved_runtime_input.manifest
+    return TaskSpec(
+        task_id=manifest.task_id,
+        name=manifest.name,
+        version=manifest.version,
+        entry_state="home_hud_visible",
+        manifest=manifest,
+        steps=[
+            TaskStep(step.step_id, step.description, handlers[step.step_id])
+            for step in resolved_runtime_input.step_specs
+        ],
+        metadata={
+            **dict(resolved_runtime_input.blueprint.metadata),
+            "implementation_state": "fixtured",
+            "navigation_plan": resolved_navigation_plan.to_dict(),
+            "required_anchor_ids": list(resolved_runtime_input.required_anchor_ids),
+            "supporting_anchor_ids": list(resolved_runtime_input.supporting_anchor_ids),
+            "runtime_bridge": "roxauto.tasks.daily_ui.merchant_commission_meow",
+            "builder_input": resolved_runtime_input.builder_input.to_dict(),
+            "runtime_input": resolved_runtime_input.to_dict(),
+            "runtime_seam": resolved_runtime_seam.to_dict(),
+            "implementation_readiness_state": (
+                resolved_runtime_input.readiness_report.implementation_readiness_state.value
+            ),
+        },
+    )
+
+
+def has_merchant_commission_meow_runtime_bridge() -> bool:
+    return True
+
+
+class _MerchantCommissionMeowTaskBridge:
+    def __init__(
+        self,
+        *,
+        adapter: EmulatorActionAdapter,
+        vision_gateway: MerchantCommissionMeowVisionGateway,
+        runtime_input: MerchantCommissionMeowRuntimeInput,
+        navigation_plan: MerchantCommissionMeowFullRunNavigationPlan,
+    ) -> None:
+        self._adapter = adapter
+        self._vision_gateway = vision_gateway
+        self._runtime_input = runtime_input
+        self._navigation_plan = navigation_plan
+        self._step_specs = {item.step_id: item for item in runtime_input.step_specs}
+
+    def open_merchant_commission_entry(self, context: TaskExecutionContext):
+        step_id = "open_merchant_commission_entry"
+        attempts: list[dict[str, Any]] = []
+        precheck, precheck_attempts = self._inspect_until(
+            context,
+            step_id=step_id,
+            reason="entry.precheck",
+            signal_anchor_ids=self._signal_anchor_ids(step_id),
+            accepted=lambda inspection: inspection.has_anchor(_DETAIL_MODAL_ANCHOR_ID),
+            max_attempts=1,
+        )
+        attempts.extend(precheck_attempts)
+        if precheck.has_anchor(_DETAIL_MODAL_ANCHOR_ID):
+            return step_success(
+                step_id,
+                "Merchant commission detail modal is already visible.",
+                screenshot_path=precheck.screenshot_path,
+                data=self._step_data(
+                    step_id=step_id,
+                    inspection=precheck,
+                    inspection_attempts=attempts,
+                    outcome_code="entry_modal_already_visible",
+                    telemetry={"reason": "entry.precheck"},
+                ),
+            )
+
+        task_actions: list[dict[str, Any]] = []
+        last_action: dict[str, Any] | None = None
+        for point, wait_sec, reason in (
+            (
+                self._navigation_plan.entry_plan.activity_button_point,
+                self._navigation_plan.entry_plan.wait_after_activity_open_sec,
+                "entry.tap_activity",
+            ),
+            (
+                self._navigation_plan.entry_plan.carnival_entry_point,
+                self._navigation_plan.entry_plan.wait_after_carnival_sec,
+                "entry.tap_carnival",
+            ),
+            (
+                self._navigation_plan.entry_plan.merchant_commission_icon_point,
+                self._navigation_plan.entry_plan.wait_after_merchant_detail_sec,
+                "entry.tap_merchant_icon",
+            ),
+        ):
+            last_action = self._tap(context, step_id=step_id, point=point, reason=reason)
+            task_actions.append(last_action)
+            if self._dispatch_failed(last_action):
+                return step_failure(
+                    step_id,
+                    self._dispatch_failure_message(
+                        action_name="merchant commission entry tap",
+                        task_action=last_action,
+                    ),
+                    data=self._step_data(
+                        step_id=step_id,
+                        inspection=precheck,
+                        inspection_attempts=attempts,
+                        failure_reason_id=MerchantCommissionMeowTaskFailureReason.RUNTIME_DISPATCH_FAILED.value,
+                        outcome_code="entry_dispatch_failed",
+                        task_action=last_action,
+                        telemetry={"reason": reason, "task_actions": task_actions},
+                    ),
+                )
+            self._sleep(wait_sec)
+
+        postcheck, post_attempts = self._inspect_until(
+            context,
+            step_id=step_id,
+            reason="entry.postcheck",
+            signal_anchor_ids=self._signal_anchor_ids(step_id),
+            accepted=lambda inspection: inspection.has_anchor(_DETAIL_MODAL_ANCHOR_ID),
+            max_attempts=self._inspection_retry_limit(step_id),
+        )
+        attempts.extend(post_attempts)
+        if postcheck.has_anchor(_DETAIL_MODAL_ANCHOR_ID):
+            return step_success(
+                step_id,
+                "Fixed entry route reached the merchant commission detail modal.",
+                screenshot_path=postcheck.screenshot_path,
+                data=self._step_data(
+                    step_id=step_id,
+                    inspection=postcheck,
+                    inspection_attempts=attempts,
+                    outcome_code="entry_modal_verified",
+                    task_action=last_action,
+                    telemetry={"reason": "entry.postcheck", "task_actions": task_actions},
+                ),
+            )
+        return step_failure(
+            step_id,
+            "Merchant commission detail modal could not be verified after the fixed entry route.",
+            screenshot_path=postcheck.screenshot_path,
+            data=self._step_data(
+                step_id=step_id,
+                inspection=postcheck,
+                inspection_attempts=attempts,
+                failure_reason_id=MerchantCommissionMeowTaskFailureReason.ENTRY_MODAL_UNAVAILABLE.value,
+                outcome_code="entry_modal_unverified",
+                task_action=last_action,
+                step_outcome={
+                    "kind": "verification_failed",
+                    "failure_reason_id": MerchantCommissionMeowTaskFailureReason.ENTRY_MODAL_UNAVAILABLE.value,
+                },
+                telemetry={"reason": "entry.postcheck", "task_actions": task_actions},
+            ),
+        )
+
+    def accept_meow_group_commission(self, context: TaskExecutionContext):
+        step_id = "accept_meow_group_commission"
+        attempts: list[dict[str, Any]] = []
+        precheck, precheck_attempts = self._inspect_until(
+            context,
+            step_id=step_id,
+            reason="accept.precheck",
+            signal_anchor_ids=self._signal_anchor_ids(step_id),
+            accepted=lambda inspection: inspection.has_anchor(_TASK_LIST_ENTRY_ANCHOR_ID),
+            max_attempts=1,
+        )
+        attempts.extend(precheck_attempts)
+        if precheck.has_anchor(_TASK_LIST_ENTRY_ANCHOR_ID):
+            return step_success(
+                step_id,
+                "Meow Group commission is already accepted and ready in the task list.",
+                screenshot_path=precheck.screenshot_path,
+                data=self._step_data(
+                    step_id=step_id,
+                    inspection=precheck,
+                    inspection_attempts=attempts,
+                    outcome_code="accept_already_prepared_task_list",
+                    telemetry={"reason": "accept.precheck"},
+                ),
+            )
+
+        task_actions: list[dict[str, Any]] = []
+        last_action: dict[str, Any] | None = None
+        list_inspection = precheck
+        if not (
+            list_inspection.has_anchor(_LIST_PANEL_ANCHOR_ID)
+            and list_inspection.has_anchor(_MEOW_ACCEPT_BUTTON_ANCHOR_ID)
+        ):
+            for point, wait_sec, reason in (
+                (
+                    self._navigation_plan.entry_plan.go_now_point,
+                    self._navigation_plan.entry_plan.wait_after_go_now_sec,
+                    "accept.tap_go_now",
+                ),
+                (
+                    self._navigation_plan.entry_plan.npc_commission_option_point,
+                    self._navigation_plan.entry_plan.wait_after_npc_option_sec,
+                    "accept.tap_npc_option",
+                ),
+            ):
+                last_action = self._tap(context, step_id=step_id, point=point, reason=reason)
+                task_actions.append(last_action)
+                if self._dispatch_failed(last_action):
+                    return step_failure(
+                        step_id,
+                        self._dispatch_failure_message(
+                            action_name="meow accept preparation tap",
+                            task_action=last_action,
+                        ),
+                        data=self._step_data(
+                            step_id=step_id,
+                            inspection=list_inspection,
+                            inspection_attempts=attempts,
+                            failure_reason_id=MerchantCommissionMeowTaskFailureReason.RUNTIME_DISPATCH_FAILED.value,
+                            outcome_code="accept_dispatch_failed",
+                            task_action=last_action,
+                            telemetry={"reason": reason, "task_actions": task_actions},
+                        ),
+                    )
+                self._sleep(wait_sec)
+
+            list_inspection, list_attempts = self._inspect_until(
+                context,
+                step_id=step_id,
+                reason="accept.list_panel",
+                signal_anchor_ids=self._signal_anchor_ids(step_id),
+                accepted=lambda inspection: inspection.has_anchor(_LIST_PANEL_ANCHOR_ID)
+                and inspection.has_anchor(_MEOW_ACCEPT_BUTTON_ANCHOR_ID),
+                max_attempts=self._inspection_retry_limit(step_id),
+            )
+            attempts.extend(list_attempts)
+
+        if not (
+            list_inspection.has_anchor(_LIST_PANEL_ANCHOR_ID)
+            and list_inspection.has_anchor(_MEOW_ACCEPT_BUTTON_ANCHOR_ID)
+        ):
+            return step_failure(
+                step_id,
+                "Meow Group accept surface could not be verified.",
+                screenshot_path=list_inspection.screenshot_path,
+                data=self._step_data(
+                    step_id=step_id,
+                    inspection=list_inspection,
+                    inspection_attempts=attempts,
+                    failure_reason_id=MerchantCommissionMeowTaskFailureReason.MEOW_ACCEPT_UNAVAILABLE.value,
+                    outcome_code="accept_surface_unverified",
+                    task_action=last_action,
+                    step_outcome={
+                        "kind": "verification_failed",
+                        "failure_reason_id": MerchantCommissionMeowTaskFailureReason.MEOW_ACCEPT_UNAVAILABLE.value,
+                    },
+                    telemetry={"reason": "accept.list_panel", "task_actions": task_actions},
+                ),
+            )
+
+        for action_kind, wait_sec, reason in (
+            (
+                ("tap", self._navigation_plan.entry_plan.meow_accept_point),
+                self._navigation_plan.entry_plan.wait_after_accept_sec,
+                "accept.tap_meow_accept",
+            ),
+            (
+                ("tap", self._navigation_plan.entry_plan.close_list_point),
+                self._navigation_plan.entry_plan.wait_after_close_list_sec,
+                "accept.tap_close_list",
+            ),
+            (
+                ("tap", self._navigation_plan.entry_plan.expand_task_tab_point),
+                self._navigation_plan.entry_plan.wait_after_expand_task_tab_sec,
+                "accept.tap_expand_task_tab",
+            ),
+            (
+                (
+                    "swipe",
+                    (
+                        self._navigation_plan.entry_plan.task_list_swipe_start,
+                        self._navigation_plan.entry_plan.task_list_swipe_end,
+                        self._navigation_plan.entry_plan.task_list_swipe_duration_ms,
+                    ),
+                ),
+                self._navigation_plan.entry_plan.wait_after_task_swipe_sec,
+                "accept.swipe_task_list",
+            ),
+        ):
+            if action_kind[0] == "tap":
+                last_action = self._tap(
+                    context,
+                    step_id=step_id,
+                    point=action_kind[1],
+                    reason=reason,
+                )
+            else:
+                start, end, duration_ms = action_kind[1]
+                last_action = self._swipe(
+                    context,
+                    step_id=step_id,
+                    start=start,
+                    end=end,
+                    duration_ms=duration_ms,
+                    reason=reason,
+                )
+            task_actions.append(last_action)
+            if self._dispatch_failed(last_action):
+                return step_failure(
+                    step_id,
+                    self._dispatch_failure_message(
+                        action_name="meow accept follow-up action",
+                        task_action=last_action,
+                    ),
+                    data=self._step_data(
+                        step_id=step_id,
+                        inspection=list_inspection,
+                        inspection_attempts=attempts,
+                        failure_reason_id=MerchantCommissionMeowTaskFailureReason.RUNTIME_DISPATCH_FAILED.value,
+                        outcome_code="accept_dispatch_failed",
+                        task_action=last_action,
+                        telemetry={"reason": reason, "task_actions": task_actions},
+                    ),
+                )
+            self._sleep(wait_sec)
+
+        task_list_inspection, task_list_attempts = self._inspect_until(
+            context,
+            step_id=step_id,
+            reason="accept.task_list_ready",
+            signal_anchor_ids=self._signal_anchor_ids(step_id),
+            accepted=lambda inspection: inspection.has_anchor(_TASK_LIST_ENTRY_ANCHOR_ID),
+            max_attempts=self._inspection_retry_limit(step_id),
+        )
+        attempts.extend(task_list_attempts)
+        if task_list_inspection.has_anchor(_TASK_LIST_ENTRY_ANCHOR_ID):
+            return step_success(
+                step_id,
+                "Meow Group commission was accepted and the task list re-entry route is ready.",
+                screenshot_path=task_list_inspection.screenshot_path,
+                data=self._step_data(
+                    step_id=step_id,
+                    inspection=task_list_inspection,
+                    inspection_attempts=attempts,
+                    outcome_code="accept_prepared_task_list",
+                    task_action=last_action,
+                    telemetry={"reason": "accept.task_list_ready", "task_actions": task_actions},
+                ),
+            )
+        return step_failure(
+            step_id,
+            "Accepted Meow Group commission could not be recovered to the task list route.",
+            screenshot_path=task_list_inspection.screenshot_path,
+            data=self._step_data(
+                step_id=step_id,
+                inspection=task_list_inspection,
+                inspection_attempts=attempts,
+                failure_reason_id=MerchantCommissionMeowTaskFailureReason.TASK_LIST_ENTRY_UNAVAILABLE.value,
+                outcome_code="task_list_entry_unverified",
+                task_action=last_action,
+                step_outcome={
+                    "kind": "verification_failed",
+                    "failure_reason_id": MerchantCommissionMeowTaskFailureReason.TASK_LIST_ENTRY_UNAVAILABLE.value,
+                },
+                telemetry={"reason": "accept.task_list_ready", "task_actions": task_actions},
+            ),
+        )
+
+    def reenter_from_daily_task_list(self, context: TaskExecutionContext):
+        step_id = "reenter_from_daily_task_list"
+        precheck, attempts = self._inspect_until(
+            context,
+            step_id=step_id,
+            reason="reenter.precheck",
+            signal_anchor_ids=self._signal_anchor_ids(step_id),
+            accepted=lambda inspection: inspection.has_anchor(_TASK_LIST_ENTRY_ANCHOR_ID),
+            max_attempts=self._inspection_retry_limit(step_id),
+        )
+        if not precheck.has_anchor(_TASK_LIST_ENTRY_ANCHOR_ID):
+            return step_failure(
+                step_id,
+                "Task-list re-entry surface is not visible for the accepted Meow Group commission.",
+                screenshot_path=precheck.screenshot_path,
+                data=self._step_data(
+                    step_id=step_id,
+                    inspection=precheck,
+                    inspection_attempts=attempts,
+                    failure_reason_id=MerchantCommissionMeowTaskFailureReason.TASK_LIST_ENTRY_UNAVAILABLE.value,
+                    outcome_code="reenter_task_list_missing",
+                    step_outcome={
+                        "kind": "verification_failed",
+                        "failure_reason_id": MerchantCommissionMeowTaskFailureReason.TASK_LIST_ENTRY_UNAVAILABLE.value,
+                    },
+                    telemetry={"reason": "reenter.precheck"},
+                ),
+            )
+
+        best_before_round = _best_round_index_evidence(
+            precheck,
+            round_limit=self._runtime_input.loop_contract.round_limit,
+        )
+        context.metadata[_PRE_SUBMIT_ROUND_CONTEXT_KEY] = {
+            "inspection": precheck.to_dict(),
+            "round_index": best_before_round[0] if best_before_round is not None else None,
+            "confidence_ok": bool(
+                best_before_round is not None
+                and best_before_round[1].confidence >= _TEXT_EVIDENCE_CONFIDENCE_THRESHOLD
+            ),
+            "best_text_evidence": (
+                best_before_round[1].to_dict() if best_before_round is not None else None
+            ),
+        }
+
+        task_action = self._tap(
+            context,
+            step_id=step_id,
+            point=self._navigation_plan.active_round_plan.task_entry_point,
+            reason="reenter.tap_task_entry",
+        )
+        if self._dispatch_failed(task_action):
+            return step_failure(
+                step_id,
+                self._dispatch_failure_message(
+                    action_name="task-list re-entry tap",
+                    task_action=task_action,
+                ),
+                data=self._step_data(
+                    step_id=step_id,
+                    inspection=precheck,
+                    inspection_attempts=attempts,
+                    failure_reason_id=MerchantCommissionMeowTaskFailureReason.RUNTIME_DISPATCH_FAILED.value,
+                    outcome_code="reenter_dispatch_failed",
+                    task_action=task_action,
+                    text_evidence=precheck.text_evidence,
+                    telemetry={"reason": "reenter.tap_task_entry"},
+                ),
+            )
+        self._sleep(self._navigation_plan.active_round_plan.wait_after_task_entry_sec)
+
+        postcheck, post_attempts = self._inspect_until(
+            context,
+            step_id=step_id,
+            reason="reenter.postcheck",
+            signal_anchor_ids=self._signal_anchor_ids(step_id),
+            accepted=lambda inspection: inspection.has_anchor(_MEOW_SUBMIT_OPTION_ANCHOR_ID),
+            max_attempts=self._inspection_retry_limit(step_id),
+        )
+        attempts.extend(post_attempts)
+        if postcheck.has_anchor(_MEOW_SUBMIT_OPTION_ANCHOR_ID):
+            return step_success(
+                step_id,
+                "Accepted Meow Group commission was re-entered from the task list.",
+                screenshot_path=postcheck.screenshot_path,
+                data=self._step_data(
+                    step_id=step_id,
+                    inspection=postcheck,
+                    inspection_attempts=attempts,
+                    outcome_code="reentry_ready_for_submit",
+                    task_action=task_action,
+                    round_index=best_before_round[0] if best_before_round is not None else None,
+                    text_evidence=precheck.text_evidence,
+                    telemetry={
+                        "reason": "reenter.postcheck",
+                        "stored_pre_submit_round": dict(context.metadata[_PRE_SUBMIT_ROUND_CONTEXT_KEY]),
+                    },
+                ),
+            )
+        return step_failure(
+            step_id,
+            "Task-list re-entry did not reach the Meow Group submit shortcut.",
+            screenshot_path=postcheck.screenshot_path,
+            data=self._step_data(
+                step_id=step_id,
+                inspection=postcheck,
+                inspection_attempts=attempts,
+                failure_reason_id=MerchantCommissionMeowTaskFailureReason.REENTRY_UNAVAILABLE.value,
+                outcome_code="reentry_unverified",
+                task_action=task_action,
+                round_index=best_before_round[0] if best_before_round is not None else None,
+                text_evidence=precheck.text_evidence,
+                step_outcome={
+                    "kind": "verification_failed",
+                    "failure_reason_id": MerchantCommissionMeowTaskFailureReason.REENTRY_UNAVAILABLE.value,
+                },
+                telemetry={"reason": "reenter.postcheck"},
+            ),
+        )
+
+    def resolve_round_material_submission(self, context: TaskExecutionContext):
+        step_id = "resolve_round_material_submission"
+        attempts: list[dict[str, Any]] = []
+        task_actions: list[dict[str, Any]] = []
+        last_action: dict[str, Any] | None = None
+
+        panel_inspection, precheck_attempts = self._inspect_until(
+            context,
+            step_id=step_id,
+            reason="submission.precheck",
+            signal_anchor_ids=self._signal_anchor_ids(step_id),
+            accepted=lambda inspection: inspection.has_anchor(_SUBMIT_ITEM_PANEL_ANCHOR_ID),
+            max_attempts=1,
+        )
+        attempts.extend(precheck_attempts)
+        if not panel_inspection.has_anchor(_SUBMIT_ITEM_PANEL_ANCHOR_ID):
+            last_action = self._tap(
+                context,
+                step_id=step_id,
+                point=self._navigation_plan.active_round_plan.submit_option_point,
+                reason="submission.tap_submit_option",
+            )
+            task_actions.append(last_action)
+            if self._dispatch_failed(last_action):
+                return step_failure(
+                    step_id,
+                    self._dispatch_failure_message(
+                        action_name="submit-option tap",
+                        task_action=last_action,
+                    ),
+                    data=self._step_data(
+                        step_id=step_id,
+                        inspection=panel_inspection,
+                        inspection_attempts=attempts,
+                        failure_reason_id=MerchantCommissionMeowTaskFailureReason.RUNTIME_DISPATCH_FAILED.value,
+                        outcome_code="submission_dispatch_failed",
+                        task_action=last_action,
+                        telemetry={"reason": "submission.tap_submit_option", "task_actions": task_actions},
+                    ),
+                )
+            self._sleep(self._navigation_plan.active_round_plan.wait_after_submit_option_sec)
+            panel_inspection, panel_attempts = self._inspect_until(
+                context,
+                step_id=step_id,
+                reason="submission.panel",
+                signal_anchor_ids=self._signal_anchor_ids(step_id),
+                accepted=lambda inspection: inspection.has_anchor(_SUBMIT_ITEM_PANEL_ANCHOR_ID),
+                max_attempts=self._inspection_retry_limit(step_id),
+            )
+            attempts.extend(panel_attempts)
+
+        if not panel_inspection.has_anchor(_SUBMIT_ITEM_PANEL_ANCHOR_ID):
+            return step_failure(
+                step_id,
+                "Meow submit-item panel could not be verified.",
+                screenshot_path=panel_inspection.screenshot_path,
+                data=self._step_data(
+                    step_id=step_id,
+                    inspection=panel_inspection,
+                    inspection_attempts=attempts,
+                    failure_reason_id=MerchantCommissionMeowTaskFailureReason.SUBMIT_PANEL_UNAVAILABLE.value,
+                    outcome_code="submit_panel_unverified",
+                    task_action=last_action,
+                    step_outcome={
+                        "kind": "verification_failed",
+                        "failure_reason_id": MerchantCommissionMeowTaskFailureReason.SUBMIT_PANEL_UNAVAILABLE.value,
+                    },
+                    telemetry={"reason": "submission.panel", "task_actions": task_actions},
+                ),
+            )
+
+        submit_panel_inspection = inspect_merchant_commission_meow_submit_panel_progress(
+            panel_inspection.screenshot_path
+        )
+        if submit_panel_inspection.progress_state is MerchantCommissionMeowSubmitPanelProgressState.FULL:
+            if not panel_inspection.has_anchor(_SUBMIT_BUTTON_ANCHOR_ID):
+                return step_failure(
+                    step_id,
+                    "Submit button is not visible on the ready Meow submit panel.",
+                    screenshot_path=panel_inspection.screenshot_path,
+                    data=self._step_data(
+                        step_id=step_id,
+                        inspection=panel_inspection,
+                        inspection_attempts=attempts,
+                        failure_reason_id=MerchantCommissionMeowTaskFailureReason.SUBMIT_BUTTON_UNAVAILABLE.value,
+                        outcome_code="submit_button_missing",
+                        decision=MerchantCommissionMeowDecisionValue.DIRECT_SUBMIT.value,
+                        telemetry={
+                            "reason": "submission.ready_panel",
+                            "submit_panel_inspection": submit_panel_inspection.to_dict(),
+                            "task_actions": task_actions,
+                        },
+                    ),
+                )
+            last_action = self._tap(
+                context,
+                step_id=step_id,
+                point=self._navigation_plan.active_round_plan.submit_panel_plan.submit_point,
+                reason="submission.tap_submit",
+            )
+            task_actions.append(last_action)
+            if self._dispatch_failed(last_action):
+                return step_failure(
+                    step_id,
+                    self._dispatch_failure_message(
+                        action_name="submit tap",
+                        task_action=last_action,
+                    ),
+                    data=self._step_data(
+                        step_id=step_id,
+                        inspection=panel_inspection,
+                        inspection_attempts=attempts,
+                        failure_reason_id=MerchantCommissionMeowTaskFailureReason.RUNTIME_DISPATCH_FAILED.value,
+                        outcome_code="submit_dispatch_failed",
+                        decision=MerchantCommissionMeowDecisionValue.DIRECT_SUBMIT.value,
+                        task_action=last_action,
+                        telemetry={
+                            "reason": "submission.tap_submit",
+                            "submit_panel_inspection": submit_panel_inspection.to_dict(),
+                            "task_actions": task_actions,
+                        },
+                    ),
+                )
+            return step_success(
+                step_id,
+                "Ready Meow round was submitted directly.",
+                screenshot_path=panel_inspection.screenshot_path,
+                data=self._step_data(
+                    step_id=step_id,
+                    inspection=panel_inspection,
+                    inspection_attempts=attempts,
+                    outcome_code="direct_submit_dispatched",
+                    decision=MerchantCommissionMeowDecisionValue.DIRECT_SUBMIT.value,
+                    reason_id=MerchantCommissionMeowDecisionReason.MATERIALS_READY.value,
+                    task_action=last_action,
+                    telemetry={
+                        "reason": "submission.ready_panel",
+                        "submit_panel_inspection": submit_panel_inspection.to_dict(),
+                        "task_actions": task_actions,
+                    },
+                ),
+            )
+
+        if submit_panel_inspection.progress_state is MerchantCommissionMeowSubmitPanelProgressState.INCOMPLETE:
+            if not panel_inspection.has_anchor(_BUY_NOW_BUTTON_ANCHOR_ID):
+                return step_failure(
+                    step_id,
+                    "Buy-now affordance is unavailable on the incomplete Meow submit panel.",
+                    screenshot_path=panel_inspection.screenshot_path,
+                    data=self._step_data(
+                        step_id=step_id,
+                        inspection=panel_inspection,
+                        inspection_attempts=attempts,
+                        failure_reason_id=MerchantCommissionMeowTaskFailureReason.BUY_NOW_UNAVAILABLE.value,
+                        outcome_code="buy_now_missing",
+                        decision=MerchantCommissionMeowDecisionValue.IMMEDIATE_BUY_THEN_SUBMIT.value,
+                        telemetry={
+                            "reason": "submission.incomplete_panel",
+                            "submit_panel_inspection": submit_panel_inspection.to_dict(),
+                            "task_actions": task_actions,
+                        },
+                    ),
+                )
+            last_action = self._tap(
+                context,
+                step_id=step_id,
+                point=self._navigation_plan.active_round_plan.submit_panel_plan.buy_now_point,
+                reason="submission.tap_buy_now",
+            )
+            task_actions.append(last_action)
+            if self._dispatch_failed(last_action):
+                return step_failure(
+                    step_id,
+                    self._dispatch_failure_message(
+                        action_name="buy-now tap",
+                        task_action=last_action,
+                    ),
+                    data=self._step_data(
+                        step_id=step_id,
+                        inspection=panel_inspection,
+                        inspection_attempts=attempts,
+                        failure_reason_id=MerchantCommissionMeowTaskFailureReason.RUNTIME_DISPATCH_FAILED.value,
+                        outcome_code="buy_now_dispatch_failed",
+                        decision=MerchantCommissionMeowDecisionValue.IMMEDIATE_BUY_THEN_SUBMIT.value,
+                        task_action=last_action,
+                        telemetry={
+                            "reason": "submission.tap_buy_now",
+                            "submit_panel_inspection": submit_panel_inspection.to_dict(),
+                            "task_actions": task_actions,
+                        },
+                    ),
+                )
+            self._sleep(self._navigation_plan.active_round_plan.submit_panel_plan.wait_after_buy_sec)
+
+            confirm_inspection, confirm_attempts = self._inspect_until(
+                context,
+                step_id=step_id,
+                reason="submission.buy_confirmation",
+                signal_anchor_ids=[_BUY_CONFIRMATION_DIALOG_ANCHOR_ID, _BUY_CONFIRM_BUTTON_ANCHOR_ID],
+                accepted=lambda inspection: inspection.has_anchor(_BUY_CONFIRM_BUTTON_ANCHOR_ID),
+                max_attempts=self._inspection_retry_limit(step_id),
+            )
+            attempts.extend(confirm_attempts)
+            if not confirm_inspection.has_anchor(_BUY_CONFIRM_BUTTON_ANCHOR_ID):
+                return step_failure(
+                    step_id,
+                    "Buy confirmation could not be verified for the Meow submit panel.",
+                    screenshot_path=confirm_inspection.screenshot_path,
+                    data=self._step_data(
+                        step_id=step_id,
+                        inspection=confirm_inspection,
+                        inspection_attempts=attempts,
+                        failure_reason_id=MerchantCommissionMeowTaskFailureReason.BUY_CONFIRMATION_UNAVAILABLE.value,
+                        outcome_code="buy_confirmation_unverified",
+                        decision=MerchantCommissionMeowDecisionValue.IMMEDIATE_BUY_THEN_SUBMIT.value,
+                        task_action=last_action,
+                        step_outcome={
+                            "kind": "verification_failed",
+                            "failure_reason_id": MerchantCommissionMeowTaskFailureReason.BUY_CONFIRMATION_UNAVAILABLE.value,
+                        },
+                        telemetry={
+                            "reason": "submission.buy_confirmation",
+                            "submit_panel_inspection": submit_panel_inspection.to_dict(),
+                            "task_actions": task_actions,
+                        },
+                    ),
+                )
+
+            last_action = self._tap(
+                context,
+                step_id=step_id,
+                point=self._navigation_plan.active_round_plan.submit_panel_plan.buy_confirm_point,
+                reason="submission.tap_buy_confirm",
+            )
+            task_actions.append(last_action)
+            if self._dispatch_failed(last_action):
+                return step_failure(
+                    step_id,
+                    self._dispatch_failure_message(
+                        action_name="buy-confirm tap",
+                        task_action=last_action,
+                    ),
+                    data=self._step_data(
+                        step_id=step_id,
+                        inspection=confirm_inspection,
+                        inspection_attempts=attempts,
+                        failure_reason_id=MerchantCommissionMeowTaskFailureReason.RUNTIME_DISPATCH_FAILED.value,
+                        outcome_code="buy_confirm_dispatch_failed",
+                        decision=MerchantCommissionMeowDecisionValue.IMMEDIATE_BUY_THEN_SUBMIT.value,
+                        task_action=last_action,
+                        telemetry={
+                            "reason": "submission.tap_buy_confirm",
+                            "submit_panel_inspection": submit_panel_inspection.to_dict(),
+                            "task_actions": task_actions,
+                        },
+                    ),
+                )
+            self._sleep(
+                self._navigation_plan.active_round_plan.submit_panel_plan.wait_after_confirm_sec
+            )
+
+            ready_panel_inspection, ready_panel_attempts = self._inspect_until(
+                context,
+                step_id=step_id,
+                reason="submission.post_confirm",
+                signal_anchor_ids=self._signal_anchor_ids(step_id),
+                accepted=lambda inspection: inspection.has_anchor(_SUBMIT_ITEM_PANEL_ANCHOR_ID)
+                and inspection.has_anchor(_SUBMIT_BUTTON_ANCHOR_ID),
+                max_attempts=self._inspection_retry_limit(step_id),
+            )
+            attempts.extend(ready_panel_attempts)
+            if not ready_panel_inspection.has_anchor(_SUBMIT_BUTTON_ANCHOR_ID):
+                return step_failure(
+                    step_id,
+                    "Submit button did not recover after Meow immediate-buy confirmation.",
+                    screenshot_path=ready_panel_inspection.screenshot_path,
+                    data=self._step_data(
+                        step_id=step_id,
+                        inspection=ready_panel_inspection,
+                        inspection_attempts=attempts,
+                        failure_reason_id=MerchantCommissionMeowTaskFailureReason.SUBMIT_BUTTON_UNAVAILABLE.value,
+                        outcome_code="submit_button_missing_after_buy",
+                        decision=MerchantCommissionMeowDecisionValue.IMMEDIATE_BUY_THEN_SUBMIT.value,
+                        telemetry={
+                            "reason": "submission.post_confirm",
+                            "submit_panel_inspection": submit_panel_inspection.to_dict(),
+                            "task_actions": task_actions,
+                        },
+                    ),
+                )
+
+            last_action = self._tap(
+                context,
+                step_id=step_id,
+                point=self._navigation_plan.active_round_plan.submit_panel_plan.submit_point,
+                reason="submission.tap_submit_after_buy",
+            )
+            task_actions.append(last_action)
+            if self._dispatch_failed(last_action):
+                return step_failure(
+                    step_id,
+                    self._dispatch_failure_message(
+                        action_name="submit-after-buy tap",
+                        task_action=last_action,
+                    ),
+                    data=self._step_data(
+                        step_id=step_id,
+                        inspection=ready_panel_inspection,
+                        inspection_attempts=attempts,
+                        failure_reason_id=MerchantCommissionMeowTaskFailureReason.RUNTIME_DISPATCH_FAILED.value,
+                        outcome_code="submit_dispatch_failed_after_buy",
+                        decision=MerchantCommissionMeowDecisionValue.IMMEDIATE_BUY_THEN_SUBMIT.value,
+                        task_action=last_action,
+                        telemetry={
+                            "reason": "submission.tap_submit_after_buy",
+                            "submit_panel_inspection": submit_panel_inspection.to_dict(),
+                            "task_actions": task_actions,
+                        },
+                    ),
+                )
+            return step_success(
+                step_id,
+                "Incomplete Meow round was bought and submitted.",
+                screenshot_path=ready_panel_inspection.screenshot_path,
+                data=self._step_data(
+                    step_id=step_id,
+                    inspection=ready_panel_inspection,
+                    inspection_attempts=attempts,
+                    outcome_code="buy_then_submit_dispatched",
+                    decision=MerchantCommissionMeowDecisionValue.IMMEDIATE_BUY_THEN_SUBMIT.value,
+                    reason_id=MerchantCommissionMeowDecisionReason.BUY_REQUIRED.value,
+                    task_action=last_action,
+                    telemetry={
+                        "reason": "submission.post_confirm",
+                        "submit_panel_inspection": submit_panel_inspection.to_dict(),
+                        "task_actions": task_actions,
+                    },
+                ),
+            )
+
+        return step_failure(
+            step_id,
+            "The Meow submit panel could not be classified truthfully.",
+            screenshot_path=panel_inspection.screenshot_path,
+            data=self._step_data(
+                step_id=step_id,
+                inspection=panel_inspection,
+                inspection_attempts=attempts,
+                failure_reason_id=MerchantCommissionMeowDecisionReason.ROUND_STATE_UNKNOWN.value,
+                outcome_code="submit_panel_state_unknown",
+                decision=MerchantCommissionMeowDecisionValue.STOP_FOR_OPERATOR.value,
+                step_outcome={
+                    "kind": "verification_failed",
+                    "failure_reason_id": MerchantCommissionMeowDecisionReason.ROUND_STATE_UNKNOWN.value,
+                },
+                telemetry={
+                    "reason": "submission.panel",
+                    "submit_panel_inspection": submit_panel_inspection.to_dict(),
+                    "task_actions": task_actions,
+                },
+            ),
+        )
+
+    def verify_round_progression(self, context: TaskExecutionContext):
+        step_id = "verify_round_progression"
+        stored_pre_submit = self._stored_pre_submit_round(context)
+        after_inspection, attempts = self._inspect_until(
+            context,
+            step_id=step_id,
+            reason="progression.verify",
+            signal_anchor_ids=self._signal_anchor_ids(step_id),
+            accepted=lambda inspection: inspection.has_anchor(_TASK_LIST_ENTRY_ANCHOR_ID)
+            or inspection.has_anchor(_ROUND_COUNTER_ANCHOR_ID),
+            max_attempts=self._inspection_retry_limit(step_id),
+        )
+        before_inspection = (
+            MerchantCommissionMeowCheckpointInspection.from_dict(
+                dict(stored_pre_submit.get("inspection", {}))
+            )
+            if stored_pre_submit
+            else None
+        )
+        before_round = (
+            _best_round_index_evidence(
+                before_inspection,
+                round_limit=self._runtime_input.loop_contract.round_limit,
+            )
+            if before_inspection is not None
+            else None
+        )
+        after_round = _best_round_index_evidence(
+            after_inspection,
+            round_limit=self._runtime_input.loop_contract.round_limit,
+        )
+        combined_text_evidence: list[MerchantCommissionMeowObservedTextEvidence] = []
+        if before_inspection is not None:
+            combined_text_evidence.extend(before_inspection.text_evidence)
+        combined_text_evidence.extend(after_inspection.text_evidence)
+
+        if before_round is None or after_round is None:
+            return step_failure(
+                step_id,
+                "Round progression could not be verified from bounded task-list text evidence.",
+                screenshot_path=after_inspection.screenshot_path,
+                data=self._step_data(
+                    step_id=step_id,
+                    inspection=after_inspection,
+                    inspection_attempts=attempts,
+                    failure_reason_id=MerchantCommissionMeowTaskFailureReason.PROGRESSION_UNVERIFIED.value,
+                    outcome_code="round_progression_unverified",
+                    text_evidence=combined_text_evidence,
+                    step_outcome={
+                        "kind": "verification_failed",
+                        "failure_reason_id": MerchantCommissionMeowTaskFailureReason.PROGRESSION_UNVERIFIED.value,
+                    },
+                    telemetry={
+                        "reason": "progression.verify",
+                        "before_round_text_evidence": [
+                            item.to_dict()
+                            for item in (before_inspection.text_evidence if before_inspection else [])
+                        ],
+                        "after_round_text_evidence": [item.to_dict() for item in after_inspection.text_evidence],
+                    },
+                ),
+            )
+
+        if (
+            before_round[1].confidence < _TEXT_EVIDENCE_CONFIDENCE_THRESHOLD
+            or after_round[1].confidence < _TEXT_EVIDENCE_CONFIDENCE_THRESHOLD
+        ):
+            return step_failure(
+                step_id,
+                "Round progression text evidence is below the safe confidence threshold.",
+                screenshot_path=after_inspection.screenshot_path,
+                data=self._step_data(
+                    step_id=step_id,
+                    inspection=after_inspection,
+                    inspection_attempts=attempts,
+                    failure_reason_id=MerchantCommissionMeowTaskFailureReason.PROGRESSION_LOW_CONFIDENCE.value,
+                    outcome_code="round_progression_low_confidence",
+                    round_index=after_round[0],
+                    text_evidence=combined_text_evidence,
+                    step_outcome={
+                        "kind": "low_confidence_text_evidence",
+                        "failure_reason_id": MerchantCommissionMeowTaskFailureReason.PROGRESSION_LOW_CONFIDENCE.value,
+                        "previous_round_index": before_round[0],
+                        "current_round_index": after_round[0],
+                    },
+                    telemetry={
+                        "reason": "progression.verify",
+                        "confidence_threshold": _TEXT_EVIDENCE_CONFIDENCE_THRESHOLD,
+                        "before_round_text_evidence": [before_round[1].to_dict()],
+                        "after_round_text_evidence": [after_round[1].to_dict()],
+                    },
+                ),
+            )
+
+        if after_round[0] != before_round[0] + 1:
+            return step_failure(
+                step_id,
+                "Round progression text did not advance to the next Meow Group task-list state.",
+                screenshot_path=after_inspection.screenshot_path,
+                data=self._step_data(
+                    step_id=step_id,
+                    inspection=after_inspection,
+                    inspection_attempts=attempts,
+                    failure_reason_id=MerchantCommissionMeowTaskFailureReason.PROGRESSION_UNVERIFIED.value,
+                    outcome_code="round_progression_not_advanced",
+                    round_index=after_round[0],
+                    text_evidence=combined_text_evidence,
+                    step_outcome={
+                        "kind": "verification_failed",
+                        "failure_reason_id": MerchantCommissionMeowTaskFailureReason.PROGRESSION_UNVERIFIED.value,
+                        "previous_round_index": before_round[0],
+                        "current_round_index": after_round[0],
+                    },
+                    telemetry={
+                        "reason": "progression.verify",
+                        "before_round_text_evidence": [before_round[1].to_dict()],
+                        "after_round_text_evidence": [after_round[1].to_dict()],
+                    },
+                ),
+            )
+
+        return step_success(
+            step_id,
+            f"Round progression verified: {before_round[0]} -> {after_round[0]}",
+            screenshot_path=after_inspection.screenshot_path,
+            data=self._step_data(
+                step_id=step_id,
+                inspection=after_inspection,
+                inspection_attempts=attempts,
+                outcome_code="round_progression_verified",
+                round_index=after_round[0],
+                text_evidence=combined_text_evidence,
+                step_outcome={
+                    "kind": "round_progression_verified",
+                    "previous_round_index": before_round[0],
+                    "current_round_index": after_round[0],
+                },
+                telemetry={
+                    "reason": "progression.verify",
+                    "confidence_threshold": _TEXT_EVIDENCE_CONFIDENCE_THRESHOLD,
+                    "before_round_text_evidence": [before_round[1].to_dict()],
+                    "after_round_text_evidence": [after_round[1].to_dict()],
+                },
+            ),
+        )
+
+    def _step_data(
+        self,
+        *,
+        step_id: str,
+        inspection: MerchantCommissionMeowCheckpointInspection | None = None,
+        inspection_attempts: list[dict[str, Any]] | None = None,
+        failure_reason_id: str = "",
+        outcome_code: str = "",
+        task_action: dict[str, Any] | None = None,
+        step_outcome: dict[str, Any] | None = None,
+        telemetry: dict[str, Any] | None = None,
+        text_evidence: list[MerchantCommissionMeowObservedTextEvidence] | None = None,
+        round_index: int | None = None,
+        decision: str = "",
+        reason_id: str = "",
+    ) -> dict[str, Any]:
+        step_spec = self._step_specs[step_id]
+        resolved_text_evidence = (
+            text_evidence if text_evidence is not None else (inspection.text_evidence if inspection is not None else [])
+        )
+        payload: dict[str, Any] = {
+            "anchor_id": step_spec.anchor_id,
+            "matched_anchor_ids": list(inspection.matched_anchor_ids) if inspection is not None else [],
+            "inspection_attempts": list(inspection_attempts or []),
+            "failure_reason_id": failure_reason_id,
+            "outcome_code": outcome_code,
+            "runtime_step_spec": step_spec.to_dict(),
+            "text_evidence": [item.to_dict() for item in resolved_text_evidence],
+        }
+        if inspection is not None:
+            payload["screenshot_path"] = inspection.screenshot_path
+        if round_index is not None:
+            payload["round_index"] = round_index
+        elif inspection is not None and inspection.round_index is not None:
+            payload["round_index"] = inspection.round_index
+        if decision:
+            payload["decision"] = decision
+        if reason_id:
+            payload["reason_id"] = reason_id
+        if task_action is not None:
+            payload["task_action"] = task_action
+        if step_outcome is not None:
+            payload["step_outcome"] = step_outcome
+        if telemetry is not None:
+            payload["telemetry"] = telemetry
+        return payload
+
+    def _inspect_until(
+        self,
+        context: TaskExecutionContext,
+        *,
+        step_id: str,
+        reason: str,
+        signal_anchor_ids: list[str],
+        accepted,
+        max_attempts: int,
+    ) -> tuple[MerchantCommissionMeowCheckpointInspection, list[dict[str, Any]]]:
+        attempts: list[dict[str, Any]] = []
+        last_inspection: MerchantCommissionMeowCheckpointInspection | None = None
+        for attempt in range(1, max(1, int(max_attempts)) + 1):
+            inspection = self._inspect(
+                context,
+                step_id=step_id,
+                reason=reason,
+                signal_anchor_ids=signal_anchor_ids,
+            )
+            accepted_flag = bool(accepted(inspection))
+            attempts.append(
+                {
+                    "attempt": attempt,
+                    "accepted": accepted_flag,
+                    **inspection.to_dict(),
+                }
+            )
+            last_inspection = inspection
+            if accepted_flag:
+                return inspection, attempts
+        if last_inspection is None:
+            raise RuntimeError("merchant commission inspection unexpectedly produced no result")
+        return last_inspection, attempts
+
+    def _inspect(
+        self,
+        context: TaskExecutionContext,
+        *,
+        step_id: str,
+        reason: str,
+        signal_anchor_ids: list[str],
+    ) -> MerchantCommissionMeowCheckpointInspection:
+        screenshot_path = self._capture_screenshot(context, step_id=step_id, reason=reason)
+        inspection = self._vision_gateway.inspect(
+            instance=context.instance,
+            screenshot_path=screenshot_path,
+            step_id=step_id,
+            signal_anchor_ids=list(signal_anchor_ids),
+            metadata={
+                "task_id": self._runtime_input.task_id,
+                "reason": reason,
+            },
+        )
+        if inspection.screenshot_path == str(screenshot_path):
+            return inspection
+        return replace(inspection, screenshot_path=str(screenshot_path))
+
+    def _tap(
+        self,
+        context: TaskExecutionContext,
+        *,
+        step_id: str,
+        point: tuple[int, int],
+        reason: str,
+    ) -> dict[str, Any]:
+        metadata = {"source": self._runtime_input.task_id, "reason": reason}
+        if context.action_bridge is not None:
+            result = context.require_action_bridge().tap(point, step_id=step_id, metadata=metadata)
+            return {
+                "action": "tap",
+                "point": point,
+                "status": result.status,
+                "message": result.message,
+                "source": "task_action_bridge",
+                "payload": dict(result.payload),
+                "metadata": dict(result.metadata),
+            }
+        self._adapter.tap(context.instance, point)
+        return {
+            "action": "tap",
+            "point": point,
+            "status": "executed",
+            "message": "",
+            "source": "adapter",
+        }
+
+    def _swipe(
+        self,
+        context: TaskExecutionContext,
+        *,
+        step_id: str,
+        start: tuple[int, int],
+        end: tuple[int, int],
+        duration_ms: int,
+        reason: str,
+    ) -> dict[str, Any]:
+        metadata = {
+            "source": self._runtime_input.task_id,
+            "reason": reason,
+            "duration_ms": duration_ms,
+        }
+        if context.action_bridge is not None:
+            result = context.require_action_bridge().swipe(
+                start,
+                end,
+                duration_ms=duration_ms,
+                step_id=step_id,
+                metadata=metadata,
+            )
+            return {
+                "action": "swipe",
+                "start": start,
+                "end": end,
+                "duration_ms": duration_ms,
+                "status": result.status,
+                "message": result.message,
+                "source": "task_action_bridge",
+                "payload": dict(result.payload),
+                "metadata": dict(result.metadata),
+            }
+        self._adapter.swipe(context.instance, start, end, duration_ms=duration_ms)
+        return {
+            "action": "swipe",
+            "start": start,
+            "end": end,
+            "duration_ms": duration_ms,
+            "status": "executed",
+            "message": "",
+            "source": "adapter",
+        }
+
+    def _capture_screenshot(
+        self,
+        context: TaskExecutionContext,
+        *,
+        step_id: str,
+        reason: str,
+    ) -> Path:
+        metadata = {"source": self._runtime_input.task_id, "reason": reason}
+        if context.action_bridge is not None:
+            frame = context.require_action_bridge().capture_preview(step_id=step_id, metadata=metadata)
+            return Path(frame.image_path)
+        return self._adapter.capture_screenshot(context.instance)
+
+    def _dispatch_failed(self, task_action: dict[str, Any]) -> bool:
+        return str(task_action.get("status", "")) not in _ACTION_DISPATCH_SUCCESS_STATUSES
+
+    def _dispatch_failure_message(self, *, action_name: str, task_action: dict[str, Any]) -> str:
+        status = str(task_action.get("status", "")).strip() or "unknown"
+        message = str(task_action.get("message", "")).strip()
+        if message:
+            return f"{action_name} failed through the runtime bridge: {message}"
+        return f"{action_name} failed through the runtime bridge with status {status}."
+
+    def _signal_anchor_ids(self, step_id: str) -> list[str]:
+        metadata = self._step_specs[step_id].metadata
+        raw_value = metadata.get("signal_anchor_ids", [])
+        if not isinstance(raw_value, list):
+            return []
+        return [str(item) for item in raw_value]
+
+    def _inspection_retry_limit(self, step_id: str) -> int:
+        metadata = self._step_specs[step_id].metadata
+        try:
+            return int(metadata.get("inspection_retry_limit", _DEFAULT_INSPECTION_RETRY_LIMIT))
+        except (TypeError, ValueError):
+            return _DEFAULT_INSPECTION_RETRY_LIMIT
+
+    def _sleep(self, seconds: float) -> None:
+        if seconds > 0:
+            time.sleep(seconds)
+
+    def _stored_pre_submit_round(self, context: TaskExecutionContext) -> dict[str, Any]:
+        value = context.metadata.get(_PRE_SUBMIT_ROUND_CONTEXT_KEY, {})
+        return dict(value) if isinstance(value, dict) else {}
+
+
+def _default_runtime_seam_metadata() -> dict[str, Any]:
+    return {
+        "runtime_input_builder": _RUNTIME_INPUT_BUILDER_PATH,
+        "runtime_seam_builder": _RUNTIME_SEAM_BUILDER_PATH,
+        "task_spec_builder": _TASK_SPEC_BUILDER_PATH,
+        "runtime_bridge_probe": _RUNTIME_BRIDGE_PROBE_PATH,
+        "signal_contract_version": _SIGNAL_CONTRACT_VERSION,
+        "result_signal_keys": list(_RESULT_SIGNAL_KEYS),
+    }
+
+
+def _resolve_runtime_seam_metadata(
+    *,
+    builder_input: TaskRuntimeBuilderInput,
+    blueprint: TaskBlueprint,
+) -> dict[str, Any]:
+    runtime_seam = _metadata_dict(builder_input.metadata, "runtime_seam") or _metadata_dict(
+        blueprint.metadata,
+        "runtime_seam",
+    )
+    return {
+        **_default_runtime_seam_metadata(),
+        **runtime_seam,
+    }
+
+
+def _build_runtime_manifest(manifest: TaskManifest) -> TaskManifest:
+    metadata = dict(manifest.metadata)
+    metadata["implementation_state"] = "fixtured"
+    metadata["runtime_bridge"] = "roxauto.tasks.daily_ui.merchant_commission_meow"
+    metadata["signal_contract_version"] = _SIGNAL_CONTRACT_VERSION
+    return replace(manifest, metadata=metadata)
+
+
+def _build_runtime_step_specs(
+    steps: list[TaskStepBlueprint],
+) -> list[MerchantCommissionMeowRuntimeStepSpec]:
+    display_names = {
+        "open_merchant_commission_entry": "Open Merchant Entry",
+        "accept_meow_group_commission": "Accept Meow Group",
+        "reenter_from_daily_task_list": "Re-enter From Task List",
+        "resolve_round_material_submission": "Resolve Material Submission",
+        "verify_round_progression": "Verify Round Progression",
+    }
+    summaries = {
+        "open_merchant_commission_entry": "Reach the merchant commission detail modal from the main-screen route.",
+        "accept_meow_group_commission": "Accept the Meow Group commission and prepare the task-list route.",
+        "reenter_from_daily_task_list": "Resume the accepted Meow Group commission from the left task list.",
+        "resolve_round_material_submission": "Submit one Meow Group round with direct submit or immediate buy.",
+        "verify_round_progression": "Confirm that the task-list round counter advances after submission.",
+    }
+    anchor_ids = {
+        "open_merchant_commission_entry": _DETAIL_MODAL_ANCHOR_ID,
+        "accept_meow_group_commission": _MEOW_ACCEPT_BUTTON_ANCHOR_ID,
+        "reenter_from_daily_task_list": _TASK_LIST_ENTRY_ANCHOR_ID,
+        "resolve_round_material_submission": _SUBMIT_ITEM_PANEL_ANCHOR_ID,
+        "verify_round_progression": _ROUND_COUNTER_ANCHOR_ID,
+    }
+    failure_reason_ids = {
+        "open_merchant_commission_entry": MerchantCommissionMeowTaskFailureReason.ENTRY_MODAL_UNAVAILABLE.value,
+        "accept_meow_group_commission": MerchantCommissionMeowTaskFailureReason.MEOW_ACCEPT_UNAVAILABLE.value,
+        "reenter_from_daily_task_list": MerchantCommissionMeowTaskFailureReason.REENTRY_UNAVAILABLE.value,
+        "resolve_round_material_submission": MerchantCommissionMeowTaskFailureReason.SUBMIT_PANEL_UNAVAILABLE.value,
+        "verify_round_progression": MerchantCommissionMeowTaskFailureReason.PROGRESSION_UNVERIFIED.value,
+    }
+    signal_anchor_ids = {
+        "open_merchant_commission_entry": [
+            _PORING_BUTTON_ANCHOR_ID,
+            _CARNIVAL_ENTRY_ANCHOR_ID,
+            _DETAIL_MODAL_ANCHOR_ID,
+        ],
+        "accept_meow_group_commission": [
+            _GO_NOW_BUTTON_ANCHOR_ID,
+            _NPC_DIALOG_ANCHOR_ID,
+            _LIST_PANEL_ANCHOR_ID,
+            _MEOW_ACCEPT_BUTTON_ANCHOR_ID,
+            _CLOSE_BUTTON_ANCHOR_ID,
+            _TASK_LIST_ENTRY_ANCHOR_ID,
+            _ROUND_COUNTER_ANCHOR_ID,
+        ],
+        "reenter_from_daily_task_list": [
+            _TASK_LIST_ENTRY_ANCHOR_ID,
+            _ROUND_COUNTER_ANCHOR_ID,
+            _MEOW_SUBMIT_OPTION_ANCHOR_ID,
+        ],
+        "resolve_round_material_submission": [
+            _MEOW_SUBMIT_OPTION_ANCHOR_ID,
+            _SUBMIT_ITEM_PANEL_ANCHOR_ID,
+            _BUY_NOW_BUTTON_ANCHOR_ID,
+            _BUY_CONFIRMATION_DIALOG_ANCHOR_ID,
+            _BUY_CONFIRM_BUTTON_ANCHOR_ID,
+            _SUBMIT_BUTTON_ANCHOR_ID,
+        ],
+        "verify_round_progression": [
+            _TASK_LIST_ENTRY_ANCHOR_ID,
+            _ROUND_COUNTER_ANCHOR_ID,
+        ],
+    }
+    return [
+        MerchantCommissionMeowRuntimeStepSpec(
+            step_id=step.step_id,
+            action=step.action,
+            description=step.success_condition,
+            display_name=display_names.get(step.step_id, step.step_id.replace("_", " ").title()),
+            success_condition=step.success_condition,
+            failure_condition=step.failure_condition,
+            notes=step.notes,
+            summary=summaries.get(step.step_id, ""),
+            anchor_id=anchor_ids.get(step.step_id, ""),
+            failure_reason_id=failure_reason_ids.get(step.step_id, ""),
+            metadata={
+                **dict(step.metadata),
+                "signal_anchor_ids": list(signal_anchor_ids.get(step.step_id, [])),
+                "inspection_retry_limit": _DEFAULT_INSPECTION_RETRY_LIMIT,
+            },
+        )
+        for step in steps
+    ]
+
+
+def _best_round_index_evidence(
+    inspection: MerchantCommissionMeowCheckpointInspection | None,
+    *,
+    round_limit: int,
+) -> tuple[int, MerchantCommissionMeowObservedTextEvidence] | None:
+    if inspection is None:
+        return None
+    best: tuple[int, MerchantCommissionMeowObservedTextEvidence] | None = None
+    for evidence in inspection.text_evidence:
+        round_index = _parse_round_index(evidence.normalized_text, round_limit=round_limit)
+        if round_index is None:
+            round_index = _parse_round_index(evidence.raw_text, round_limit=round_limit)
+        if round_index is None:
+            continue
+        if best is None or evidence.confidence > best[1].confidence:
+            best = (round_index, evidence)
+    if best is not None:
+        return best
+    if inspection.round_index is None or not inspection.text_evidence:
+        return None
+    fallback_evidence = max(inspection.text_evidence, key=lambda item: item.confidence)
+    return inspection.round_index, fallback_evidence
+
+
+def _parse_round_index(text: str, *, round_limit: int) -> int | None:
+    normalized_text = str(text).replace(" ", "")
+    for pattern in (
+        re.compile(r"\((\d+)/(\d+)\)"),
+        re.compile(r"(\d+)/(\d+)"),
+    ):
+        match = pattern.search(normalized_text)
+        if match is None:
+            continue
+        current = int(match.group(1))
+        total = int(match.group(2))
+        if total == round_limit and 1 <= current <= round_limit:
+            return current
+    return None
+
+
 def _metadata_dict(metadata: dict[str, Any], key: str) -> dict[str, Any]:
     value = metadata.get(key)
     if isinstance(value, dict):
@@ -1189,6 +2968,18 @@ def _tuple_int_pair(value: object, *, default: tuple[int, int] = (0, 0)) -> tupl
         return int(value[0]), int(value[1])
     if isinstance(value, list) and len(value) == 2:
         return int(value[0]), int(value[1])
+    return default
+
+
+def _tuple_int_quad(
+    value: object,
+    *,
+    default: tuple[int, int, int, int] = (0, 0, 0, 0),
+) -> tuple[int, int, int, int]:
+    if isinstance(value, tuple) and len(value) == 4:
+        return int(value[0]), int(value[1]), int(value[2]), int(value[3])
+    if isinstance(value, list) and len(value) == 4:
+        return int(value[0]), int(value[1]), int(value[2]), int(value[3])
     return default
 
 
