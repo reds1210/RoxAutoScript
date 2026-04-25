@@ -156,11 +156,25 @@ class AnchorRepositoryTests(unittest.TestCase):
         )
         self.assertEqual(
             repository.get_guild_order_scene_contract()["decision_surface_state"],
-            "submit_decision_surfaces_captured_failure_states_pending",
+            "submit_refresh_decision_surfaces_captured_failure_states_pending",
         )
         self.assertEqual(
             repository.get_guild_order_scene_contract()["blocked_scene_ids"],
             [],
+        )
+        self.assertEqual(
+            repository.get_guild_order_scene_contract()["scene_truth"]["guild_order_refresh_affordance"],
+            {
+                "anchor_ids": ["daily_ui.guild_order_refresh_button"],
+                "contract_state": "placeholder_anchor_with_reviewed_live_evidence",
+                "live_probe_status": "captured",
+                "truth_basis": "reviewed_live_refresh_capture",
+                "summary": (
+                    "The anchor is still placeholder scaffolding, but reviewed live evidence "
+                    "captured the refresh affordance and zeny refresh cost on the selected "
+                    "guild-order detail scene."
+                ),
+            },
         )
         self.assertEqual(
             repository.get_guild_order_scene_contract()["scene_truth"]["guild_order_submit_result_state"],

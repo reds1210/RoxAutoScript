@@ -108,7 +108,7 @@ class VisionToolingTests(unittest.TestCase):
         )
         self.assertEqual(
             workspace.readiness.metadata["guild_order_scene_contract"]["decision_surface_state"],
-            "submit_decision_surfaces_captured_failure_states_pending",
+            "submit_refresh_decision_surfaces_captured_failure_states_pending",
         )
         self.assertEqual(
             workspace.readiness.metadata["guild_order_scene_contract"]["blocked_scene_ids"],

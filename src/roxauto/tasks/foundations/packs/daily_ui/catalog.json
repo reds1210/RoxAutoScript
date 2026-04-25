@@ -115,6 +115,32 @@
           "completed_state",
           "submit_result"
         ],
+        "runtime_seam": {
+          "runtime_input_builder": "roxauto.tasks.daily_ui.guild_order_submit.build_guild_order_submit_runtime_input",
+          "runtime_seam_builder": "roxauto.tasks.daily_ui.guild_order_submit.build_guild_order_submit_runtime_seam",
+          "task_spec_builder": "roxauto.tasks.daily_ui.guild_order_submit.build_guild_order_submit_task_spec",
+          "runtime_bridge_probe": "roxauto.tasks.daily_ui.guild_order_submit.has_guild_order_submit_runtime_bridge",
+          "signal_contract_version": "guild_order_submit.v2",
+          "result_signal_keys": [
+            "decision",
+            "reason_id",
+            "slot_index",
+            "order_kind",
+            "requirements",
+            "availability",
+            "custom_options",
+            "selected_custom_option",
+            "refresh_attempted",
+            "verification_state",
+            "failure_reason_id",
+            "inspection_attempts",
+            "outcome_code",
+            "step_outcome",
+            "task_action",
+            "telemetry",
+            "text_evidence"
+          ]
+        },
         "guild_order_spec_builders": {
           "task_specification_builder": "roxauto.tasks.daily_ui.guild_order_submit.build_guild_order_submit_specification",
           "material_policy_loader": "roxauto.tasks.daily_ui.guild_order_submit.load_guild_order_submit_material_policy",

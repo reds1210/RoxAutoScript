@@ -95,11 +95,11 @@ class DailyUiFoundationsTests(unittest.TestCase):
         )
         self.assertEqual(
             blueprints[2].metadata["foundation_requirement_ids"],
-            [
-                "foundation.daily_ui.guild_order_visible_quantity_contract",
-                "foundation.daily_ui.guild_order_result_state_contract",
-                "foundation.daily_ui.guild_order_custom_option_contract",
-            ],
+            [],
+        )
+        self.assertEqual(
+            blueprints[2].metadata["runtime_requirement_ids"],
+            ["runtime.daily_ui.dispatch_bridge"],
         )
         self.assertEqual(
             blueprints[3].metadata["merchant_commission_meow_loop_contract"]["preferred_reentry_mode"],
@@ -121,10 +121,10 @@ class DailyUiFoundationsTests(unittest.TestCase):
             ["supporting"],
         )
         self.assertEqual(reports["daily_ui.guild_check_in"].builder_readiness_state.value, "blocked_by_asset")
-        self.assertEqual(reports["daily_ui.guild_order_submit"].builder_readiness_state.value, "blocked_by_foundation")
+        self.assertEqual(reports["daily_ui.guild_order_submit"].builder_readiness_state.value, "ready")
         self.assertEqual(
             reports["daily_ui.guild_order_submit"].implementation_readiness_state.value,
-            "blocked_by_foundation",
+            "ready",
         )
         self.assertEqual(
             reports["daily_ui.merchant_commission_meow"].builder_readiness_state.value,

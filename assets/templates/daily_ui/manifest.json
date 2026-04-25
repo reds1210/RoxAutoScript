@@ -121,10 +121,10 @@
             },
             "guild_order_refresh_affordance": {
               "anchor_ids": ["daily_ui.guild_order_refresh_button"],
-              "contract_state": "placeholder_anchor_only",
-              "live_probe_status": "missing",
-              "truth_basis": "placeholder_manifest_plus_reviewed_live_route",
-              "summary": "Only a placeholder refresh-affordance scaffold exists, and the reviewed live healer-MuMu route did not expose any refresh affordance on the visited orders."
+              "contract_state": "placeholder_anchor_with_reviewed_live_evidence",
+              "live_probe_status": "captured",
+              "truth_basis": "reviewed_live_refresh_capture",
+              "summary": "The anchor is still placeholder scaffolding, but reviewed live evidence captured the refresh affordance and zeny refresh cost on the selected guild-order detail scene."
             },
             "guild_order_unavailable_state": {
               "anchor_ids": ["daily_ui.guild_order_unavailable_state"],
@@ -170,8 +170,8 @@
           },
           "ambiguous_scene_ids": [],
           "evidence_state": "partial_reviewed_live_evidence",
-          "decision_surface_state": "submit_decision_surfaces_captured_failure_states_pending",
-          "summary": "Reviewed live evidence now covers the guild-order route, list/detail scene, submit affordance, material label, required quantity, available count, and stable submit-result state on reserved serial 127.0.0.1:16480. All anchors remain placeholder scaffolds for now, while refresh, unavailable, and insufficient-material states remain blocked pending separate reviewed capture."
+          "decision_surface_state": "submit_refresh_decision_surfaces_captured_failure_states_pending",
+          "summary": "Reviewed live evidence now covers the guild-order route, list/detail scene, submit affordance, refresh affordance with zeny cost, material label, required quantity, available count, and stable submit-result state on reserved serial 127.0.0.1:16480. All anchors remain placeholder scaffolds for now, while unavailable and insufficient-material states remain blocked pending separate reviewed capture."
         }
       }
     }

@@ -162,7 +162,7 @@ class ConsoleSnapshotTests(unittest.TestCase):
         )
 
         self.assertEqual(pane.total_tasks, len(reports))
-        self.assertEqual(pane.builder_ready_count, 2)
+        self.assertEqual(pane.builder_ready_count, 3)
         self.assertEqual(pane.blocked_by_asset_count, 2)
         self.assertEqual(pane.blocked_by_runtime_count, 0)
         self.assertEqual(pane.blocked_by_calibration_count, 1)
