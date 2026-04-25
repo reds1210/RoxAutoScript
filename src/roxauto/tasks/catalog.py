@@ -24,6 +24,10 @@ from roxauto.tasks.models import (
     TaskReadinessState,
     TaskRuntimeBuilderInput,
 )
+from roxauto.tasks.foundations.navigation import (
+    load_shared_carnival_entry_checkpoint_pack,
+    load_shared_carnival_entry_route_contract,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -781,6 +785,7 @@ class TaskFoundationRepository:
         metadata.update(self._claim_rewards_contract_metadata(blueprint))
         metadata.update(self._guild_order_contract_metadata(blueprint))
         metadata.update(self._merchant_commission_meow_contract_metadata(blueprint))
+        metadata.update(self._shared_entry_contract_metadata(blueprint))
         return metadata
 
     def _signal_contract_version(self, blueprint: TaskBlueprint) -> str:
@@ -1177,6 +1182,21 @@ class TaskFoundationRepository:
             elif isinstance(value, list):
                 metadata[key] = [str(item) for item in value]
         return metadata
+
+    def _shared_entry_contract_metadata(self, blueprint: TaskBlueprint) -> dict[str, Any]:
+        if blueprint.task_id not in {
+            "daily_ui.guild_order_submit",
+            "daily_ui.merchant_commission_meow",
+        }:
+            return {}
+        route_contract = load_shared_carnival_entry_route_contract()
+        checkpoint_pack = load_shared_carnival_entry_checkpoint_pack()
+        return {
+            "shared_entry_route_id": route_contract.route_id,
+            "shared_checkpoint_pack_id": checkpoint_pack.pack_id,
+            "shared_entry_route_contract": route_contract.to_dict(),
+            "shared_checkpoint_pack": checkpoint_pack.to_dict(),
+        }
 
     def _provenance_bucket(
         self,

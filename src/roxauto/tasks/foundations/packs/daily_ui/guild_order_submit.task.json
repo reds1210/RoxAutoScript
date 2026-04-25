@@ -110,6 +110,8 @@
   "metadata": {
     "phase": "round-9",
     "task_pack_owner": "engine_d",
+    "shared_entry_route_id": "daily_ui.shared_carnival_entry",
+    "shared_checkpoint_pack_id": "daily_ui.shared_carnival_entry.checkpoints",
     "asset_requirement_ids": [
       "asset.daily_ui.guild_order_list",
       "asset.daily_ui.guild_order_detail",

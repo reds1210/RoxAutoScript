@@ -124,6 +124,11 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
                 "reentry_mode",
             ],
         )
+        self.assertEqual(meow_record.metadata["shared_entry_route_id"], "daily_ui.shared_carnival_entry")
+        self.assertEqual(
+            meow_record.metadata["shared_checkpoint_pack"]["required_anchor_ids"],
+            ["common.close_button"],
+        )
 
     def test_discovers_pack_catalogs(self) -> None:
         catalogs = self.repository.discover_pack_catalogs()
@@ -149,10 +154,18 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
             catalogs[0].entries[2].metadata["signal_contract_version"],
             "guild_order_submit.v2",
         )
+        self.assertEqual(
+            catalogs[0].entries[2].metadata["shared_entry_route_id"],
+            "daily_ui.shared_carnival_entry",
+        )
         self.assertEqual(catalogs[0].entries[3].task_id, "daily_ui.merchant_commission_meow")
         self.assertEqual(
             catalogs[0].entries[3].metadata["signal_contract_version"],
             "merchant_commission_meow.v1",
+        )
+        self.assertEqual(
+            catalogs[0].entries[3].metadata["shared_checkpoint_pack_id"],
+            "daily_ui.shared_carnival_entry.checkpoints",
         )
 
     def test_builds_asset_inventory(self) -> None:
@@ -315,6 +328,10 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
             ["submit", "skip", "refresh"],
         )
         self.assertEqual(
+            by_task["daily_ui.guild_order_submit"].metadata["shared_entry_route_contract"]["route_id"],
+            "daily_ui.shared_carnival_entry",
+        )
+        self.assertEqual(
             by_task["daily_ui.merchant_commission_meow"].asset_requirement_ids,
             [
                 "asset.daily_ui.merchant_commission_poring_button",
@@ -363,6 +380,10 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
                 "merchant_npc_dialog_initial",
                 "merchant_commission_list",
             ],
+        )
+        self.assertEqual(
+            by_task["daily_ui.merchant_commission_meow"].metadata["shared_checkpoint_pack"]["feature_ids"],
+            ["daily_ui.guild_order_submit", "daily_ui.merchant_commission_meow"],
         )
         self.assertEqual(
             by_task["odin.preset_entry"].calibration_requirement_ids,

@@ -1,6 +1,17 @@
 """Task foundation package for pre-Gate-3 task assets and schemas."""
 
 from roxauto.tasks.catalog import TaskFoundationRepository
+from roxauto.tasks.foundations.navigation import (
+    SharedCarnivalEntryAdapter,
+    SharedCarnivalEntryFeatureNavigationPlan,
+    SharedCarnivalEntryNavigationPlan,
+    SharedCarnivalEntryResolution,
+    SharedCheckpointPack,
+    SharedEntryRouteContract,
+    load_shared_carnival_entry_checkpoint_pack,
+    load_shared_carnival_entry_route_contract,
+    resolve_shared_carnival_entry,
+)
 from roxauto.tasks.models import (
     GoldenScreenshotCase,
     GoldenScreenshotConvention,
@@ -46,5 +57,14 @@ __all__ = [
     "TaskReadinessState",
     "TaskRuntimeBuilderInput",
     "TaskStepBlueprint",
+    "SharedCarnivalEntryAdapter",
+    "SharedCarnivalEntryFeatureNavigationPlan",
+    "SharedCarnivalEntryNavigationPlan",
+    "SharedCarnivalEntryResolution",
+    "SharedCheckpointPack",
+    "SharedEntryRouteContract",
+    "load_shared_carnival_entry_checkpoint_pack",
+    "load_shared_carnival_entry_route_contract",
+    "resolve_shared_carnival_entry",
 ]
 

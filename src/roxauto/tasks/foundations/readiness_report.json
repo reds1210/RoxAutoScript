@@ -583,6 +583,111 @@
             },
             "inventory_source": "curated_inventory",
             "phase": "round-9",
+            "shared_checkpoint_pack": {
+              "checkpoint_ids": [
+                "main_screen_idle",
+                "top_right_expanded_icon_group",
+                "carnival_hub",
+                "feature_description_card",
+                "shared_go_now_handoff"
+              ],
+              "feature_ids": [
+                "daily_ui.guild_order_submit",
+                "daily_ui.merchant_commission_meow"
+              ],
+              "metadata": {
+                "close_rule_anchor_ids": [
+                  "common.close_button"
+                ],
+                "feature_anchor_ids": {
+                  "daily_ui.guild_order_submit": [
+                    "daily_ui.guild_order_hub_entry"
+                  ],
+                  "daily_ui.merchant_commission_meow": [
+                    "daily_ui.merchant_commission_poring_button",
+                    "daily_ui.merchant_commission_carnival_entry",
+                    "daily_ui.merchant_commission_detail_modal",
+                    "daily_ui.merchant_commission_go_now_button"
+                  ]
+                },
+                "notes": "This pack intentionally stays narrow: main screen, shared Carnival hub, feature description card, Go now, and shared close/back semantics only."
+              },
+              "pack_id": "daily_ui.shared_carnival_entry.checkpoints",
+              "required_anchor_ids": [
+                "common.close_button"
+              ],
+              "supporting_anchor_ids": [
+                "daily_ui.guild_order_hub_entry",
+                "daily_ui.merchant_commission_poring_button",
+                "daily_ui.merchant_commission_carnival_entry",
+                "daily_ui.merchant_commission_detail_modal",
+                "daily_ui.merchant_commission_go_now_button"
+              ]
+            },
+            "shared_checkpoint_pack_id": "daily_ui.shared_carnival_entry.checkpoints",
+            "shared_entry_route_contract": {
+              "blocked_click_notes": [
+                "Do not use the right-side function drawer as the shared entry route into Carnival.",
+                "Do not treat the top-right expanded icon group as a generic activity-only launcher; select Carnival explicitly.",
+                "Do not widen the shared segment past the first `Go now` tap; post-go navigation remains feature-specific."
+              ],
+              "entry_checkpoints": [
+                "main_screen_idle",
+                "top_right_expanded_icon_group",
+                "carnival_hub",
+                "feature_description_card",
+                "shared_go_now_handoff"
+              ],
+              "feature_overrides": {
+                "daily_ui.guild_order_submit": {
+                  "back_rule_id": "post_go_cleanup_feature_owned",
+                  "close_rule_id": "description_card_close_to_carnival_hub",
+                  "feature_card_anchor_ids": [
+                    "daily_ui.guild_order_hub_entry"
+                  ],
+                  "feature_card_checkpoint_id": "guild_order_description_card",
+                  "notes": "The shared segment stops after `Go now`; guild panel, Activity tab, and guild-order card navigation stay feature-specific.",
+                  "post_go_checkpoint_id": "guild_panel_landing"
+                },
+                "daily_ui.merchant_commission_meow": {
+                  "back_rule_id": "post_go_cleanup_feature_owned",
+                  "close_rule_id": "description_card_close_to_carnival_hub",
+                  "feature_card_anchor_ids": [
+                    "daily_ui.merchant_commission_detail_modal"
+                  ],
+                  "feature_card_checkpoint_id": "merchant_commission_detail_modal",
+                  "notes": "The shared segment stops after `Go now`; NPC dialog, merchant list, accept flow, and left-task re-entry stay merchant-specific.",
+                  "post_go_checkpoint_id": "merchant_autopath_to_npc"
+                }
+              },
+              "metadata": {
+                "checkpoint_truth": {
+                  "carnival_hub": "Shared upper-level hub validated for both guild order and merchant commission.",
+                  "feature_description_card": "Selecting the target feature card opens a description card.",
+                  "main_screen_idle": "The reusable route starts from a stable main-world screen.",
+                  "shared_go_now_handoff": "The shared helper taps `Go now` and hands control to feature-specific navigation.",
+                  "top_right_expanded_icon_group": "Opened by the blue fold/unfold orb near the top-right corner."
+                },
+                "close_back_rules": {
+                  "description_card_close_to_carnival_hub": "Use `common.close_button` to dismiss the feature description card back to the Carnival hub before switching targets.",
+                  "post_go_cleanup_feature_owned": "Any close/back cleanup after `Go now` is feature-owned and not part of the shared helper."
+                },
+                "evidence_handoffs": [
+                  "docs/handoffs/live-entry-route-recon-2026-04-25.md",
+                  "docs/handoffs/merchant-commission-meow-full-route-2026-04-25.md",
+                  "docs/handoffs/task-daily-ui-guild-order.md"
+                ],
+                "go_button_label": "\u7acb\u5373\u524d\u5f80",
+                "shared_hub_label": "CARNIVAL",
+                "verified_features": [
+                  "daily_ui.guild_order_submit",
+                  "daily_ui.merchant_commission_meow"
+                ]
+              },
+              "reentry_checkpoints": [],
+              "route_id": "daily_ui.shared_carnival_entry"
+            },
+            "shared_entry_route_id": "daily_ui.shared_carnival_entry",
             "signal_contract_version": "guild_order_submit.v2",
             "source": "task_foundations",
             "supporting_anchor_ids": [
@@ -1202,6 +1307,111 @@
               "verified_reentry_mode": "left_task_list"
             },
             "phase": "merchant_commission_transition",
+            "shared_checkpoint_pack": {
+              "checkpoint_ids": [
+                "main_screen_idle",
+                "top_right_expanded_icon_group",
+                "carnival_hub",
+                "feature_description_card",
+                "shared_go_now_handoff"
+              ],
+              "feature_ids": [
+                "daily_ui.guild_order_submit",
+                "daily_ui.merchant_commission_meow"
+              ],
+              "metadata": {
+                "close_rule_anchor_ids": [
+                  "common.close_button"
+                ],
+                "feature_anchor_ids": {
+                  "daily_ui.guild_order_submit": [
+                    "daily_ui.guild_order_hub_entry"
+                  ],
+                  "daily_ui.merchant_commission_meow": [
+                    "daily_ui.merchant_commission_poring_button",
+                    "daily_ui.merchant_commission_carnival_entry",
+                    "daily_ui.merchant_commission_detail_modal",
+                    "daily_ui.merchant_commission_go_now_button"
+                  ]
+                },
+                "notes": "This pack intentionally stays narrow: main screen, shared Carnival hub, feature description card, Go now, and shared close/back semantics only."
+              },
+              "pack_id": "daily_ui.shared_carnival_entry.checkpoints",
+              "required_anchor_ids": [
+                "common.close_button"
+              ],
+              "supporting_anchor_ids": [
+                "daily_ui.guild_order_hub_entry",
+                "daily_ui.merchant_commission_poring_button",
+                "daily_ui.merchant_commission_carnival_entry",
+                "daily_ui.merchant_commission_detail_modal",
+                "daily_ui.merchant_commission_go_now_button"
+              ]
+            },
+            "shared_checkpoint_pack_id": "daily_ui.shared_carnival_entry.checkpoints",
+            "shared_entry_route_contract": {
+              "blocked_click_notes": [
+                "Do not use the right-side function drawer as the shared entry route into Carnival.",
+                "Do not treat the top-right expanded icon group as a generic activity-only launcher; select Carnival explicitly.",
+                "Do not widen the shared segment past the first `Go now` tap; post-go navigation remains feature-specific."
+              ],
+              "entry_checkpoints": [
+                "main_screen_idle",
+                "top_right_expanded_icon_group",
+                "carnival_hub",
+                "feature_description_card",
+                "shared_go_now_handoff"
+              ],
+              "feature_overrides": {
+                "daily_ui.guild_order_submit": {
+                  "back_rule_id": "post_go_cleanup_feature_owned",
+                  "close_rule_id": "description_card_close_to_carnival_hub",
+                  "feature_card_anchor_ids": [
+                    "daily_ui.guild_order_hub_entry"
+                  ],
+                  "feature_card_checkpoint_id": "guild_order_description_card",
+                  "notes": "The shared segment stops after `Go now`; guild panel, Activity tab, and guild-order card navigation stay feature-specific.",
+                  "post_go_checkpoint_id": "guild_panel_landing"
+                },
+                "daily_ui.merchant_commission_meow": {
+                  "back_rule_id": "post_go_cleanup_feature_owned",
+                  "close_rule_id": "description_card_close_to_carnival_hub",
+                  "feature_card_anchor_ids": [
+                    "daily_ui.merchant_commission_detail_modal"
+                  ],
+                  "feature_card_checkpoint_id": "merchant_commission_detail_modal",
+                  "notes": "The shared segment stops after `Go now`; NPC dialog, merchant list, accept flow, and left-task re-entry stay merchant-specific.",
+                  "post_go_checkpoint_id": "merchant_autopath_to_npc"
+                }
+              },
+              "metadata": {
+                "checkpoint_truth": {
+                  "carnival_hub": "Shared upper-level hub validated for both guild order and merchant commission.",
+                  "feature_description_card": "Selecting the target feature card opens a description card.",
+                  "main_screen_idle": "The reusable route starts from a stable main-world screen.",
+                  "shared_go_now_handoff": "The shared helper taps `Go now` and hands control to feature-specific navigation.",
+                  "top_right_expanded_icon_group": "Opened by the blue fold/unfold orb near the top-right corner."
+                },
+                "close_back_rules": {
+                  "description_card_close_to_carnival_hub": "Use `common.close_button` to dismiss the feature description card back to the Carnival hub before switching targets.",
+                  "post_go_cleanup_feature_owned": "Any close/back cleanup after `Go now` is feature-owned and not part of the shared helper."
+                },
+                "evidence_handoffs": [
+                  "docs/handoffs/live-entry-route-recon-2026-04-25.md",
+                  "docs/handoffs/merchant-commission-meow-full-route-2026-04-25.md",
+                  "docs/handoffs/task-daily-ui-guild-order.md"
+                ],
+                "go_button_label": "\u7acb\u5373\u524d\u5f80",
+                "shared_hub_label": "CARNIVAL",
+                "verified_features": [
+                  "daily_ui.guild_order_submit",
+                  "daily_ui.merchant_commission_meow"
+                ]
+              },
+              "reentry_checkpoints": [],
+              "route_id": "daily_ui.shared_carnival_entry"
+            },
+            "shared_entry_route_id": "daily_ui.shared_carnival_entry",
             "signal_contract_version": "merchant_commission_meow.v1",
             "source": "task_foundations",
             "supporting_anchor_ids": [

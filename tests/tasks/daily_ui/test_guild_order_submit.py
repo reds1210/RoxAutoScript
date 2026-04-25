@@ -36,6 +36,11 @@ class GuildOrderSubmitFoundationsTests(unittest.TestCase):
 
         self.assertEqual(blueprint.task_id, "daily_ui.guild_order_submit")
         self.assertEqual(blueprint.implementation_state.value, "spec_only")
+        self.assertEqual(blueprint.metadata["shared_entry_route_id"], "daily_ui.shared_carnival_entry")
+        self.assertEqual(
+            blueprint.metadata["shared_checkpoint_pack_id"],
+            "daily_ui.shared_carnival_entry.checkpoints",
+        )
         self.assertEqual(
             blueprint.required_anchors,
             [
@@ -98,6 +103,11 @@ class GuildOrderSubmitFoundationsTests(unittest.TestCase):
         self.assertEqual(specification.task_id, "daily_ui.guild_order_submit")
         self.assertEqual(specification.fixture_profile.fixture_id, "fixture.tw.guild.default")
         self.assertEqual(specification.metadata["signal_contract_version"], "guild_order_submit.v2")
+        self.assertEqual(specification.metadata["shared_entry_route_id"], "daily_ui.shared_carnival_entry")
+        self.assertEqual(
+            specification.metadata["shared_checkpoint_pack_id"],
+            "daily_ui.shared_carnival_entry.checkpoints",
+        )
         self.assertEqual(
             specification.metadata["guild_order_handoff_fields"],
             [
@@ -112,6 +122,16 @@ class GuildOrderSubmitFoundationsTests(unittest.TestCase):
                 "refresh_attempted",
                 "verification_state",
             ],
+        )
+        self.assertEqual(
+            specification.shared_entry_route_contract.feature_overrides["daily_ui.guild_order_submit"][
+                "post_go_checkpoint_id"
+            ],
+            "guild_panel_landing",
+        )
+        self.assertEqual(
+            specification.shared_checkpoint_pack.required_anchor_ids,
+            ["common.close_button"],
         )
         self.assertEqual(specification.required_screen_slugs, ["order_list", "order_detail"])
         self.assertEqual(

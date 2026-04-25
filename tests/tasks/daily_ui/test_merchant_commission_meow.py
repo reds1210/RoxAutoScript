@@ -129,6 +129,11 @@ class MerchantCommissionMeowFoundationsTests(unittest.TestCase):
         self.assertEqual(specification.task_id, "daily_ui.merchant_commission_meow")
         self.assertEqual(specification.fixture_profile.fixture_id, "fixture.tw.merchant.default")
         self.assertEqual(specification.metadata["signal_contract_version"], "merchant_commission_meow.v1")
+        self.assertEqual(specification.metadata["shared_entry_route_id"], "daily_ui.shared_carnival_entry")
+        self.assertEqual(
+            specification.metadata["shared_checkpoint_pack_id"],
+            "daily_ui.shared_carnival_entry.checkpoints",
+        )
         self.assertEqual(
             specification.metadata["merchant_commission_meow_handoff_fields"],
             [
@@ -143,6 +148,16 @@ class MerchantCommissionMeowFoundationsTests(unittest.TestCase):
                 "zeny_cost",
                 "reentry_mode",
             ],
+        )
+        self.assertEqual(
+            specification.shared_entry_route_contract.feature_overrides["daily_ui.merchant_commission_meow"][
+                "post_go_checkpoint_id"
+            ],
+            "merchant_autopath_to_npc",
+        )
+        self.assertEqual(
+            specification.shared_checkpoint_pack.required_anchor_ids,
+            ["common.close_button"],
         )
         self.assertEqual(
             specification.required_screen_slugs,
@@ -474,6 +489,16 @@ class MerchantCommissionMeowFoundationsTests(unittest.TestCase):
             resolution.executed_points,
             [(1, 2), (3, 4), (5, 6), (7, 8), (9, 10), (11, 12), (13, 14), (15, 16)],
         )
+        self.assertEqual(
+            resolution.metadata["shared_entry_resolution"]["checkpoint_ids"],
+            [
+                "main_screen_idle",
+                "top_right_expanded_icon_group",
+                "carnival_hub",
+                "feature_description_card",
+                "shared_go_now_handoff",
+            ],
+        )
 
     def test_resolve_from_main_screen_accepts_then_completes_one_round(self) -> None:
         adapter = _FakeSubmitPanelAdapter(
@@ -544,6 +569,10 @@ class MerchantCommissionMeowFoundationsTests(unittest.TestCase):
                 (27, 28),
                 (29, 30),
             ],
+        )
+        self.assertEqual(
+            resolution.entry_resolution.metadata["shared_entry_resolution"]["feature_id"],
+            "daily_ui.merchant_commission_meow",
         )
         self.assertEqual(adapter.swipes, [((17, 18), (19, 20), 321)])
 

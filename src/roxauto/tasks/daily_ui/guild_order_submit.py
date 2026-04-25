@@ -6,6 +6,12 @@ from typing import Any, Self
 
 from roxauto.core.serde import to_primitive
 from roxauto.tasks.catalog import TaskFoundationRepository
+from roxauto.tasks.foundations.navigation import (
+    SharedCheckpointPack,
+    SharedEntryRouteContract,
+    load_shared_carnival_entry_checkpoint_pack,
+    load_shared_carnival_entry_route_contract,
+)
 from roxauto.tasks.models import TaskBlueprint, TaskFixtureProfile, TaskReadinessReport, TaskRuntimeBuilderInput
 
 
@@ -403,6 +409,12 @@ class GuildOrderSubmitSpecification:
     supporting_anchor_ids: list[str] = field(default_factory=list)
     required_screen_slugs: list[str] = field(default_factory=list)
     supporting_screen_slugs: list[str] = field(default_factory=list)
+    shared_entry_route_contract: SharedEntryRouteContract = field(
+        default_factory=load_shared_carnival_entry_route_contract
+    )
+    shared_checkpoint_pack: SharedCheckpointPack = field(
+        default_factory=load_shared_carnival_entry_checkpoint_pack
+    )
     material_policy: GuildOrderMaterialPolicy = field(default_factory=GuildOrderMaterialPolicy)
     decision_contract: GuildOrderDecisionContract = field(default_factory=GuildOrderDecisionContract)
     visibility_contract: GuildOrderVisibilityContract = field(default_factory=GuildOrderVisibilityContract)
@@ -423,6 +435,8 @@ class GuildOrderSubmitSpecification:
                 "supporting_anchor_ids": self.supporting_anchor_ids,
                 "required_screen_slugs": self.required_screen_slugs,
                 "supporting_screen_slugs": self.supporting_screen_slugs,
+                "shared_entry_route_contract": self.shared_entry_route_contract.to_dict(),
+                "shared_checkpoint_pack": self.shared_checkpoint_pack.to_dict(),
                 "material_policy": self.material_policy.to_dict(),
                 "decision_contract": self.decision_contract.to_dict(),
                 "visibility_contract": self.visibility_contract.to_dict(),
@@ -609,6 +623,8 @@ def build_guild_order_submit_specification(
             if case.screen_slug not in _metadata_string_list(metadata_source, "supporting_golden_screen_slugs")
         ],
         supporting_screen_slugs=_metadata_string_list(metadata_source, "supporting_golden_screen_slugs"),
+        shared_entry_route_contract=load_shared_carnival_entry_route_contract(),
+        shared_checkpoint_pack=load_shared_carnival_entry_checkpoint_pack(),
         material_policy=GuildOrderMaterialPolicy.from_dict(
             _metadata_dict(metadata_source, "guild_order_material_policy")
             or _metadata_dict(blueprint_metadata, "guild_order_material_policy")
@@ -623,6 +639,15 @@ def build_guild_order_submit_specification(
         ),
         metadata={
             "signal_contract_version": str(metadata_source.get("signal_contract_version", "")),
+            "shared_entry_route_id": str(
+                metadata_source.get("shared_entry_route_id", "daily_ui.shared_carnival_entry")
+            ),
+            "shared_checkpoint_pack_id": str(
+                metadata_source.get(
+                    "shared_checkpoint_pack_id",
+                    "daily_ui.shared_carnival_entry.checkpoints",
+                )
+            ),
             "guild_order_spec_builders": _metadata_dict(metadata_source, "guild_order_spec_builders"),
             "guild_order_handoff_fields": _metadata_string_list(metadata_source, "guild_order_handoff_fields"),
             "implementation_state": str(resolved_readiness_report.metadata.get("implementation_state", "")),

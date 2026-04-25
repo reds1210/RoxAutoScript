@@ -102,6 +102,14 @@ class DailyUiFoundationsTests(unittest.TestCase):
             ],
         )
         self.assertEqual(
+            blueprints[2].metadata["shared_entry_route_id"],
+            "daily_ui.shared_carnival_entry",
+        )
+        self.assertEqual(
+            blueprints[3].metadata["shared_checkpoint_pack_id"],
+            "daily_ui.shared_carnival_entry.checkpoints",
+        )
+        self.assertEqual(
             blueprints[3].metadata["merchant_commission_meow_loop_contract"]["preferred_reentry_mode"],
             "left_task_list",
         )

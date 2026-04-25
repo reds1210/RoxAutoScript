@@ -94,6 +94,8 @@
       "metadata": {
         "phase": "round-9",
         "signal_contract_version": "guild_order_submit.v2",
+        "shared_entry_route_id": "daily_ui.shared_carnival_entry",
+        "shared_checkpoint_pack_id": "daily_ui.shared_carnival_entry.checkpoints",
         "supporting_anchor_ids": [
           "daily_ui.guild_order_material_label",
           "daily_ui.guild_order_required_quantity",
@@ -162,6 +164,8 @@
       "metadata": {
         "phase": "merchant_commission_transition",
         "signal_contract_version": "merchant_commission_meow.v1",
+        "shared_entry_route_id": "daily_ui.shared_carnival_entry",
+        "shared_checkpoint_pack_id": "daily_ui.shared_carnival_entry.checkpoints",
         "supporting_anchor_ids": [
           "daily_ui.merchant_commission_round_counter",
           "daily_ui.merchant_commission_material_label",

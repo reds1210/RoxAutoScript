@@ -405,6 +405,8 @@ Rules:
 
 - shared entry routes should only describe navigation proven reusable by multiple features
 - feature-specific policy or feature-specific stop conditions should stay outside the shared route contract
+- a narrow shared entry contract may stop at a shared `Go now` / `立即前往` handoff when the post-go destination flow diverges by feature
+- shared close/back semantics should describe only reusable hub or description-card cleanup, not feature-specific destination cleanup
 
 ### `SharedCheckpointPack`
 
@@ -421,6 +423,7 @@ Rules:
 
 - checkpoint packs should remain machine-readable so multiple features can verify the same route segments consistently
 - packs should not pretend a placeholder or exploratory checkpoint is production-ready
+- if only part of the route has shared anchors, checkpoint metadata should record which checkpoints are anchor-backed versus evidence-only instead of widening the shared path prematurely
 
 ### `PreviewFrame`
 

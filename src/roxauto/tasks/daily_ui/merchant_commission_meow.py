@@ -11,6 +11,15 @@ import numpy as np
 
 from roxauto.core.serde import to_primitive
 from roxauto.tasks.catalog import TaskFoundationRepository
+from roxauto.tasks.foundations.navigation import (
+    SharedCarnivalEntryFeatureNavigationPlan,
+    SharedCarnivalEntryNavigationPlan,
+    SharedCheckpointPack,
+    SharedEntryRouteContract,
+    load_shared_carnival_entry_checkpoint_pack,
+    load_shared_carnival_entry_route_contract,
+    resolve_shared_carnival_entry,
+)
 from roxauto.tasks.models import (
     TaskBlueprint,
     TaskFixtureProfile,
@@ -491,6 +500,21 @@ class MerchantCommissionMeowEntryNavigationPlan:
             wait_after_task_swipe_sec=float(data.get("wait_after_task_swipe_sec", 0.8)),
         )
 
+    def to_shared_entry_navigation_plan(self) -> SharedCarnivalEntryNavigationPlan:
+        return SharedCarnivalEntryNavigationPlan(
+            top_right_entry_point=self.activity_button_point,
+            carnival_hub_point=self.carnival_entry_point,
+            wait_after_top_right_entry_sec=self.wait_after_activity_open_sec,
+            wait_after_carnival_hub_sec=self.wait_after_carnival_sec,
+            feature_plan=SharedCarnivalEntryFeatureNavigationPlan(
+                feature_id="daily_ui.merchant_commission_meow",
+                feature_card_point=self.merchant_commission_icon_point,
+                go_now_point=self.go_now_point,
+                wait_after_feature_card_sec=self.wait_after_merchant_detail_sec,
+                wait_after_go_now_sec=self.wait_after_go_now_sec,
+            ),
+        )
+
 
 @dataclass(slots=True)
 class MerchantCommissionMeowEntryResolution:
@@ -710,6 +734,12 @@ class MerchantCommissionMeowSpecification:
     supporting_anchor_ids: list[str] = field(default_factory=list)
     required_screen_slugs: list[str] = field(default_factory=list)
     supporting_screen_slugs: list[str] = field(default_factory=list)
+    shared_entry_route_contract: SharedEntryRouteContract = field(
+        default_factory=load_shared_carnival_entry_route_contract
+    )
+    shared_checkpoint_pack: SharedCheckpointPack = field(
+        default_factory=load_shared_carnival_entry_checkpoint_pack
+    )
     route_contract: MerchantCommissionMeowRouteContract = field(
         default_factory=MerchantCommissionMeowRouteContract
     )
@@ -739,6 +769,8 @@ class MerchantCommissionMeowSpecification:
                 "supporting_anchor_ids": self.supporting_anchor_ids,
                 "required_screen_slugs": self.required_screen_slugs,
                 "supporting_screen_slugs": self.supporting_screen_slugs,
+                "shared_entry_route_contract": self.shared_entry_route_contract.to_dict(),
+                "shared_checkpoint_pack": self.shared_checkpoint_pack.to_dict(),
                 "route_contract": self.route_contract.to_dict(),
                 "loop_contract": self.loop_contract.to_dict(),
                 "submission_policy": self.submission_policy.to_dict(),
@@ -928,6 +960,8 @@ def build_merchant_commission_meow_specification(
         supporting_screen_slugs=_metadata_string_list(
             metadata_source, "supporting_golden_screen_slugs"
         ),
+        shared_entry_route_contract=load_shared_carnival_entry_route_contract(),
+        shared_checkpoint_pack=load_shared_carnival_entry_checkpoint_pack(),
         route_contract=MerchantCommissionMeowRouteContract.from_dict(
             _metadata_dict(metadata_source, "merchant_commission_meow_route_contract")
             or _metadata_dict(blueprint_metadata, "merchant_commission_meow_route_contract")
@@ -946,6 +980,15 @@ def build_merchant_commission_meow_specification(
         ),
         metadata={
             "signal_contract_version": str(metadata_source.get("signal_contract_version", "")),
+            "shared_entry_route_id": str(
+                metadata_source.get("shared_entry_route_id", "daily_ui.shared_carnival_entry")
+            ),
+            "shared_checkpoint_pack_id": str(
+                metadata_source.get(
+                    "shared_checkpoint_pack_id",
+                    "daily_ui.shared_carnival_entry.checkpoints",
+                )
+            ),
             "merchant_commission_meow_spec_builders": _metadata_dict(
                 metadata_source, "merchant_commission_meow_spec_builders"
             ),
@@ -1102,15 +1145,19 @@ def resolve_merchant_commission_meow_entry_accept(
     executed_points: list[tuple[int, int]] = []
     executed_swipes: list[dict[str, Any]] = []
 
+    shared_entry_resolution = resolve_shared_carnival_entry(
+        adapter=adapter,
+        instance=instance,
+        navigation_plan=plan.to_shared_entry_navigation_plan(),
+        sleep_fn=sleep_fn,
+    )
+    executed_points.extend(shared_entry_resolution.executed_points)
+
     def _tap(point: tuple[int, int], wait_sec: float) -> None:
         adapter.tap(instance, point)
         executed_points.append(point)
         sleep_fn(wait_sec)
 
-    _tap(plan.activity_button_point, plan.wait_after_activity_open_sec)
-    _tap(plan.carnival_entry_point, plan.wait_after_carnival_sec)
-    _tap(plan.merchant_commission_icon_point, plan.wait_after_merchant_detail_sec)
-    _tap(plan.go_now_point, plan.wait_after_go_now_sec)
     _tap(plan.npc_commission_option_point, plan.wait_after_npc_option_sec)
     _tap(plan.meow_accept_point, plan.wait_after_accept_sec)
     _tap(plan.close_list_point, plan.wait_after_close_list_sec)
@@ -1133,7 +1180,10 @@ def resolve_merchant_commission_meow_entry_accept(
     return MerchantCommissionMeowEntryResolution(
         executed_points=executed_points,
         executed_swipes=executed_swipes,
-        metadata={"navigation_plan": plan.to_dict()},
+        metadata={
+            "navigation_plan": plan.to_dict(),
+            "shared_entry_resolution": shared_entry_resolution.to_dict(),
+        },
     )
 
 
