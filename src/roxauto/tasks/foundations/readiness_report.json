@@ -1,77 +1,38 @@
 {
+  "metadata": {
+    "source": "task_foundations"
+  },
   "report_id": "pre_gate_3_task_readiness",
-  "version": "0.1.0",
   "reports": [
     {
-      "task_id": "daily_ui.claim_rewards",
-      "pack_id": "daily_ui",
       "builder_readiness_state": "ready",
-      "implementation_readiness_state": "ready",
       "builder_requirements": [],
+      "implementation_readiness_state": "ready",
       "implementation_requirements": [
         {
-          "requirement_id": "runtime.daily_ui.dispatch_bridge",
-          "domain": "runtime",
-          "summary": "Daily UI fixed-flow tasks require a production runtime action-dispatch bridge.",
-          "satisfied": true,
           "blocking": true,
           "details": "runtime_bridge=implemented runtime_input_builder=roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_input runtime_seam_builder=roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_seam task_spec_builder=roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_task_spec runtime_bridge_probe=roxauto.tasks.daily_ui.claim_rewards.has_claim_rewards_runtime_bridge",
+          "domain": "runtime",
           "metadata": {
             "domain": "runtime"
-          }
-        }
-      ],
-      "warning_requirements": [
-        {
-          "requirement_id": "warning.daily_ui.claim_rewards:template:daily_ui.reward_confirm_state.provenance",
-          "domain": "asset",
-          "summary": "Supporting template asset still relies on curated stand-in provenance instead of an approved live capture.",
-          "satisfied": false,
-          "blocking": false,
-          "details": "asset_status=present requirement_level=supporting provenance_kind=curated_stand_in live_capture=false replacement_target=approved_live_zh_tw_capture source_path=assets/templates/daily_ui/manifest.json#daily_ui.reward_confirm_state",
-          "metadata": {
-            "anchor_id": "daily_ui.reward_confirm_state",
-            "requirement_level": "supporting",
-            "provenance_kind": "curated_stand_in",
-            "live_capture": false,
-            "replacement_target": "approved_live_zh_tw_capture"
-          }
+          },
+          "requirement_id": "runtime.daily_ui.dispatch_bridge",
+          "satisfied": true,
+          "summary": "Daily UI fixed-flow tasks require a production runtime action-dispatch bridge."
         }
       ],
       "metadata": {
         "builder_input": {
-          "task_id": "daily_ui.claim_rewards",
-          "pack_id": "daily_ui",
-          "manifest_path": "packs/daily_ui/daily_claim_rewards.task.json",
+          "asset_requirement_ids": [],
+          "calibration_requirement_ids": [],
           "fixture_profile_paths": [
             "fixture_profiles/default_tw_daily.fixture.json"
           ],
-          "required_anchors": [
-            "daily_ui.reward_panel",
-            "daily_ui.claim_reward",
-            "common.confirm_button",
-            "common.close_button"
-          ],
-          "asset_requirement_ids": [],
-          "runtime_requirement_ids": [
-            "runtime.daily_ui.dispatch_bridge"
-          ],
-          "calibration_requirement_ids": [],
           "foundation_requirement_ids": [],
+          "manifest_path": "packs/daily_ui/daily_claim_rewards.task.json",
           "metadata": {
-            "source": "task_foundations",
-            "phase": "pre_gate_3",
-            "asset_state": "mixed_live_capture_and_curated_stand_in",
             "asset_provenance": {
-              "template_anchor_provenance": {
-                "curated_stand_in": [
-                  "daily_ui.reward_confirm_state"
-                ],
-                "live_capture": [
-                  "daily_ui.reward_panel",
-                  "daily_ui.claim_reward"
-                ]
-              },
+              "asset_state": "mixed_live_capture_and_curated_stand_in",
               "golden_case_provenance": {
                 "curated_stand_in": [
                   "confirm_state"
@@ -87,66 +48,23 @@
               "replacement_pending_golden_screen_slugs": [
                 "confirm_state"
               ],
-              "asset_state": "mixed_live_capture_and_curated_stand_in"
+              "template_anchor_provenance": {
+                "curated_stand_in": [
+                  "daily_ui.reward_confirm_state"
+                ],
+                "live_capture": [
+                  "daily_ui.reward_panel",
+                  "daily_ui.claim_reward"
+                ]
+              }
             },
-            "runtime_seam": {
-              "runtime_input_builder": "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_input",
-              "runtime_seam_builder": "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_seam",
-              "task_spec_builder": "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_task_spec",
-              "task_preset_builder": "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_task_preset",
-              "task_display_builder": "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_task_display_model",
-              "runtime_bridge_probe": "roxauto.tasks.daily_ui.claim_rewards.has_claim_rewards_runtime_bridge",
-              "signal_contract_version": "claim_rewards.v2",
-              "result_signal_keys": [
-                "failure_reason_id",
-                "outcome_code",
-                "expected_panel_states",
-                "inspection_attempts",
-                "signals",
-                "step_outcome",
-                "telemetry",
-                "task_action"
-              ]
-            },
-            "signal_contract_version": "claim_rewards.v2",
-            "preset_id": "daily_ui.claim_rewards.mvp",
-            "product_display_name": "每日領獎",
-            "supporting_anchor_ids": [
-              "daily_ui.reward_confirm_state"
+            "asset_state": "mixed_live_capture_and_curated_stand_in",
+            "claim_rewards_alternate_post_tap_capture_ids": [
+              "post_tap_reward_overlay_live_capture_emulator_5556_after_day7_claim_tap_2026_04_22",
+              "post_tap_claimed_result_live_capture_127_0_0_1_5559_after_claim_tap",
+              "post_tap_claimed_result_live_capture_127_0_0_1_5563_after_claim_tap",
+              "post_tap_claimed_result_live_capture_emulator_5560_after_claim_tap"
             ],
-            "supporting_golden_screen_slugs": [
-              "confirm_state"
-            ],
-            "post_claim_resolution": {
-              "decision": "direct_result_overlay_is_valid",
-              "accepted_post_tap_panel_states": [
-                "claimed",
-                "confirm_required"
-              ],
-              "terminal_success_panel_states": [
-                "claimed"
-              ],
-              "supporting_anchor_ids": [
-                "daily_ui.reward_confirm_state"
-              ],
-              "supporting_golden_screen_slugs": [
-                "confirm_state"
-              ],
-              "notes": "The task now treats a direct post-tap claimed/result-overlay path as a valid success transition while keeping the explicit confirm modal as an optional supporting path when it appears."
-            },
-            "claim_rewards_live_capture_coverage": {
-              "live_anchor_ids": [
-                "daily_ui.claim_reward",
-                "daily_ui.reward_panel"
-              ],
-              "stand_in_anchor_ids": [
-                "daily_ui.reward_confirm_state"
-              ],
-              "live_context_anchor_ids": [],
-              "blocked_scene_ids": [
-                "reward_confirm_modal"
-              ]
-            },
             "claim_rewards_capture_inventory": {
               "capture_round": "round-8",
               "confirmed_device_serials": [
@@ -163,489 +81,209 @@
               ],
               "missing_device_serials": []
             },
-            "claim_rewards_alternate_post_tap_capture_ids": [
-              "post_tap_reward_overlay_live_capture_emulator_5556_after_day7_claim_tap_2026_04_22",
-              "post_tap_claimed_result_live_capture_127_0_0_1_5559_after_claim_tap",
-              "post_tap_claimed_result_live_capture_127_0_0_1_5563_after_claim_tap",
-              "post_tap_claimed_result_live_capture_emulator_5560_after_claim_tap"
+            "claim_rewards_live_capture_coverage": {
+              "blocked_scene_ids": [
+                "reward_confirm_modal"
+              ],
+              "live_anchor_ids": [
+                "daily_ui.claim_reward",
+                "daily_ui.reward_panel"
+              ],
+              "live_context_anchor_ids": [],
+              "stand_in_anchor_ids": [
+                "daily_ui.reward_confirm_state"
+              ]
+            },
+            "inventory_source": "curated_inventory",
+            "phase": "pre_gate_3",
+            "post_claim_resolution": {
+              "accepted_post_tap_panel_states": [
+                "claimed",
+                "confirm_required"
+              ],
+              "decision": "direct_result_overlay_is_valid",
+              "notes": "The task now treats a direct post-tap claimed/result-overlay path as a valid success transition while keeping the explicit confirm modal as an optional supporting path when it appears.",
+              "supporting_anchor_ids": [
+                "daily_ui.reward_confirm_state"
+              ],
+              "supporting_golden_screen_slugs": [
+                "confirm_state"
+              ],
+              "terminal_success_panel_states": [
+                "claimed"
+              ]
+            },
+            "preset_id": "daily_ui.claim_rewards.mvp",
+            "product_display_name": "\u6bcf\u65e5\u9818\u734e",
+            "runtime_seam": {
+              "result_signal_keys": [
+                "failure_reason_id",
+                "outcome_code",
+                "expected_panel_states",
+                "inspection_attempts",
+                "signals",
+                "step_outcome",
+                "telemetry",
+                "task_action"
+              ],
+              "runtime_bridge_probe": "roxauto.tasks.daily_ui.claim_rewards.has_claim_rewards_runtime_bridge",
+              "runtime_input_builder": "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_input",
+              "runtime_seam_builder": "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_seam",
+              "signal_contract_version": "claim_rewards.v2",
+              "task_display_builder": "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_task_display_model",
+              "task_preset_builder": "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_task_preset",
+              "task_spec_builder": "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_task_spec"
+            },
+            "signal_contract_version": "claim_rewards.v2",
+            "source": "task_foundations",
+            "supporting_anchor_ids": [
+              "daily_ui.reward_confirm_state"
             ],
-            "inventory_source": "curated_inventory"
-          }
+            "supporting_golden_screen_slugs": [
+              "confirm_state"
+            ]
+          },
+          "pack_id": "daily_ui",
+          "required_anchors": [
+            "daily_ui.reward_panel",
+            "daily_ui.claim_reward",
+            "common.confirm_button",
+            "common.close_button"
+          ],
+          "runtime_requirement_ids": [
+            "runtime.daily_ui.dispatch_bridge"
+          ],
+          "task_id": "daily_ui.claim_rewards"
         },
         "implementation_state": "fixtured"
-      }
-    },
-    {
-      "task_id": "daily_ui.guild_check_in",
+      },
       "pack_id": "daily_ui",
-      "builder_readiness_state": "blocked_by_asset",
-      "implementation_readiness_state": "blocked_by_asset",
-      "builder_requirements": [
-        {
-          "requirement_id": "asset.daily_ui.guild_check_in_button",
-          "domain": "asset",
-          "summary": "Guild check-in still requires a curated guild check-in button asset, not just placeholder scaffolding.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "asset_status=placeholder source_path=assets/templates/daily_ui/manifest.json#daily_ui.guild_check_in_button",
-          "metadata": {
-            "domain": "asset"
-          }
-        }
-      ],
-      "implementation_requirements": [
-        {
-          "requirement_id": "asset.daily_ui.guild_check_in_button",
-          "domain": "asset",
-          "summary": "Guild check-in still requires a curated guild check-in button asset, not just placeholder scaffolding.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "asset_status=placeholder source_path=assets/templates/daily_ui/manifest.json#daily_ui.guild_check_in_button",
-          "metadata": {
-            "domain": "asset"
-          }
-        }
-      ],
+      "task_id": "daily_ui.claim_rewards",
       "warning_requirements": [
         {
-          "requirement_id": "warning.daily_ui.guild_check_in:golden:guild_hub",
-          "domain": "asset",
-          "summary": "Golden screenshots are still planned and not curated yet.",
-          "satisfied": false,
           "blocking": false,
-          "details": "asset_status=planned source_path=daily_ui/daily_ui_guild_check_in/guild_hub/daily_ui_guild_check_in__guild_hub__baseline__v1.png",
-          "metadata": {}
+          "details": "asset_status=present requirement_level=supporting provenance_kind=curated_stand_in live_capture=false replacement_target=approved_live_zh_tw_capture source_path=assets/templates/daily_ui/manifest.json#daily_ui.reward_confirm_state",
+          "domain": "asset",
+          "metadata": {
+            "anchor_id": "daily_ui.reward_confirm_state",
+            "live_capture": false,
+            "provenance_kind": "curated_stand_in",
+            "replacement_target": "approved_live_zh_tw_capture",
+            "requirement_level": "supporting"
+          },
+          "requirement_id": "warning.daily_ui.claim_rewards:template:daily_ui.reward_confirm_state.provenance",
+          "satisfied": false,
+          "summary": "Supporting template asset still relies on curated stand-in provenance instead of an approved live capture."
+        }
+      ]
+    },
+    {
+      "builder_readiness_state": "blocked_by_asset",
+      "builder_requirements": [
+        {
+          "blocking": true,
+          "details": "asset_status=placeholder source_path=assets/templates/daily_ui/manifest.json#daily_ui.guild_check_in_button",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.guild_check_in_button",
+          "satisfied": false,
+          "summary": "Guild check-in still requires a curated guild check-in button asset, not just placeholder scaffolding."
+        }
+      ],
+      "implementation_readiness_state": "blocked_by_asset",
+      "implementation_requirements": [
+        {
+          "blocking": true,
+          "details": "asset_status=placeholder source_path=assets/templates/daily_ui/manifest.json#daily_ui.guild_check_in_button",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.guild_check_in_button",
+          "satisfied": false,
+          "summary": "Guild check-in still requires a curated guild check-in button asset, not just placeholder scaffolding."
         }
       ],
       "metadata": {
         "builder_input": {
-          "task_id": "daily_ui.guild_check_in",
-          "pack_id": "daily_ui",
-          "manifest_path": "packs/daily_ui/guild_check_in.task.json",
+          "asset_requirement_ids": [
+            "asset.daily_ui.guild_check_in_button"
+          ],
+          "calibration_requirement_ids": [],
           "fixture_profile_paths": [
             "fixture_profiles/default_tw_guild.fixture.json"
           ],
+          "foundation_requirement_ids": [],
+          "manifest_path": "packs/daily_ui/guild_check_in.task.json",
+          "metadata": {
+            "inventory_source": "curated_inventory",
+            "phase": "pre_gate_3",
+            "source": "task_foundations"
+          },
+          "pack_id": "daily_ui",
           "required_anchors": [
             "common.close_button",
             "daily_ui.guild_check_in_button"
           ],
-          "asset_requirement_ids": [
-            "asset.daily_ui.guild_check_in_button"
-          ],
           "runtime_requirement_ids": [],
-          "calibration_requirement_ids": [],
-          "foundation_requirement_ids": [],
-          "metadata": {
-            "source": "task_foundations",
-            "phase": "pre_gate_3",
-            "inventory_source": "curated_inventory"
-          }
+          "task_id": "daily_ui.guild_check_in"
         },
         "implementation_state": "spec_only"
-      }
-    },
-    {
-      "task_id": "daily_ui.guild_order_submit",
+      },
       "pack_id": "daily_ui",
-      "builder_readiness_state": "blocked_by_foundation",
-      "implementation_readiness_state": "blocked_by_foundation",
-      "builder_requirements": [
-        {
-          "requirement_id": "asset.daily_ui.guild_order_list",
-          "domain": "asset",
-          "summary": "Guild-order submit still requires a truthful guild-order list anchor.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "asset_status=placeholder source_path=assets/templates/daily_ui/manifest.json#daily_ui.guild_order_list_panel",
-          "metadata": {
-            "domain": "asset"
-          }
-        },
-        {
-          "requirement_id": "asset.daily_ui.guild_order_detail",
-          "domain": "asset",
-          "summary": "Guild-order submit still requires a truthful guild-order detail anchor.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "asset_status=placeholder source_path=assets/templates/daily_ui/manifest.json#daily_ui.guild_order_detail_panel",
-          "metadata": {
-            "domain": "asset"
-          }
-        },
-        {
-          "requirement_id": "asset.daily_ui.guild_order_submit_button",
-          "domain": "asset",
-          "summary": "Guild-order submit still requires a truthful submit affordance anchor.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "asset_status=placeholder source_path=assets/templates/daily_ui/manifest.json#daily_ui.guild_order_submit_button",
-          "metadata": {
-            "domain": "asset"
-          }
-        },
-        {
-          "requirement_id": "asset.daily_ui.guild_order_refresh_button",
-          "domain": "asset",
-          "summary": "Guild-order submit still requires a truthful refresh affordance anchor.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "asset_status=placeholder source_path=assets/templates/daily_ui/manifest.json#daily_ui.guild_order_refresh_button",
-          "metadata": {
-            "domain": "asset"
-          }
-        },
-        {
-          "requirement_id": "foundation.daily_ui.guild_order_visible_quantity_contract",
-          "domain": "foundation",
-          "summary": "Guild-order material logic still requires a truthful visible-quantity contract for material label, required quantity, and available quantity.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "anchor_statuses=daily_ui.guild_order_material_label:missing,daily_ui.guild_order_required_quantity:missing,daily_ui.guild_order_available_quantity:missing decision_surface=visible_material_label_required_quantity_available_quantity",
-          "metadata": {
-            "domain": "foundation"
-          }
-        },
-        {
-          "requirement_id": "foundation.daily_ui.guild_order_result_state_contract",
-          "domain": "foundation",
-          "summary": "Guild-order submit/skip/refresh still requires a truthful verification-state contract for completed, insufficient-material, and submit-result surfaces.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "anchor_statuses=daily_ui.guild_order_unavailable_state:placeholder,daily_ui.guild_order_insufficient_material_feedback:placeholder,daily_ui.guild_order_submit_result_state:placeholder verification_surface=completed_insufficient_submit_result",
-          "metadata": {
-            "domain": "foundation"
-          }
-        },
-        {
-          "requirement_id": "foundation.daily_ui.guild_order_custom_option_contract",
-          "domain": "foundation",
-          "summary": "Guild-order self-select support still requires a truthful custom-order contract for the list button, option list panel, visible option quantities, and selected-option verification.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "anchor_statuses=daily_ui.guild_order_custom_list_button:missing,daily_ui.guild_order_custom_list_panel:missing,daily_ui.guild_order_custom_option_material_label:missing,daily_ui.guild_order_custom_option_required_quantity:missing,daily_ui.guild_order_custom_option_available_quantity:missing,daily_ui.guild_order_custom_option_selected_state:missing selection_surface=custom_list_button_custom_list_panel_visible_option_quantities_selected_option",
-          "metadata": {
-            "domain": "foundation"
-          }
-        }
-      ],
-      "implementation_requirements": [
-        {
-          "requirement_id": "asset.daily_ui.guild_order_list",
-          "domain": "asset",
-          "summary": "Guild-order submit still requires a truthful guild-order list anchor.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "asset_status=placeholder source_path=assets/templates/daily_ui/manifest.json#daily_ui.guild_order_list_panel",
-          "metadata": {
-            "domain": "asset"
-          }
-        },
-        {
-          "requirement_id": "asset.daily_ui.guild_order_detail",
-          "domain": "asset",
-          "summary": "Guild-order submit still requires a truthful guild-order detail anchor.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "asset_status=placeholder source_path=assets/templates/daily_ui/manifest.json#daily_ui.guild_order_detail_panel",
-          "metadata": {
-            "domain": "asset"
-          }
-        },
-        {
-          "requirement_id": "asset.daily_ui.guild_order_submit_button",
-          "domain": "asset",
-          "summary": "Guild-order submit still requires a truthful submit affordance anchor.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "asset_status=placeholder source_path=assets/templates/daily_ui/manifest.json#daily_ui.guild_order_submit_button",
-          "metadata": {
-            "domain": "asset"
-          }
-        },
-        {
-          "requirement_id": "asset.daily_ui.guild_order_refresh_button",
-          "domain": "asset",
-          "summary": "Guild-order submit still requires a truthful refresh affordance anchor.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "asset_status=placeholder source_path=assets/templates/daily_ui/manifest.json#daily_ui.guild_order_refresh_button",
-          "metadata": {
-            "domain": "asset"
-          }
-        },
-        {
-          "requirement_id": "foundation.daily_ui.guild_order_visible_quantity_contract",
-          "domain": "foundation",
-          "summary": "Guild-order material logic still requires a truthful visible-quantity contract for material label, required quantity, and available quantity.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "anchor_statuses=daily_ui.guild_order_material_label:missing,daily_ui.guild_order_required_quantity:missing,daily_ui.guild_order_available_quantity:missing decision_surface=visible_material_label_required_quantity_available_quantity",
-          "metadata": {
-            "domain": "foundation"
-          }
-        },
-        {
-          "requirement_id": "foundation.daily_ui.guild_order_result_state_contract",
-          "domain": "foundation",
-          "summary": "Guild-order submit/skip/refresh still requires a truthful verification-state contract for completed, insufficient-material, and submit-result surfaces.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "anchor_statuses=daily_ui.guild_order_unavailable_state:placeholder,daily_ui.guild_order_insufficient_material_feedback:placeholder,daily_ui.guild_order_submit_result_state:placeholder verification_surface=completed_insufficient_submit_result",
-          "metadata": {
-            "domain": "foundation"
-          }
-        },
-        {
-          "requirement_id": "foundation.daily_ui.guild_order_custom_option_contract",
-          "domain": "foundation",
-          "summary": "Guild-order self-select support still requires a truthful custom-order contract for the list button, option list panel, visible option quantities, and selected-option verification.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "anchor_statuses=daily_ui.guild_order_custom_list_button:missing,daily_ui.guild_order_custom_list_panel:missing,daily_ui.guild_order_custom_option_material_label:missing,daily_ui.guild_order_custom_option_required_quantity:missing,daily_ui.guild_order_custom_option_available_quantity:missing,daily_ui.guild_order_custom_option_selected_state:missing selection_surface=custom_list_button_custom_list_panel_visible_option_quantities_selected_option",
-          "metadata": {
-            "domain": "foundation"
-          }
-        }
-      ],
+      "task_id": "daily_ui.guild_check_in",
       "warning_requirements": [
         {
-          "requirement_id": "warning.daily_ui.guild_order_submit:template:daily_ui.guild_order_list_panel",
-          "domain": "asset",
-          "summary": "Template asset is still placeholder scaffolding.",
-          "satisfied": false,
           "blocking": false,
-          "details": "asset_status=placeholder source_path=assets/templates/daily_ui/manifest.json#daily_ui.guild_order_list_panel",
-          "metadata": {}
-        },
+          "details": "asset_status=planned source_path=daily_ui/daily_ui_guild_check_in/guild_hub/daily_ui_guild_check_in__guild_hub__baseline__v1.png",
+          "domain": "asset",
+          "metadata": {},
+          "requirement_id": "warning.daily_ui.guild_check_in:golden:guild_hub",
+          "satisfied": false,
+          "summary": "Golden screenshots are still planned and not curated yet."
+        }
+      ]
+    },
+    {
+      "builder_readiness_state": "ready",
+      "builder_requirements": [],
+      "implementation_readiness_state": "ready",
+      "implementation_requirements": [
         {
-          "requirement_id": "warning.daily_ui.guild_order_submit:template:daily_ui.guild_order_detail_panel",
-          "domain": "asset",
-          "summary": "Template asset is still placeholder scaffolding.",
-          "satisfied": false,
-          "blocking": false,
-          "details": "asset_status=placeholder source_path=assets/templates/daily_ui/manifest.json#daily_ui.guild_order_detail_panel",
-          "metadata": {}
-        },
-        {
-          "requirement_id": "warning.daily_ui.guild_order_submit:template:daily_ui.guild_order_submit_button",
-          "domain": "asset",
-          "summary": "Template asset is still placeholder scaffolding.",
-          "satisfied": false,
-          "blocking": false,
-          "details": "asset_status=placeholder source_path=assets/templates/daily_ui/manifest.json#daily_ui.guild_order_submit_button",
-          "metadata": {}
-        },
-        {
-          "requirement_id": "warning.daily_ui.guild_order_submit:template:daily_ui.guild_order_refresh_button",
-          "domain": "asset",
-          "summary": "Template asset is still placeholder scaffolding.",
-          "satisfied": false,
-          "blocking": false,
-          "details": "asset_status=placeholder source_path=assets/templates/daily_ui/manifest.json#daily_ui.guild_order_refresh_button",
-          "metadata": {}
-        },
-        {
-          "requirement_id": "warning.daily_ui.guild_order_submit:template:daily_ui.guild_order_unavailable_state",
-          "domain": "asset",
-          "summary": "Template asset is still placeholder scaffolding.",
-          "satisfied": false,
-          "blocking": false,
-          "details": "asset_status=placeholder source_path=assets/templates/daily_ui/manifest.json#daily_ui.guild_order_unavailable_state",
-          "metadata": {}
-        },
-        {
-          "requirement_id": "warning.daily_ui.guild_order_submit:template:daily_ui.guild_order_insufficient_material_feedback",
-          "domain": "asset",
-          "summary": "Template asset is still placeholder scaffolding.",
-          "satisfied": false,
-          "blocking": false,
-          "details": "asset_status=placeholder source_path=assets/templates/daily_ui/manifest.json#daily_ui.guild_order_insufficient_material_feedback",
-          "metadata": {}
-        },
-        {
-          "requirement_id": "warning.daily_ui.guild_order_submit:template:daily_ui.guild_order_submit_result_state",
-          "domain": "asset",
-          "summary": "Template asset is still placeholder scaffolding.",
-          "satisfied": false,
-          "blocking": false,
-          "details": "asset_status=placeholder source_path=assets/templates/daily_ui/manifest.json#daily_ui.guild_order_submit_result_state",
-          "metadata": {}
-        },
-        {
-          "requirement_id": "warning.daily_ui.guild_order_submit:golden:order_list",
-          "domain": "asset",
-          "summary": "Golden screenshots are still planned and not curated yet.",
-          "satisfied": false,
-          "blocking": false,
-          "details": "asset_status=planned source_path=daily_ui/daily_ui_guild_order_submit/order_list/daily_ui_guild_order_submit__order_list__baseline__v1.png",
-          "metadata": {}
-        },
-        {
-          "requirement_id": "warning.daily_ui.guild_order_submit:golden:order_detail",
-          "domain": "asset",
-          "summary": "Golden screenshots are still planned and not curated yet.",
-          "satisfied": false,
-          "blocking": false,
-          "details": "asset_status=planned source_path=daily_ui/daily_ui_guild_order_submit/order_detail/daily_ui_guild_order_submit__order_detail__baseline__v1.png",
-          "metadata": {}
-        },
-        {
-          "requirement_id": "warning.daily_ui.guild_order_submit:golden:custom_order_detail",
-          "domain": "asset",
-          "summary": "Golden screenshots are still planned and not curated yet.",
-          "satisfied": false,
-          "blocking": false,
-          "details": "asset_status=planned source_path=daily_ui/daily_ui_guild_order_submit/custom_order_detail/daily_ui_guild_order_submit__custom_order_detail__baseline__v1.png",
-          "metadata": {}
-        },
-        {
-          "requirement_id": "warning.daily_ui.guild_order_submit:golden:custom_order_list",
-          "domain": "asset",
-          "summary": "Golden screenshots are still planned and not curated yet.",
-          "satisfied": false,
-          "blocking": false,
-          "details": "asset_status=planned source_path=daily_ui/daily_ui_guild_order_submit/custom_order_list/daily_ui_guild_order_submit__custom_order_list__baseline__v1.png",
-          "metadata": {}
-        },
-        {
-          "requirement_id": "warning.daily_ui.guild_order_submit:golden:insufficient_material_state",
-          "domain": "asset",
-          "summary": "Golden screenshots are still planned and not curated yet.",
-          "satisfied": false,
-          "blocking": false,
-          "details": "asset_status=planned source_path=daily_ui/daily_ui_guild_order_submit/insufficient_material_state/daily_ui_guild_order_submit__insufficient_material_state__baseline__v1.png",
-          "metadata": {}
-        },
-        {
-          "requirement_id": "warning.daily_ui.guild_order_submit:golden:completed_state",
-          "domain": "asset",
-          "summary": "Golden screenshots are still planned and not curated yet.",
-          "satisfied": false,
-          "blocking": false,
-          "details": "asset_status=planned source_path=daily_ui/daily_ui_guild_order_submit/completed_state/daily_ui_guild_order_submit__completed_state__baseline__v1.png",
-          "metadata": {}
-        },
-        {
-          "requirement_id": "warning.daily_ui.guild_order_submit:golden:submit_result",
-          "domain": "asset",
-          "summary": "Golden screenshots are still planned and not curated yet.",
-          "satisfied": false,
-          "blocking": false,
-          "details": "asset_status=planned source_path=daily_ui/daily_ui_guild_order_submit/submit_result/daily_ui_guild_order_submit__submit_result__baseline__v1.png",
-          "metadata": {}
+          "blocking": true,
+          "details": "runtime_bridge=implemented runtime_input_builder=roxauto.tasks.daily_ui.guild_order_submit.build_guild_order_submit_runtime_input runtime_seam_builder=roxauto.tasks.daily_ui.guild_order_submit.build_guild_order_submit_runtime_seam task_spec_builder=roxauto.tasks.daily_ui.guild_order_submit.build_guild_order_submit_task_spec runtime_bridge_probe=roxauto.tasks.daily_ui.guild_order_submit.has_guild_order_submit_runtime_bridge",
+          "domain": "runtime",
+          "metadata": {
+            "domain": "runtime"
+          },
+          "requirement_id": "runtime.daily_ui.dispatch_bridge",
+          "satisfied": true,
+          "summary": "Daily UI fixed-flow tasks require a production runtime action-dispatch bridge."
         }
       ],
       "metadata": {
         "builder_input": {
-          "task_id": "daily_ui.guild_order_submit",
-          "pack_id": "daily_ui",
-          "manifest_path": "packs/daily_ui/guild_order_submit.task.json",
+          "asset_requirement_ids": [],
+          "calibration_requirement_ids": [],
           "fixture_profile_paths": [
             "fixture_profiles/default_tw_guild.fixture.json"
           ],
-          "required_anchors": [
-            "common.close_button",
-            "daily_ui.guild_order_list_panel",
-            "daily_ui.guild_order_detail_panel",
-            "daily_ui.guild_order_submit_button",
-            "daily_ui.guild_order_refresh_button"
-          ],
-          "asset_requirement_ids": [
-            "asset.daily_ui.guild_order_list",
-            "asset.daily_ui.guild_order_detail",
-            "asset.daily_ui.guild_order_submit_button",
-            "asset.daily_ui.guild_order_refresh_button"
-          ],
-          "runtime_requirement_ids": [],
-          "calibration_requirement_ids": [],
-          "foundation_requirement_ids": [
-            "foundation.daily_ui.guild_order_visible_quantity_contract",
-            "foundation.daily_ui.guild_order_result_state_contract",
-            "foundation.daily_ui.guild_order_custom_option_contract"
-          ],
+          "foundation_requirement_ids": [],
+          "manifest_path": "packs/daily_ui/guild_order_submit.task.json",
           "metadata": {
-            "source": "task_foundations",
-            "phase": "round-9",
-            "signal_contract_version": "guild_order_submit.v2",
-            "supporting_anchor_ids": [
-              "daily_ui.guild_order_material_label",
-              "daily_ui.guild_order_required_quantity",
-              "daily_ui.guild_order_available_quantity",
-              "daily_ui.guild_order_custom_list_button",
-              "daily_ui.guild_order_custom_list_panel",
-              "daily_ui.guild_order_custom_option_material_label",
-              "daily_ui.guild_order_custom_option_required_quantity",
-              "daily_ui.guild_order_custom_option_available_quantity",
-              "daily_ui.guild_order_custom_option_selected_state",
-              "daily_ui.guild_order_unavailable_state",
-              "daily_ui.guild_order_insufficient_material_feedback",
-              "daily_ui.guild_order_submit_result_state"
-            ],
-            "supporting_golden_screen_slugs": [
-              "custom_order_detail",
-              "custom_order_list",
-              "insufficient_material_state",
-              "completed_state",
-              "submit_result"
-            ],
-            "guild_order_material_policy": {
-              "allowed_material_ids": [],
-              "allowed_material_labels": [],
-              "blocked_material_ids": [],
-              "blocked_material_labels": [],
-              "reserve_quantity_by_material_id": {},
-              "reserve_quantity_by_material_label": {},
-              "refresh_allowed": true,
-              "max_refresh_attempts_per_run": 1,
-              "custom_order_enabled": true,
-              "custom_order_preferred_material_ids": [],
-              "custom_order_preferred_material_labels": [],
-              "custom_order_max_candidates_to_inspect": 8,
-              "custom_order_selection_boundary": "visible_custom_order_candidate_evidence_only",
-              "decision_priority": [
-                "submit",
-                "refresh",
-                "skip"
-              ],
-              "decision_boundary": "visible_material_evidence_only",
-              "disallowed_behaviors": [
-                "crafting",
-                "gathering",
-                "pathing"
-              ],
-              "notes": "Guild-order submission now includes the bounded self-select order path. The self-select order is a first-round bonus card, not a second-round mode. The task may inspect visible custom-order candidates and choose one truthful option using the same material-policy rules, but it still must not hide crafting, gathering, or pathing as dependencies."
-            },
             "guild_order_decision_contract": {
               "allowed_decisions": [
                 "submit",
                 "skip",
                 "refresh"
               ],
-              "reason_ids": [
-                "materials_sufficient",
-                "materials_insufficient",
-                "policy_blocked_material",
-                "order_already_completed",
-                "order_state_unknown",
-                "refresh_not_allowed",
-                "refresh_limit_reached",
-                "custom_order_disabled",
-                "custom_order_list_unavailable",
-                "custom_order_no_viable_option",
-                "custom_order_option_selected",
-                "custom_order_selected_candidate_missing",
-                "custom_order_selected_candidate_blocked",
-                "custom_order_selected_candidate_insufficient",
-                "submit_verification_failed",
-                "refresh_verification_failed"
-              ],
-              "verification_state_ids": [
-                "submit_verified",
-                "skip_recorded",
-                "refresh_verified",
-                "verification_failed",
-                "order_state_unknown"
-              ],
+              "decision_rules": {
+                "refresh": "Visible standard-order evidence is unsuitable and one bounded refresh remains allowed by policy.",
+                "skip": "Visible order is already completed, the state is still ambiguous, custom-order handling is disabled, refresh is disallowed, or no truthful bounded action remains after policy evaluation.",
+                "submit": "Visible standard requirements are allowed and sufficiently stocked from bounded evidence only."
+              },
               "decision_signal_keys": [
                 "decision",
                 "reason_id",
@@ -668,20 +306,92 @@
                 "available_quantity",
                 "sufficiency"
               ],
-              "decision_rules": {
-                "submit": "Visible standard requirements are allowed and sufficiently stocked, or a visible self-select option is chosen truthfully under the same material policy.",
-                "skip": "Visible order is already completed, self-select support is unavailable or disabled, refresh is disallowed, or no truthful bounded action remains after policy evaluation.",
-                "refresh": "Visible order or self-select option set is unsuitable and one bounded refresh remains allowed by policy."
-              },
-              "notes": "Unknown order state should fail honestly instead of inventing a fourth hidden action path. Self-select orders stay inside the same submit / skip / refresh decision envelope as a first-round bonus path, must record the chosen option explicitly, and should preserve truthful failure reasons when an operator-selected candidate index is missing, blocked, or insufficient."
+              "notes": "Unknown order state must fail or skip honestly instead of inventing a hidden action path. V1 keeps custom-order handling outside scope and records that surface as a truthful skip.",
+              "reason_ids": [
+                "materials_sufficient",
+                "materials_insufficient",
+                "policy_blocked_material",
+                "order_already_completed",
+                "order_state_unknown",
+                "refresh_not_allowed",
+                "refresh_limit_reached",
+                "custom_order_disabled",
+                "submit_verification_failed",
+                "refresh_verification_failed"
+              ],
+              "verification_state_ids": [
+                "submit_verified",
+                "skip_recorded",
+                "refresh_verified",
+                "verification_failed",
+                "order_state_unknown"
+              ]
+            },
+            "guild_order_handoff_fields": [
+              "decision",
+              "reason_id",
+              "slot_index",
+              "order_kind",
+              "requirements",
+              "availability",
+              "custom_options",
+              "selected_custom_option",
+              "refresh_attempted",
+              "verification_state"
+            ],
+            "guild_order_material_policy": {
+              "allowed_material_ids": [],
+              "allowed_material_labels": [],
+              "blocked_material_ids": [],
+              "blocked_material_labels": [],
+              "custom_order_enabled": false,
+              "custom_order_max_candidates_to_inspect": 8,
+              "custom_order_preferred_material_ids": [],
+              "custom_order_preferred_material_labels": [],
+              "custom_order_selection_boundary": "disabled_in_v1_runtime",
+              "decision_boundary": "visible_material_evidence_only",
+              "decision_priority": [
+                "submit",
+                "refresh",
+                "skip"
+              ],
+              "disallowed_behaviors": [
+                "crafting",
+                "gathering",
+                "pathing"
+              ],
+              "max_refresh_attempts_per_run": 1,
+              "notes": "V1 supports standard-order submit / skip / refresh only. When a self-select custom order is visible, the runtime preserves evidence and records a truthful skip instead of widening into candidate selection.",
+              "refresh_allowed": true,
+              "reserve_quantity_by_material_id": {},
+              "reserve_quantity_by_material_label": {}
+            },
+            "guild_order_spec_builders": {
+              "decision_contract_loader": "roxauto.tasks.daily_ui.guild_order_submit.load_guild_order_submit_decision_contract",
+              "material_policy_loader": "roxauto.tasks.daily_ui.guild_order_submit.load_guild_order_submit_material_policy",
+              "task_specification_builder": "roxauto.tasks.daily_ui.guild_order_submit.build_guild_order_submit_specification",
+              "visibility_contract_loader": "roxauto.tasks.daily_ui.guild_order_submit.load_guild_order_submit_visibility_contract"
             },
             "guild_order_visibility_contract": {
+              "decision_input_fields": [
+                "order_kind",
+                "slot_index",
+                "material_label",
+                "required_quantity",
+                "available_quantity"
+              ],
+              "foundation_requirement_ids": [],
+              "notes": "V1 uses bounded runtime OCR evidence and signature-based verification instead of template-blocked quantity contracts, but still preserves truthful supporting scene metadata for future evidence work.",
               "required_anchor_ids": [
                 "common.close_button",
                 "daily_ui.guild_order_list_panel",
                 "daily_ui.guild_order_detail_panel",
                 "daily_ui.guild_order_submit_button",
                 "daily_ui.guild_order_refresh_button"
+              ],
+              "required_screen_slugs": [
+                "order_list",
+                "order_detail"
               ],
               "supporting_anchor_ids": [
                 "daily_ui.guild_order_material_label",
@@ -697,469 +407,708 @@
                 "daily_ui.guild_order_insufficient_material_feedback",
                 "daily_ui.guild_order_submit_result_state"
               ],
-              "required_screen_slugs": [
-                "order_list",
-                "order_detail"
-              ],
               "supporting_screen_slugs": [
                 "custom_order_detail",
                 "custom_order_list",
                 "insufficient_material_state",
                 "completed_state",
                 "submit_result"
-              ],
-              "decision_input_fields": [
-                "order_kind",
+              ]
+            },
+            "inventory_source": "curated_inventory",
+            "phase": "round-9",
+            "runtime_seam": {
+              "result_signal_keys": [
+                "decision",
+                "reason_id",
                 "slot_index",
-                "material_label",
-                "required_quantity",
-                "available_quantity",
-                "candidate_index",
-                "custom_option_material_label",
-                "custom_option_required_quantity",
-                "custom_option_available_quantity"
+                "order_kind",
+                "requirements",
+                "availability",
+                "custom_options",
+                "selected_custom_option",
+                "refresh_attempted",
+                "verification_state",
+                "failure_reason_id",
+                "inspection_attempts",
+                "outcome_code",
+                "step_outcome",
+                "task_action",
+                "telemetry",
+                "text_evidence"
               ],
-              "foundation_requirement_ids": [
-                "foundation.daily_ui.guild_order_visible_quantity_contract",
-                "foundation.daily_ui.guild_order_result_state_contract",
-                "foundation.daily_ui.guild_order_custom_option_contract"
-              ],
-              "notes": "Guild-order submit remains blocked until visible quantities, self-select option surfaces, and post-decision result states are truthful and deterministic."
+              "runtime_bridge_probe": "roxauto.tasks.daily_ui.guild_order_submit.has_guild_order_submit_runtime_bridge",
+              "runtime_input_builder": "roxauto.tasks.daily_ui.guild_order_submit.build_guild_order_submit_runtime_input",
+              "runtime_seam_builder": "roxauto.tasks.daily_ui.guild_order_submit.build_guild_order_submit_runtime_seam",
+              "signal_contract_version": "guild_order_submit.v2",
+              "task_spec_builder": "roxauto.tasks.daily_ui.guild_order_submit.build_guild_order_submit_task_spec"
             },
-            "guild_order_handoff_fields": [
-              "decision",
-              "reason_id",
-              "slot_index",
-              "order_kind",
-              "requirements",
-              "availability",
-              "custom_options",
-              "selected_custom_option",
-              "refresh_attempted",
-              "verification_state"
+            "signal_contract_version": "guild_order_submit.v2",
+            "source": "task_foundations",
+            "supporting_anchor_ids": [
+              "daily_ui.guild_order_material_label",
+              "daily_ui.guild_order_required_quantity",
+              "daily_ui.guild_order_available_quantity",
+              "daily_ui.guild_order_custom_list_button",
+              "daily_ui.guild_order_custom_list_panel",
+              "daily_ui.guild_order_custom_option_material_label",
+              "daily_ui.guild_order_custom_option_required_quantity",
+              "daily_ui.guild_order_custom_option_available_quantity",
+              "daily_ui.guild_order_custom_option_selected_state",
+              "daily_ui.guild_order_unavailable_state",
+              "daily_ui.guild_order_insufficient_material_feedback",
+              "daily_ui.guild_order_submit_result_state"
             ],
-            "guild_order_spec_builders": {
-              "task_specification_builder": "roxauto.tasks.daily_ui.guild_order_submit.build_guild_order_submit_specification",
-              "material_policy_loader": "roxauto.tasks.daily_ui.guild_order_submit.load_guild_order_submit_material_policy",
-              "decision_contract_loader": "roxauto.tasks.daily_ui.guild_order_submit.load_guild_order_submit_decision_contract",
-              "visibility_contract_loader": "roxauto.tasks.daily_ui.guild_order_submit.load_guild_order_submit_visibility_contract"
-            },
-            "inventory_source": "curated_inventory"
-          }
+            "supporting_golden_screen_slugs": [
+              "custom_order_detail",
+              "custom_order_list",
+              "insufficient_material_state",
+              "completed_state",
+              "submit_result"
+            ]
+          },
+          "pack_id": "daily_ui",
+          "required_anchors": [
+            "common.close_button",
+            "daily_ui.guild_order_list_panel",
+            "daily_ui.guild_order_detail_panel",
+            "daily_ui.guild_order_submit_button",
+            "daily_ui.guild_order_refresh_button"
+          ],
+          "runtime_requirement_ids": [
+            "runtime.daily_ui.dispatch_bridge"
+          ],
+          "task_id": "daily_ui.guild_order_submit"
         },
-        "implementation_state": "spec_only"
-      }
-    },
-    {
-      "task_id": "daily_ui.merchant_commission_meow",
+        "implementation_state": "fixtured"
+      },
       "pack_id": "daily_ui",
-      "builder_readiness_state": "blocked_by_asset",
-      "implementation_readiness_state": "blocked_by_asset",
-      "builder_requirements": [
-        {
-          "requirement_id": "asset.daily_ui.merchant_commission_poring_button",
-          "domain": "asset",
-          "summary": "Merchant commission meow still requires a truthful Poring activity entry anchor.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_poring_button",
-          "metadata": {
-            "domain": "asset"
-          }
-        },
-        {
-          "requirement_id": "asset.daily_ui.merchant_commission_carnival_entry",
-          "domain": "asset",
-          "summary": "Merchant commission meow still requires a truthful Carnival entry anchor.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_carnival_entry",
-          "metadata": {
-            "domain": "asset"
-          }
-        },
-        {
-          "requirement_id": "asset.daily_ui.merchant_commission_detail_modal",
-          "domain": "asset",
-          "summary": "Merchant commission meow still requires a truthful merchant commission detail modal anchor.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_detail_modal",
-          "metadata": {
-            "domain": "asset"
-          }
-        },
-        {
-          "requirement_id": "asset.daily_ui.merchant_commission_go_now_button",
-          "domain": "asset",
-          "summary": "Merchant commission meow still requires a truthful `立即前往` anchor.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_go_now_button",
-          "metadata": {
-            "domain": "asset"
-          }
-        },
-        {
-          "requirement_id": "asset.daily_ui.merchant_commission_npc_dialog",
-          "domain": "asset",
-          "summary": "Merchant commission meow still requires a truthful merchant NPC dialog anchor.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_npc_dialog",
-          "metadata": {
-            "domain": "asset"
-          }
-        },
-        {
-          "requirement_id": "asset.daily_ui.merchant_commission_list_panel",
-          "domain": "asset",
-          "summary": "Merchant commission meow still requires a truthful merchant group list anchor.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_list_panel",
-          "metadata": {
-            "domain": "asset"
-          }
-        },
-        {
-          "requirement_id": "asset.daily_ui.merchant_commission_meow_accept_button",
-          "domain": "asset",
-          "summary": "Merchant commission meow still requires a truthful Meow Group accept-button anchor.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_meow_accept_button",
-          "metadata": {
-            "domain": "asset"
-          }
-        },
-        {
-          "requirement_id": "asset.daily_ui.merchant_commission_task_list_entry",
-          "domain": "asset",
-          "summary": "Merchant commission meow still requires a truthful left task-list re-entry anchor.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_task_list_entry",
-          "metadata": {
-            "domain": "asset"
-          }
-        },
-        {
-          "requirement_id": "asset.daily_ui.merchant_commission_meow_submit_option",
-          "domain": "asset",
-          "summary": "Merchant commission meow still requires a truthful NPC top submit-option anchor.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_meow_submit_option",
-          "metadata": {
-            "domain": "asset"
-          }
-        },
-        {
-          "requirement_id": "asset.daily_ui.merchant_commission_submit_item_panel",
-          "domain": "asset",
-          "summary": "Merchant commission meow still requires a truthful submit-item panel anchor.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_submit_item_panel",
-          "metadata": {
-            "domain": "asset"
-          }
-        },
-        {
-          "requirement_id": "asset.daily_ui.merchant_commission_buy_now_button",
-          "domain": "asset",
-          "summary": "Merchant commission meow still requires a truthful immediate-buy anchor.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_buy_now_button",
-          "metadata": {
-            "domain": "asset"
-          }
-        },
-        {
-          "requirement_id": "asset.daily_ui.merchant_commission_buy_confirmation_dialog",
-          "domain": "asset",
-          "summary": "Merchant commission meow still requires a truthful buy-confirmation dialog anchor.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_buy_confirmation_dialog",
-          "metadata": {
-            "domain": "asset"
-          }
-        },
-        {
-          "requirement_id": "asset.daily_ui.merchant_commission_buy_confirm_button",
-          "domain": "asset",
-          "summary": "Merchant commission meow still requires a truthful buy-confirm button anchor.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_buy_confirm_button",
-          "metadata": {
-            "domain": "asset"
-          }
-        },
-        {
-          "requirement_id": "asset.daily_ui.merchant_commission_submit_button",
-          "domain": "asset",
-          "summary": "Merchant commission meow still requires a truthful submit button anchor.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_submit_button",
-          "metadata": {
-            "domain": "asset"
-          }
-        }
-      ],
-      "implementation_requirements": [
-        {
-          "requirement_id": "asset.daily_ui.merchant_commission_poring_button",
-          "domain": "asset",
-          "summary": "Merchant commission meow still requires a truthful Poring activity entry anchor.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_poring_button",
-          "metadata": {
-            "domain": "asset"
-          }
-        },
-        {
-          "requirement_id": "asset.daily_ui.merchant_commission_carnival_entry",
-          "domain": "asset",
-          "summary": "Merchant commission meow still requires a truthful Carnival entry anchor.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_carnival_entry",
-          "metadata": {
-            "domain": "asset"
-          }
-        },
-        {
-          "requirement_id": "asset.daily_ui.merchant_commission_detail_modal",
-          "domain": "asset",
-          "summary": "Merchant commission meow still requires a truthful merchant commission detail modal anchor.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_detail_modal",
-          "metadata": {
-            "domain": "asset"
-          }
-        },
-        {
-          "requirement_id": "asset.daily_ui.merchant_commission_go_now_button",
-          "domain": "asset",
-          "summary": "Merchant commission meow still requires a truthful `立即前往` anchor.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_go_now_button",
-          "metadata": {
-            "domain": "asset"
-          }
-        },
-        {
-          "requirement_id": "asset.daily_ui.merchant_commission_npc_dialog",
-          "domain": "asset",
-          "summary": "Merchant commission meow still requires a truthful merchant NPC dialog anchor.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_npc_dialog",
-          "metadata": {
-            "domain": "asset"
-          }
-        },
-        {
-          "requirement_id": "asset.daily_ui.merchant_commission_list_panel",
-          "domain": "asset",
-          "summary": "Merchant commission meow still requires a truthful merchant group list anchor.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_list_panel",
-          "metadata": {
-            "domain": "asset"
-          }
-        },
-        {
-          "requirement_id": "asset.daily_ui.merchant_commission_meow_accept_button",
-          "domain": "asset",
-          "summary": "Merchant commission meow still requires a truthful Meow Group accept-button anchor.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_meow_accept_button",
-          "metadata": {
-            "domain": "asset"
-          }
-        },
-        {
-          "requirement_id": "asset.daily_ui.merchant_commission_task_list_entry",
-          "domain": "asset",
-          "summary": "Merchant commission meow still requires a truthful left task-list re-entry anchor.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_task_list_entry",
-          "metadata": {
-            "domain": "asset"
-          }
-        },
-        {
-          "requirement_id": "asset.daily_ui.merchant_commission_meow_submit_option",
-          "domain": "asset",
-          "summary": "Merchant commission meow still requires a truthful NPC top submit-option anchor.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_meow_submit_option",
-          "metadata": {
-            "domain": "asset"
-          }
-        },
-        {
-          "requirement_id": "asset.daily_ui.merchant_commission_submit_item_panel",
-          "domain": "asset",
-          "summary": "Merchant commission meow still requires a truthful submit-item panel anchor.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_submit_item_panel",
-          "metadata": {
-            "domain": "asset"
-          }
-        },
-        {
-          "requirement_id": "asset.daily_ui.merchant_commission_buy_now_button",
-          "domain": "asset",
-          "summary": "Merchant commission meow still requires a truthful immediate-buy anchor.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_buy_now_button",
-          "metadata": {
-            "domain": "asset"
-          }
-        },
-        {
-          "requirement_id": "asset.daily_ui.merchant_commission_buy_confirmation_dialog",
-          "domain": "asset",
-          "summary": "Merchant commission meow still requires a truthful buy-confirmation dialog anchor.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_buy_confirmation_dialog",
-          "metadata": {
-            "domain": "asset"
-          }
-        },
-        {
-          "requirement_id": "asset.daily_ui.merchant_commission_buy_confirm_button",
-          "domain": "asset",
-          "summary": "Merchant commission meow still requires a truthful buy-confirm button anchor.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_buy_confirm_button",
-          "metadata": {
-            "domain": "asset"
-          }
-        },
-        {
-          "requirement_id": "asset.daily_ui.merchant_commission_submit_button",
-          "domain": "asset",
-          "summary": "Merchant commission meow still requires a truthful submit button anchor.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_submit_button",
-          "metadata": {
-            "domain": "asset"
-          }
-        },
-        {
-          "requirement_id": "runtime.daily_ui.dispatch_bridge",
-          "domain": "runtime",
-          "summary": "Daily UI fixed-flow tasks require a production runtime action-dispatch bridge.",
-          "satisfied": true,
-          "blocking": true,
-          "details": "runtime_bridge=implemented runtime_input_builder=roxauto.tasks.daily_ui.merchant_commission_meow.build_merchant_commission_meow_runtime_input runtime_seam_builder=roxauto.tasks.daily_ui.merchant_commission_meow.build_merchant_commission_meow_runtime_seam task_spec_builder=roxauto.tasks.daily_ui.merchant_commission_meow.build_merchant_commission_meow_task_spec runtime_bridge_probe=roxauto.tasks.daily_ui.merchant_commission_meow.has_merchant_commission_meow_runtime_bridge",
-          "metadata": {
-            "domain": "runtime"
-          }
-        }
-      ],
+      "task_id": "daily_ui.guild_order_submit",
       "warning_requirements": [
         {
-          "requirement_id": "warning.daily_ui.merchant_commission_meow:golden:carnival_entry",
-          "domain": "asset",
-          "summary": "Golden screenshots are still planned and not curated yet.",
-          "satisfied": false,
           "blocking": false,
-          "details": "asset_status=planned source_path=daily_ui/daily_ui_merchant_commission_meow/carnival_entry/daily_ui_merchant_commission_meow__carnival_entry__baseline__v1.png",
-          "metadata": {}
+          "details": "asset_status=placeholder source_path=assets/templates/daily_ui/manifest.json#daily_ui.guild_order_list_panel",
+          "domain": "asset",
+          "metadata": {},
+          "requirement_id": "warning.daily_ui.guild_order_submit:template:daily_ui.guild_order_list_panel",
+          "satisfied": false,
+          "summary": "Template asset is still placeholder scaffolding."
         },
         {
-          "requirement_id": "warning.daily_ui.merchant_commission_meow:golden:commission_detail_modal",
-          "domain": "asset",
-          "summary": "Golden screenshots are still planned and not curated yet.",
-          "satisfied": false,
           "blocking": false,
-          "details": "asset_status=planned source_path=daily_ui/daily_ui_merchant_commission_meow/commission_detail_modal/daily_ui_merchant_commission_meow__commission_detail_modal__baseline__v1.png",
-          "metadata": {}
+          "details": "asset_status=placeholder source_path=assets/templates/daily_ui/manifest.json#daily_ui.guild_order_detail_panel",
+          "domain": "asset",
+          "metadata": {},
+          "requirement_id": "warning.daily_ui.guild_order_submit:template:daily_ui.guild_order_detail_panel",
+          "satisfied": false,
+          "summary": "Template asset is still placeholder scaffolding."
         },
         {
-          "requirement_id": "warning.daily_ui.merchant_commission_meow:golden:merchant_group_list",
-          "domain": "asset",
-          "summary": "Golden screenshots are still planned and not curated yet.",
-          "satisfied": false,
           "blocking": false,
-          "details": "asset_status=planned source_path=daily_ui/daily_ui_merchant_commission_meow/merchant_group_list/daily_ui_merchant_commission_meow__merchant_group_list__baseline__v1.png",
-          "metadata": {}
+          "details": "asset_status=placeholder source_path=assets/templates/daily_ui/manifest.json#daily_ui.guild_order_submit_button",
+          "domain": "asset",
+          "metadata": {},
+          "requirement_id": "warning.daily_ui.guild_order_submit:template:daily_ui.guild_order_submit_button",
+          "satisfied": false,
+          "summary": "Template asset is still placeholder scaffolding."
         },
         {
-          "requirement_id": "warning.daily_ui.merchant_commission_meow:golden:meow_task_list_round",
-          "domain": "asset",
-          "summary": "Golden screenshots are still planned and not curated yet.",
-          "satisfied": false,
           "blocking": false,
-          "details": "asset_status=planned source_path=daily_ui/daily_ui_merchant_commission_meow/meow_task_list_round/daily_ui_merchant_commission_meow__meow_task_list_round__baseline__v1.png",
-          "metadata": {}
+          "details": "asset_status=placeholder source_path=assets/templates/daily_ui/manifest.json#daily_ui.guild_order_refresh_button",
+          "domain": "asset",
+          "metadata": {},
+          "requirement_id": "warning.daily_ui.guild_order_submit:template:daily_ui.guild_order_refresh_button",
+          "satisfied": false,
+          "summary": "Template asset is still placeholder scaffolding."
         },
         {
-          "requirement_id": "warning.daily_ui.merchant_commission_meow:golden:meow_submit_panel",
-          "domain": "asset",
-          "summary": "Golden screenshots are still planned and not curated yet.",
-          "satisfied": false,
           "blocking": false,
-          "details": "asset_status=planned source_path=daily_ui/daily_ui_merchant_commission_meow/meow_submit_panel/daily_ui_merchant_commission_meow__meow_submit_panel__baseline__v1.png",
-          "metadata": {}
+          "details": "asset_status=placeholder source_path=assets/templates/daily_ui/manifest.json#daily_ui.guild_order_unavailable_state",
+          "domain": "asset",
+          "metadata": {},
+          "requirement_id": "warning.daily_ui.guild_order_submit:template:daily_ui.guild_order_unavailable_state",
+          "satisfied": false,
+          "summary": "Template asset is still placeholder scaffolding."
         },
         {
-          "requirement_id": "warning.daily_ui.merchant_commission_meow:golden:meow_empty_submit_panel",
-          "domain": "asset",
-          "summary": "Golden screenshots are still planned and not curated yet.",
-          "satisfied": false,
           "blocking": false,
-          "details": "asset_status=planned source_path=daily_ui/daily_ui_merchant_commission_meow/meow_empty_submit_panel/daily_ui_merchant_commission_meow__meow_empty_submit_panel__baseline__v1.png",
-          "metadata": {}
+          "details": "asset_status=placeholder source_path=assets/templates/daily_ui/manifest.json#daily_ui.guild_order_insufficient_material_feedback",
+          "domain": "asset",
+          "metadata": {},
+          "requirement_id": "warning.daily_ui.guild_order_submit:template:daily_ui.guild_order_insufficient_material_feedback",
+          "satisfied": false,
+          "summary": "Template asset is still placeholder scaffolding."
         },
         {
-          "requirement_id": "warning.daily_ui.merchant_commission_meow:golden:meow_buy_confirmation",
-          "domain": "asset",
-          "summary": "Golden screenshots are still planned and not curated yet.",
-          "satisfied": false,
           "blocking": false,
-          "details": "asset_status=planned source_path=daily_ui/daily_ui_merchant_commission_meow/meow_buy_confirmation/daily_ui_merchant_commission_meow__meow_buy_confirmation__baseline__v1.png",
-          "metadata": {}
+          "details": "asset_status=placeholder source_path=assets/templates/daily_ui/manifest.json#daily_ui.guild_order_submit_result_state",
+          "domain": "asset",
+          "metadata": {},
+          "requirement_id": "warning.daily_ui.guild_order_submit:template:daily_ui.guild_order_submit_result_state",
+          "satisfied": false,
+          "summary": "Template asset is still placeholder scaffolding."
         },
         {
-          "requirement_id": "warning.daily_ui.merchant_commission_meow:golden:meow_round_progression",
-          "domain": "asset",
-          "summary": "Golden screenshots are still planned and not curated yet.",
-          "satisfied": false,
           "blocking": false,
-          "details": "asset_status=planned source_path=daily_ui/daily_ui_merchant_commission_meow/meow_round_progression/daily_ui_merchant_commission_meow__meow_round_progression__baseline__v1.png",
-          "metadata": {}
+          "details": "asset_status=planned source_path=daily_ui/daily_ui_guild_order_submit/order_list/daily_ui_guild_order_submit__order_list__baseline__v1.png",
+          "domain": "asset",
+          "metadata": {},
+          "requirement_id": "warning.daily_ui.guild_order_submit:golden:order_list",
+          "satisfied": false,
+          "summary": "Golden screenshots are still planned and not curated yet."
+        },
+        {
+          "blocking": false,
+          "details": "asset_status=planned source_path=daily_ui/daily_ui_guild_order_submit/order_detail/daily_ui_guild_order_submit__order_detail__baseline__v1.png",
+          "domain": "asset",
+          "metadata": {},
+          "requirement_id": "warning.daily_ui.guild_order_submit:golden:order_detail",
+          "satisfied": false,
+          "summary": "Golden screenshots are still planned and not curated yet."
+        },
+        {
+          "blocking": false,
+          "details": "asset_status=planned source_path=daily_ui/daily_ui_guild_order_submit/custom_order_detail/daily_ui_guild_order_submit__custom_order_detail__baseline__v1.png",
+          "domain": "asset",
+          "metadata": {},
+          "requirement_id": "warning.daily_ui.guild_order_submit:golden:custom_order_detail",
+          "satisfied": false,
+          "summary": "Golden screenshots are still planned and not curated yet."
+        },
+        {
+          "blocking": false,
+          "details": "asset_status=planned source_path=daily_ui/daily_ui_guild_order_submit/custom_order_list/daily_ui_guild_order_submit__custom_order_list__baseline__v1.png",
+          "domain": "asset",
+          "metadata": {},
+          "requirement_id": "warning.daily_ui.guild_order_submit:golden:custom_order_list",
+          "satisfied": false,
+          "summary": "Golden screenshots are still planned and not curated yet."
+        },
+        {
+          "blocking": false,
+          "details": "asset_status=planned source_path=daily_ui/daily_ui_guild_order_submit/insufficient_material_state/daily_ui_guild_order_submit__insufficient_material_state__baseline__v1.png",
+          "domain": "asset",
+          "metadata": {},
+          "requirement_id": "warning.daily_ui.guild_order_submit:golden:insufficient_material_state",
+          "satisfied": false,
+          "summary": "Golden screenshots are still planned and not curated yet."
+        },
+        {
+          "blocking": false,
+          "details": "asset_status=planned source_path=daily_ui/daily_ui_guild_order_submit/completed_state/daily_ui_guild_order_submit__completed_state__baseline__v1.png",
+          "domain": "asset",
+          "metadata": {},
+          "requirement_id": "warning.daily_ui.guild_order_submit:golden:completed_state",
+          "satisfied": false,
+          "summary": "Golden screenshots are still planned and not curated yet."
+        },
+        {
+          "blocking": false,
+          "details": "asset_status=planned source_path=daily_ui/daily_ui_guild_order_submit/submit_result/daily_ui_guild_order_submit__submit_result__baseline__v1.png",
+          "domain": "asset",
+          "metadata": {},
+          "requirement_id": "warning.daily_ui.guild_order_submit:golden:submit_result",
+          "satisfied": false,
+          "summary": "Golden screenshots are still planned and not curated yet."
+        }
+      ]
+    },
+    {
+      "builder_readiness_state": "blocked_by_asset",
+      "builder_requirements": [
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_poring_button",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_poring_button",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful Poring activity entry anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_carnival_entry",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_carnival_entry",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful Carnival entry anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_detail_modal",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_detail_modal",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful merchant commission detail modal anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_go_now_button",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_go_now_button",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful `\u7acb\u5373\u524d\u5f80` anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_npc_dialog",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_npc_dialog",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful merchant NPC dialog anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_list_panel",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_list_panel",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful merchant group list anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_meow_accept_button",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_meow_accept_button",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful Meow Group accept-button anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_task_list_entry",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_task_list_entry",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful left task-list re-entry anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_meow_submit_option",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_meow_submit_option",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful NPC top submit-option anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_submit_item_panel",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_submit_item_panel",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful submit-item panel anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_buy_now_button",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_buy_now_button",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful immediate-buy anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_buy_confirmation_dialog",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_buy_confirmation_dialog",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful buy-confirmation dialog anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_buy_confirm_button",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_buy_confirm_button",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful buy-confirm button anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_submit_button",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_submit_button",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful submit button anchor."
+        }
+      ],
+      "implementation_readiness_state": "blocked_by_asset",
+      "implementation_requirements": [
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_poring_button",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_poring_button",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful Poring activity entry anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_carnival_entry",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_carnival_entry",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful Carnival entry anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_detail_modal",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_detail_modal",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful merchant commission detail modal anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_go_now_button",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_go_now_button",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful `\u7acb\u5373\u524d\u5f80` anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_npc_dialog",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_npc_dialog",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful merchant NPC dialog anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_list_panel",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_list_panel",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful merchant group list anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_meow_accept_button",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_meow_accept_button",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful Meow Group accept-button anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_task_list_entry",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_task_list_entry",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful left task-list re-entry anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_meow_submit_option",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_meow_submit_option",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful NPC top submit-option anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_submit_item_panel",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_submit_item_panel",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful submit-item panel anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_buy_now_button",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_buy_now_button",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful immediate-buy anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_buy_confirmation_dialog",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_buy_confirmation_dialog",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful buy-confirmation dialog anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_buy_confirm_button",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_buy_confirm_button",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful buy-confirm button anchor."
+        },
+        {
+          "blocking": true,
+          "details": "asset_status=missing source_path=assets/templates/daily_ui/manifest.json#daily_ui.merchant_commission_submit_button",
+          "domain": "asset",
+          "metadata": {
+            "domain": "asset"
+          },
+          "requirement_id": "asset.daily_ui.merchant_commission_submit_button",
+          "satisfied": false,
+          "summary": "Merchant commission meow still requires a truthful submit button anchor."
+        },
+        {
+          "blocking": true,
+          "details": "runtime_bridge=implemented runtime_input_builder=roxauto.tasks.daily_ui.merchant_commission_meow.build_merchant_commission_meow_runtime_input runtime_seam_builder=roxauto.tasks.daily_ui.merchant_commission_meow.build_merchant_commission_meow_runtime_seam task_spec_builder=roxauto.tasks.daily_ui.merchant_commission_meow.build_merchant_commission_meow_task_spec runtime_bridge_probe=roxauto.tasks.daily_ui.merchant_commission_meow.has_merchant_commission_meow_runtime_bridge",
+          "domain": "runtime",
+          "metadata": {
+            "domain": "runtime"
+          },
+          "requirement_id": "runtime.daily_ui.dispatch_bridge",
+          "satisfied": true,
+          "summary": "Daily UI fixed-flow tasks require a production runtime action-dispatch bridge."
         }
       ],
       "metadata": {
         "builder_input": {
-          "task_id": "daily_ui.merchant_commission_meow",
-          "pack_id": "daily_ui",
-          "manifest_path": "packs/daily_ui/merchant_commission_meow.task.json",
+          "asset_requirement_ids": [
+            "asset.daily_ui.merchant_commission_poring_button",
+            "asset.daily_ui.merchant_commission_carnival_entry",
+            "asset.daily_ui.merchant_commission_detail_modal",
+            "asset.daily_ui.merchant_commission_go_now_button",
+            "asset.daily_ui.merchant_commission_npc_dialog",
+            "asset.daily_ui.merchant_commission_list_panel",
+            "asset.daily_ui.merchant_commission_meow_accept_button",
+            "asset.daily_ui.merchant_commission_task_list_entry",
+            "asset.daily_ui.merchant_commission_meow_submit_option",
+            "asset.daily_ui.merchant_commission_submit_item_panel",
+            "asset.daily_ui.merchant_commission_buy_now_button",
+            "asset.daily_ui.merchant_commission_buy_confirmation_dialog",
+            "asset.daily_ui.merchant_commission_buy_confirm_button",
+            "asset.daily_ui.merchant_commission_submit_button"
+          ],
+          "calibration_requirement_ids": [],
           "fixture_profile_paths": [
             "fixture_profiles/default_tw_merchant.fixture.json"
           ],
+          "foundation_requirement_ids": [],
+          "manifest_path": "packs/daily_ui/merchant_commission_meow.task.json",
+          "metadata": {
+            "inventory_source": "curated_inventory",
+            "merchant_commission_meow_decision_contract": {
+              "allowed_decisions": [
+                "direct_submit",
+                "immediate_buy_then_submit",
+                "stop_for_operator"
+              ],
+              "decision_signal_keys": [
+                "round_index",
+                "material_label",
+                "material_progress",
+                "buy_required",
+                "zeny_cost",
+                "reentry_mode"
+              ],
+              "notes": "The round resolver only chooses among the validated submit, immediate-buy-then-submit, or stop-for-operator outcomes.",
+              "reason_ids": [
+                "materials_ready",
+                "buy_required",
+                "submit_panel_unavailable",
+                "submit_button_unavailable",
+                "buy_now_unavailable",
+                "immediate_buy_disabled",
+                "round_state_unknown"
+              ],
+              "required_evidence_fields": [
+                "round_index",
+                "material_label",
+                "current_quantity",
+                "required_quantity",
+                "submit_panel_visible",
+                "buy_now_visible",
+                "submit_button_visible",
+                "empty_inventory_feedback_visible"
+              ]
+            },
+            "merchant_commission_meow_handoff_fields": [
+              "decision",
+              "reason_id",
+              "merchant_group_label",
+              "round_index",
+              "round_limit",
+              "material_label",
+              "material_progress",
+              "buy_required",
+              "zeny_cost",
+              "reentry_mode"
+            ],
+            "merchant_commission_meow_loop_contract": {
+              "buy_confirm_label": "\u8cfc\u8cb7",
+              "buy_now_label": "\u7acb\u5373\u8cfc\u8cb7",
+              "merchant_group_label": "\u55b5\u624b\u5546\u5718",
+              "notes": "The validated Meow Group loop is a semi-fixed 10-round material hand-in chain with immediate-buy support.",
+              "preferred_reentry_mode": "left_task_list",
+              "round_limit": 10,
+              "submit_label": "\u4ea4\u4ed8",
+              "submit_panel_title": "\u4e0a\u4ea4\u9053\u5177",
+              "task_list_label": "[\u65e5\u5e38] \u5546\u6703\u59d4\u8a17",
+              "task_round_pattern": "\u5546\u6703\u59d4\u8a17({round_index}/10)",
+              "verified_material_labels": [
+                "\u7926\u6e23\u8403\u53d6\u7269",
+                "\u7425\u73c0\u7d50\u6676"
+              ],
+              "verified_round_count": 2
+            },
+            "merchant_commission_meow_route_contract": {
+              "do_not_click_notes": [
+                "Do not use the top-right line-switch arrow near the minimap as the merchant entry.",
+                "Do not reopen Carnival for every round after one Meow Group commission is already accepted.",
+                "Do not widen the route to any non-Meow merchant group."
+              ],
+              "entry_checkpoint_ids": [
+                "idle_prontera_fountain",
+                "event_poring_menu",
+                "carnival_map",
+                "merchant_commission_detail_modal",
+                "merchant_autopath_to_npc",
+                "merchant_npc_dialog_initial",
+                "merchant_commission_list"
+              ],
+              "notes": "Validated route stays inside the fixed Poring -> Carnival entry and the preferred left task-list re-entry loop.",
+              "preferred_reentry_checkpoint_ids": [
+                "task_list_round_visible",
+                "npc_submit_dialog",
+                "submit_item_panel",
+                "buy_confirmation",
+                "round_progression_visible"
+              ]
+            },
+            "merchant_commission_meow_spec_builders": {
+              "decision_contract_loader": "roxauto.tasks.daily_ui.merchant_commission_meow.load_merchant_commission_meow_decision_contract",
+              "loop_contract_loader": "roxauto.tasks.daily_ui.merchant_commission_meow.load_merchant_commission_meow_loop_contract",
+              "round_decision_evaluator": "roxauto.tasks.daily_ui.merchant_commission_meow.evaluate_merchant_commission_meow_round_decision",
+              "route_contract_loader": "roxauto.tasks.daily_ui.merchant_commission_meow.load_merchant_commission_meow_route_contract",
+              "submission_policy_loader": "roxauto.tasks.daily_ui.merchant_commission_meow.load_merchant_commission_meow_submission_policy",
+              "task_specification_builder": "roxauto.tasks.daily_ui.merchant_commission_meow.build_merchant_commission_meow_specification"
+            },
+            "merchant_commission_meow_submission_policy": {
+              "allow_immediate_buy": true,
+              "allow_partial_inventory_buy": true,
+              "buy_flow_requires_confirmation": true,
+              "disallowed_behaviors": [
+                "crafting",
+                "gathering",
+                "pathing",
+                "merchant_group_switch"
+              ],
+              "notes": "The first delivery slice may buy missing materials from the validated submit panel, but it must not widen into crafting, gathering, or other merchant-group routes.",
+              "verified_reentry_mode": "left_task_list"
+            },
+            "phase": "merchant_commission_transition",
+            "runtime_seam": {
+              "result_signal_keys": [
+                "anchor_id",
+                "decision",
+                "failure_reason_id",
+                "inspection_attempts",
+                "matched_anchor_ids",
+                "outcome_code",
+                "round_index",
+                "step_outcome",
+                "task_action",
+                "telemetry",
+                "text_evidence"
+              ],
+              "runtime_bridge_probe": "roxauto.tasks.daily_ui.merchant_commission_meow.has_merchant_commission_meow_runtime_bridge",
+              "runtime_input_builder": "roxauto.tasks.daily_ui.merchant_commission_meow.build_merchant_commission_meow_runtime_input",
+              "runtime_seam_builder": "roxauto.tasks.daily_ui.merchant_commission_meow.build_merchant_commission_meow_runtime_seam",
+              "signal_contract_version": "merchant_commission_meow.v2",
+              "task_spec_builder": "roxauto.tasks.daily_ui.merchant_commission_meow.build_merchant_commission_meow_task_spec"
+            },
+            "signal_contract_version": "merchant_commission_meow.v2",
+            "source": "task_foundations",
+            "supporting_anchor_ids": [
+              "daily_ui.merchant_commission_round_counter",
+              "daily_ui.merchant_commission_material_label",
+              "daily_ui.merchant_commission_material_progress",
+              "daily_ui.merchant_commission_empty_inventory_feedback"
+            ],
+            "supporting_golden_screen_slugs": [
+              "meow_empty_submit_panel",
+              "meow_round_progression"
+            ]
+          },
+          "pack_id": "daily_ui",
           "required_anchors": [
             "common.close_button",
             "daily_ui.merchant_commission_poring_button",
@@ -1177,253 +1126,165 @@
             "daily_ui.merchant_commission_buy_confirm_button",
             "daily_ui.merchant_commission_submit_button"
           ],
-          "asset_requirement_ids": [
-            "asset.daily_ui.merchant_commission_poring_button",
-            "asset.daily_ui.merchant_commission_carnival_entry",
-            "asset.daily_ui.merchant_commission_detail_modal",
-            "asset.daily_ui.merchant_commission_go_now_button",
-            "asset.daily_ui.merchant_commission_npc_dialog",
-            "asset.daily_ui.merchant_commission_list_panel",
-            "asset.daily_ui.merchant_commission_meow_accept_button",
-            "asset.daily_ui.merchant_commission_task_list_entry",
-            "asset.daily_ui.merchant_commission_meow_submit_option",
-            "asset.daily_ui.merchant_commission_submit_item_panel",
-            "asset.daily_ui.merchant_commission_buy_now_button",
-            "asset.daily_ui.merchant_commission_buy_confirmation_dialog",
-            "asset.daily_ui.merchant_commission_buy_confirm_button",
-            "asset.daily_ui.merchant_commission_submit_button"
-          ],
           "runtime_requirement_ids": [
             "runtime.daily_ui.dispatch_bridge"
           ],
-          "calibration_requirement_ids": [],
-          "foundation_requirement_ids": [],
-          "metadata": {
-            "source": "task_foundations",
-            "phase": "merchant_commission_transition",
-            "runtime_seam": {
-              "runtime_input_builder": "roxauto.tasks.daily_ui.merchant_commission_meow.build_merchant_commission_meow_runtime_input",
-              "runtime_seam_builder": "roxauto.tasks.daily_ui.merchant_commission_meow.build_merchant_commission_meow_runtime_seam",
-              "task_spec_builder": "roxauto.tasks.daily_ui.merchant_commission_meow.build_merchant_commission_meow_task_spec",
-              "runtime_bridge_probe": "roxauto.tasks.daily_ui.merchant_commission_meow.has_merchant_commission_meow_runtime_bridge",
-              "signal_contract_version": "merchant_commission_meow.v2",
-              "result_signal_keys": [
-                "anchor_id",
-                "decision",
-                "failure_reason_id",
-                "inspection_attempts",
-                "matched_anchor_ids",
-                "outcome_code",
-                "round_index",
-                "step_outcome",
-                "task_action",
-                "telemetry",
-                "text_evidence"
-              ]
-            },
-            "signal_contract_version": "merchant_commission_meow.v2",
-            "supporting_anchor_ids": [
-              "daily_ui.merchant_commission_round_counter",
-              "daily_ui.merchant_commission_material_label",
-              "daily_ui.merchant_commission_material_progress",
-              "daily_ui.merchant_commission_empty_inventory_feedback"
-            ],
-            "supporting_golden_screen_slugs": [
-              "meow_empty_submit_panel",
-              "meow_round_progression"
-            ],
-            "merchant_commission_meow_route_contract": {
-              "entry_checkpoint_ids": [
-                "idle_prontera_fountain",
-                "event_poring_menu",
-                "carnival_map",
-                "merchant_commission_detail_modal",
-                "merchant_autopath_to_npc",
-                "merchant_npc_dialog_initial",
-                "merchant_commission_list"
-              ],
-              "preferred_reentry_checkpoint_ids": [
-                "task_list_round_visible",
-                "npc_submit_dialog",
-                "submit_item_panel",
-                "buy_confirmation",
-                "round_progression_visible"
-              ],
-              "do_not_click_notes": [
-                "Do not use the top-right line-switch arrow near the minimap as the merchant entry.",
-                "Do not reopen Carnival for every round after one Meow Group commission is already accepted.",
-                "Do not widen the route to any non-Meow merchant group."
-              ],
-              "notes": "Validated route stays inside the fixed Poring -> Carnival entry and the preferred left task-list re-entry loop."
-            },
-            "merchant_commission_meow_loop_contract": {
-              "merchant_group_label": "喵手商團",
-              "task_list_label": "[日常] 商會委託",
-              "round_limit": 10,
-              "verified_round_count": 2,
-              "preferred_reentry_mode": "left_task_list",
-              "submit_panel_title": "上交道具",
-              "buy_now_label": "立即購買",
-              "buy_confirm_label": "購買",
-              "submit_label": "交付",
-              "task_round_pattern": "商會委託({round_index}/10)",
-              "verified_material_labels": [
-                "礦渣萃取物",
-                "琥珀結晶"
-              ],
-              "notes": "The validated Meow Group loop is a semi-fixed 10-round material hand-in chain with immediate-buy support."
-            },
-            "merchant_commission_meow_submission_policy": {
-              "allow_immediate_buy": true,
-              "allow_partial_inventory_buy": true,
-              "buy_flow_requires_confirmation": true,
-              "verified_reentry_mode": "left_task_list",
-              "disallowed_behaviors": [
-                "crafting",
-                "gathering",
-                "pathing",
-                "merchant_group_switch"
-              ],
-              "notes": "The first delivery slice may buy missing materials from the validated submit panel, but it must not widen into crafting, gathering, or other merchant-group routes."
-            },
-            "merchant_commission_meow_decision_contract": {
-              "allowed_decisions": [
-                "direct_submit",
-                "immediate_buy_then_submit",
-                "stop_for_operator"
-              ],
-              "reason_ids": [
-                "materials_ready",
-                "buy_required",
-                "submit_panel_unavailable",
-                "submit_button_unavailable",
-                "buy_now_unavailable",
-                "immediate_buy_disabled",
-                "round_state_unknown"
-              ],
-              "decision_signal_keys": [
-                "round_index",
-                "material_label",
-                "material_progress",
-                "buy_required",
-                "zeny_cost",
-                "reentry_mode"
-              ],
-              "required_evidence_fields": [
-                "round_index",
-                "material_label",
-                "current_quantity",
-                "required_quantity",
-                "submit_panel_visible",
-                "buy_now_visible",
-                "submit_button_visible",
-                "empty_inventory_feedback_visible"
-              ],
-              "notes": "The round resolver only chooses among the validated submit, immediate-buy-then-submit, or stop-for-operator outcomes."
-            },
-            "merchant_commission_meow_spec_builders": {
-              "task_specification_builder": "roxauto.tasks.daily_ui.merchant_commission_meow.build_merchant_commission_meow_specification",
-              "submission_policy_loader": "roxauto.tasks.daily_ui.merchant_commission_meow.load_merchant_commission_meow_submission_policy",
-              "decision_contract_loader": "roxauto.tasks.daily_ui.merchant_commission_meow.load_merchant_commission_meow_decision_contract",
-              "round_decision_evaluator": "roxauto.tasks.daily_ui.merchant_commission_meow.evaluate_merchant_commission_meow_round_decision",
-              "route_contract_loader": "roxauto.tasks.daily_ui.merchant_commission_meow.load_merchant_commission_meow_route_contract",
-              "loop_contract_loader": "roxauto.tasks.daily_ui.merchant_commission_meow.load_merchant_commission_meow_loop_contract"
-            },
-            "merchant_commission_meow_handoff_fields": [
-              "decision",
-              "reason_id",
-              "merchant_group_label",
-              "round_index",
-              "round_limit",
-              "material_label",
-              "material_progress",
-              "buy_required",
-              "zeny_cost",
-              "reentry_mode"
-            ],
-            "inventory_source": "curated_inventory"
-          }
+          "task_id": "daily_ui.merchant_commission_meow"
         },
         "implementation_state": "fixtured"
-      }
-    },
-    {
-      "task_id": "odin.preset_entry",
-      "pack_id": "odin",
-      "builder_readiness_state": "ready",
-      "implementation_readiness_state": "blocked_by_calibration",
-      "builder_requirements": [],
-      "implementation_requirements": [
-        {
-          "requirement_id": "calibration.odin.idle_state_profile",
-          "domain": "calibration",
-          "summary": "Odin preset entry requires an idle-state calibration profile before runtime binding is safe.",
-          "satisfied": false,
-          "blocking": true,
-          "details": "Requirement is not yet satisfied by current task foundations.",
-          "metadata": {
-            "domain": "calibration"
-          }
-        }
-      ],
+      },
+      "pack_id": "daily_ui",
+      "task_id": "daily_ui.merchant_commission_meow",
       "warning_requirements": [
         {
-          "requirement_id": "warning.odin.preset_entry:template:odin.start_button",
-          "domain": "asset",
-          "summary": "Template asset is still placeholder scaffolding.",
-          "satisfied": false,
           "blocking": false,
-          "details": "asset_status=placeholder source_path=assets/templates/odin/manifest.json#odin.start_button",
-          "metadata": {}
+          "details": "asset_status=planned source_path=daily_ui/daily_ui_merchant_commission_meow/carnival_entry/daily_ui_merchant_commission_meow__carnival_entry__baseline__v1.png",
+          "domain": "asset",
+          "metadata": {},
+          "requirement_id": "warning.daily_ui.merchant_commission_meow:golden:carnival_entry",
+          "satisfied": false,
+          "summary": "Golden screenshots are still planned and not curated yet."
         },
         {
-          "requirement_id": "warning.odin.preset_entry:golden:odin_setup_panel",
-          "domain": "asset",
-          "summary": "Golden screenshots are still planned and not curated yet.",
-          "satisfied": false,
           "blocking": false,
-          "details": "asset_status=planned source_path=odin/odin_preset_entry/odin_setup_panel/odin_preset_entry__odin_setup_panel__baseline__v1.png",
-          "metadata": {}
+          "details": "asset_status=planned source_path=daily_ui/daily_ui_merchant_commission_meow/commission_detail_modal/daily_ui_merchant_commission_meow__commission_detail_modal__baseline__v1.png",
+          "domain": "asset",
+          "metadata": {},
+          "requirement_id": "warning.daily_ui.merchant_commission_meow:golden:commission_detail_modal",
+          "satisfied": false,
+          "summary": "Golden screenshots are still planned and not curated yet."
         },
         {
-          "requirement_id": "warning.odin.preset_entry:golden:odin_idle_state",
-          "domain": "asset",
-          "summary": "Golden screenshots are still planned and not curated yet.",
-          "satisfied": false,
           "blocking": false,
-          "details": "asset_status=planned source_path=odin/odin_preset_entry/odin_idle_state/odin_preset_entry__odin_idle_state__baseline__v1.png",
-          "metadata": {}
+          "details": "asset_status=planned source_path=daily_ui/daily_ui_merchant_commission_meow/merchant_group_list/daily_ui_merchant_commission_meow__merchant_group_list__baseline__v1.png",
+          "domain": "asset",
+          "metadata": {},
+          "requirement_id": "warning.daily_ui.merchant_commission_meow:golden:merchant_group_list",
+          "satisfied": false,
+          "summary": "Golden screenshots are still planned and not curated yet."
+        },
+        {
+          "blocking": false,
+          "details": "asset_status=planned source_path=daily_ui/daily_ui_merchant_commission_meow/meow_task_list_round/daily_ui_merchant_commission_meow__meow_task_list_round__baseline__v1.png",
+          "domain": "asset",
+          "metadata": {},
+          "requirement_id": "warning.daily_ui.merchant_commission_meow:golden:meow_task_list_round",
+          "satisfied": false,
+          "summary": "Golden screenshots are still planned and not curated yet."
+        },
+        {
+          "blocking": false,
+          "details": "asset_status=planned source_path=daily_ui/daily_ui_merchant_commission_meow/meow_submit_panel/daily_ui_merchant_commission_meow__meow_submit_panel__baseline__v1.png",
+          "domain": "asset",
+          "metadata": {},
+          "requirement_id": "warning.daily_ui.merchant_commission_meow:golden:meow_submit_panel",
+          "satisfied": false,
+          "summary": "Golden screenshots are still planned and not curated yet."
+        },
+        {
+          "blocking": false,
+          "details": "asset_status=planned source_path=daily_ui/daily_ui_merchant_commission_meow/meow_empty_submit_panel/daily_ui_merchant_commission_meow__meow_empty_submit_panel__baseline__v1.png",
+          "domain": "asset",
+          "metadata": {},
+          "requirement_id": "warning.daily_ui.merchant_commission_meow:golden:meow_empty_submit_panel",
+          "satisfied": false,
+          "summary": "Golden screenshots are still planned and not curated yet."
+        },
+        {
+          "blocking": false,
+          "details": "asset_status=planned source_path=daily_ui/daily_ui_merchant_commission_meow/meow_buy_confirmation/daily_ui_merchant_commission_meow__meow_buy_confirmation__baseline__v1.png",
+          "domain": "asset",
+          "metadata": {},
+          "requirement_id": "warning.daily_ui.merchant_commission_meow:golden:meow_buy_confirmation",
+          "satisfied": false,
+          "summary": "Golden screenshots are still planned and not curated yet."
+        },
+        {
+          "blocking": false,
+          "details": "asset_status=planned source_path=daily_ui/daily_ui_merchant_commission_meow/meow_round_progression/daily_ui_merchant_commission_meow__meow_round_progression__baseline__v1.png",
+          "domain": "asset",
+          "metadata": {},
+          "requirement_id": "warning.daily_ui.merchant_commission_meow:golden:meow_round_progression",
+          "satisfied": false,
+          "summary": "Golden screenshots are still planned and not curated yet."
+        }
+      ]
+    },
+    {
+      "builder_readiness_state": "ready",
+      "builder_requirements": [],
+      "implementation_readiness_state": "blocked_by_calibration",
+      "implementation_requirements": [
+        {
+          "blocking": true,
+          "details": "Requirement is not yet satisfied by current task foundations.",
+          "domain": "calibration",
+          "metadata": {
+            "domain": "calibration"
+          },
+          "requirement_id": "calibration.odin.idle_state_profile",
+          "satisfied": false,
+          "summary": "Odin preset entry requires an idle-state calibration profile before runtime binding is safe."
         }
       ],
       "metadata": {
         "builder_input": {
-          "task_id": "odin.preset_entry",
-          "pack_id": "odin",
-          "manifest_path": "packs/odin/odin_preset_entry.task.json",
+          "asset_requirement_ids": [],
+          "calibration_requirement_ids": [
+            "calibration.odin.idle_state_profile"
+          ],
           "fixture_profile_paths": [
             "fixture_profiles/default_tw_odin.fixture.json"
           ],
+          "foundation_requirement_ids": [],
+          "manifest_path": "packs/odin/odin_preset_entry.task.json",
+          "metadata": {
+            "inventory_source": "curated_inventory",
+            "phase": "pre_gate_3",
+            "source": "task_foundations"
+          },
+          "pack_id": "odin",
           "required_anchors": [
             "common.close_button",
             "odin.start_button"
           ],
-          "asset_requirement_ids": [],
           "runtime_requirement_ids": [],
-          "calibration_requirement_ids": [
-            "calibration.odin.idle_state_profile"
-          ],
-          "foundation_requirement_ids": [],
-          "metadata": {
-            "source": "task_foundations",
-            "phase": "pre_gate_3",
-            "inventory_source": "curated_inventory"
-          }
+          "task_id": "odin.preset_entry"
         },
         "implementation_state": "spec_only"
-      }
+      },
+      "pack_id": "odin",
+      "task_id": "odin.preset_entry",
+      "warning_requirements": [
+        {
+          "blocking": false,
+          "details": "asset_status=placeholder source_path=assets/templates/odin/manifest.json#odin.start_button",
+          "domain": "asset",
+          "metadata": {},
+          "requirement_id": "warning.odin.preset_entry:template:odin.start_button",
+          "satisfied": false,
+          "summary": "Template asset is still placeholder scaffolding."
+        },
+        {
+          "blocking": false,
+          "details": "asset_status=planned source_path=odin/odin_preset_entry/odin_setup_panel/odin_preset_entry__odin_setup_panel__baseline__v1.png",
+          "domain": "asset",
+          "metadata": {},
+          "requirement_id": "warning.odin.preset_entry:golden:odin_setup_panel",
+          "satisfied": false,
+          "summary": "Golden screenshots are still planned and not curated yet."
+        },
+        {
+          "blocking": false,
+          "details": "asset_status=planned source_path=odin/odin_preset_entry/odin_idle_state/odin_preset_entry__odin_idle_state__baseline__v1.png",
+          "domain": "asset",
+          "metadata": {},
+          "requirement_id": "warning.odin.preset_entry:golden:odin_idle_state",
+          "satisfied": false,
+          "summary": "Golden screenshots are still planned and not curated yet."
+        }
+      ]
     }
   ],
-  "metadata": {
-    "source": "task_foundations"
-  }
+  "version": "0.1.0"
 }

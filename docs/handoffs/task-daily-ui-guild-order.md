@@ -1,134 +1,91 @@
 # Task Daily UI Guild Order Handoff
 
-Track:
+Date:
 
-- `codex/task-claim-rewards-runtime-seam`
+- `2026-04-25`
+
+Branch:
+
+- final worktree branch: `codex/feature-guild-order-submit`
+- note: this pass started from a worktree that was actually on `codex/feature-merchant-commission-meow`; the branch was corrected before the final autonomy loop and PR prep
 
 Scope:
 
-- Synced this worktree with the latest `main`, which brought in Engine C's first guild-order scene contract and placeholder anchors.
-- Repaired the task-side integration for `daily_ui.guild_order_submit` after that merge.
-- Kept scope to the bounded round-9 `submit` / `skip` / `refresh` contract only.
-- Kept primary edits inside Engine D ownership:
-  - `src/roxauto/tasks/`
-  - `tests/tasks/`
-  - task-specific foundation snapshots
-- Updated shared validation expectations only where the merge changed task-owned curated outputs or exposed stale task-side assumptions.
-- Did not add crafting, buying, gathering, or pathing behavior.
+- completed the first full `guild_order_submit` feature slice
+- kept scope to `submit / skip / refresh` only
+- did not add crafting, gathering, pathing, generic buying, shared navigation extraction, or shared material extraction
+- kept custom-order handling explicitly out of scope for V1 runtime actioning
 
-Files changed:
+Changed files:
 
-- `src/roxauto/tasks/catalog.py`
+- `assets/templates/daily_ui/manifest.json`
 - `src/roxauto/tasks/daily_ui/__init__.py`
 - `src/roxauto/tasks/daily_ui/guild_order_submit.py`
+- `src/roxauto/tasks/foundations/inventory.json`
 - `src/roxauto/tasks/foundations/packs/daily_ui/catalog.json`
 - `src/roxauto/tasks/foundations/packs/daily_ui/guild_order_submit.task.json`
-- `src/roxauto/tasks/foundations/inventory.json`
-- `src/roxauto/tasks/foundations/asset_inventory.json`
 - `src/roxauto/tasks/foundations/readiness_report.json`
+- `tests/app/test_viewmodels.py`
 - `tests/tasks/daily_ui/test_foundations.py`
 - `tests/tasks/daily_ui/test_guild_order_submit.py`
 - `tests/tasks/test_catalog.py`
 - `tests/tasks/test_inventory_fixtures.py`
 - `tests/vision/test_repository.py`
+- `tests/vision/test_tooling.py`
 - `tests/vision/test_validation.py`
 - `docs/handoffs/task-daily-ui-guild-order.md`
 
-Public APIs added or changed:
+What shipped:
 
-- Added task-owned guild-order decision models in `roxauto.tasks.daily_ui.guild_order_submit`:
-  - `GuildOrderRequirement`
-  - `GuildOrderAvailability`
-  - `GuildOrderDecision`
-  - `GuildOrderMaterialPolicy`
-  - `GuildOrderDecisionContract`
-  - `GuildOrderVisibilityContract`
-  - `GuildOrderSubmitSpecification`
-- Added task-owned loaders/builders:
-  - `load_guild_order_submit_blueprint(...)`
-  - `load_guild_order_submit_material_policy(...)`
-  - `load_guild_order_submit_decision_contract(...)`
-  - `load_guild_order_submit_visibility_contract(...)`
-  - `build_guild_order_submit_specification(...)`
-- `daily_ui` package exports now include the new guild-order task-owned contract surfaces.
+- added a fixtured runtime bridge for `daily_ui.guild_order_submit`
+- added bounded live route recovery into the guild-order detail scene
+- added OCR-backed inspection with preserved text evidence fields:
+  - `raw_text`
+  - `normalized_text`
+  - `bbox`
+  - `confidence`
+  - `screenshot_ref`
+  - `reader`
+- added truthful policy flow for:
+  - standard-order `submit`
+  - standard-order `refresh`
+  - explicit `skip`
+- added signature-based post-action verification so `submit` and `refresh` only succeed when the detail signature changes
+- kept missing evidence honest:
+  - standard-order evidence gaps stay `order_state_unknown`
+  - dispatch failures stay `runtime_dispatch_failed`
+  - unchanged post-action signatures stay `submit_verification_failed` or `refresh_verification_failed`
+- kept custom-order actioning disabled in V1:
+  - runtime preserves evidence
+  - decision path records a truthful `custom_order_disabled` skip
+- promoted the foundation blueprint from `spec_only` to `fixtured`
+- changed task readiness from blocked foundation gating to runtime-ready with warning-only placeholder assets
+- updated the daily-ui scene contract so refresh affordance live evidence is marked captured
 
-Contract changes:
+Tests run:
 
-- Added a new spec-only task blueprint:
-  - `daily_ui.guild_order_submit`
-- Round-9 task policy is explicit and bounded:
-  - allowed decisions:
-    - `submit`
-    - `skip`
-    - `refresh`
-  - disallowed behaviors:
-    - `crafting`
-    - `buying`
-    - `gathering`
-    - `pathing`
-- Builder/runtime-boundary metadata now carries the guild-order task contract directly:
-  - `guild_order_material_policy`
-  - `guild_order_decision_contract`
-  - `guild_order_visibility_contract`
-  - `guild_order_handoff_fields`
-  - `guild_order_spec_builders`
-- After merging Engine C's placeholder scaffolds, the task now points at the truthful currently-known anchor ids:
-  - required list/detail anchors:
-    - `daily_ui.guild_order_list_panel`
-    - `daily_ui.guild_order_detail_panel`
-  - skip / verification surfaces:
-    - `daily_ui.guild_order_unavailable_state`
-    - `daily_ui.guild_order_insufficient_material_feedback`
-    - `daily_ui.guild_order_submit_result_state`
-- Missing guild-order template records still keep their canonical manifest `source_path` in asset inventory, so workspace readiness reports can show `missing` truthfully without creating synthetic inventory mismatches.
-- Template-only readiness checks now ignore golden-screenshot metadata when evaluating guild-order anchor and foundation requirements. This addresses the Codex review finding that a present golden could otherwise satisfy a missing template-anchor contract incorrectly.
-- Readiness now encodes two explicit foundation blockers instead of pretending the first cut can already classify everything:
-  - `foundation.daily_ui.guild_order_visible_quantity_contract`
-  - `foundation.daily_ui.guild_order_result_state_contract`
-- Required list/detail/submit/refresh anchors are no longer all `missing`; after the Engine C merge they resolve as placeholder scaffolds, which is a more truthful blocked state for round 9.
-
-Assumptions:
-
-- Engine D still needs to integrate the latest Engine C scaffolding rather than freezing the older pre-merge anchor ids.
-- Visible material quantities and post-decision result states remain gating truth surfaces for round 9; this pass should not hide those gaps behind generic `spec_only` wording.
-- The first cut can reuse `fixture_profiles/default_tw_guild.fixture.json` because the bounded flow stays inside fixed guild UI surfaces.
-
-Verification performed:
-
-- `python -m unittest tests.tasks.daily_ui.test_guild_order_submit tests.tasks.daily_ui.test_foundations tests.tasks.test_catalog tests.tasks.test_inventory_fixtures`
-- `python -m pytest -q`
-- `powershell -ExecutionPolicy Bypass -File scripts/run-autonomy-loop.ps1`
+- `python -m unittest tests.tasks.daily_ui.test_guild_order_submit tests.tasks.daily_ui.test_foundations tests.tasks.test_catalog tests.tasks.test_inventory_fixtures tests.vision.test_repository tests.vision.test_validation`
+- `python -m unittest tests.app.test_viewmodels tests.vision.test_tooling`
+- `scripts/run-autonomy-loop.ps1`
 
 Autonomy loop result:
 
-- `quality-gate.json`: `passed`
-- `pytest`: `190 passed`
-- `ruff check src tests`: `passed`
-- `doctor`: `passed`
-
-Known limitations:
-
-- No runtime handlers were added in this pass.
-- The merged Engine C anchors are still placeholder scaffolds, not reviewed live captures.
-- `daily_ui.guild_order_submit` remains blocked until Engine C / Engine E produce truthful visible quantity evidence and promote result-state surfaces beyond placeholder-only scaffolding.
+- `runtime_logs/autonomy/quality-gate.json`: `passed`
+- `runtime_logs/autonomy/agent-packet.json`: generated
+- `runtime_logs/autonomy/handoff-brief.md`: generated
+- quality-gate checks:
+  - `doctor`: `passed`
+  - `pytest`: `223 passed`
+  - `ruff`: `passed`
 
 Blockers:
 
-- Required list/detail/submit/refresh anchors are present only as placeholders, so they still do not satisfy task asset requirements truthfully.
-- Missing visible quantity contract for:
-  - `daily_ui.guild_order_material_label`
-  - `daily_ui.guild_order_required_quantity`
-  - `daily_ui.guild_order_available_quantity`
-- Placeholder-only verification contract for:
-  - `daily_ui.guild_order_unavailable_state`
-  - `daily_ui.guild_order_insufficient_material_feedback`
-  - `daily_ui.guild_order_submit_result_state`
+- V1 does not action custom-order candidate selection; it records a truthful skip instead
+- unavailable-state and insufficient-material-state scene truth are still placeholder-backed evidence in the vision manifest
+- Windows OCR on this path does not surface a native confidence value, so `confidence` may remain `null` even when the evidence packet is otherwise complete
 
 Recommended next step:
 
-- Engine E should capture or classify whether the visible quantity and post-submit result states are actually stable and truthful.
-- Engine C should promote the minimum guild-order anchor set that satisfies:
-  - required list/detail/submit/refresh anchors beyond placeholder scaffolds
-  - visible material label and quantity surfaces
-  - unavailable / insufficient-feedback / submit-result verification surfaces
-- After those assets land, rerun the task foundation builders so `daily_ui.guild_order_submit` can move from blocked-by-foundation to a truthful implementation path without widening scope.
+- capture reviewed live evidence for completed / unavailable and insufficient-material states
+- if product scope still needs it after that, open a separate V2 slice for custom-order candidate inspection and selection
+- keep follow-up work on this branch and request Codex automatic review or `@codex review` on the PR

@@ -32,7 +32,7 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
             {
                 "daily_ui.claim_rewards": "fixtured",
                 "daily_ui.guild_check_in": "spec_only",
-                "daily_ui.guild_order_submit": "spec_only",
+                "daily_ui.guild_order_submit": "fixtured",
                 "daily_ui.merchant_commission_meow": "fixtured",
                 "odin.preset_entry": "spec_only",
             },
@@ -148,6 +148,10 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
         self.assertEqual(
             catalogs[0].entries[2].metadata["signal_contract_version"],
             "guild_order_submit.v2",
+        )
+        self.assertEqual(
+            catalogs[0].entries[2].metadata["runtime_seam"]["task_spec_builder"],
+            "roxauto.tasks.daily_ui.guild_order_submit.build_guild_order_submit_task_spec",
         )
         self.assertEqual(catalogs[0].entries[3].task_id, "daily_ui.merchant_commission_meow")
         self.assertEqual(
@@ -299,24 +303,26 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
         )
         self.assertEqual(
             by_task["daily_ui.guild_order_submit"].asset_requirement_ids,
-            [
-                "asset.daily_ui.guild_order_list",
-                "asset.daily_ui.guild_order_detail",
-                "asset.daily_ui.guild_order_submit_button",
-                "asset.daily_ui.guild_order_refresh_button",
-            ],
+            [],
         )
         self.assertEqual(
             by_task["daily_ui.guild_order_submit"].foundation_requirement_ids,
-            [
-                "foundation.daily_ui.guild_order_visible_quantity_contract",
-                "foundation.daily_ui.guild_order_result_state_contract",
-                "foundation.daily_ui.guild_order_custom_option_contract",
-            ],
+            [],
+        )
+        self.assertEqual(
+            by_task["daily_ui.guild_order_submit"].runtime_requirement_ids,
+            ["runtime.daily_ui.dispatch_bridge"],
         )
         self.assertEqual(
             by_task["daily_ui.guild_order_submit"].metadata["guild_order_decision_contract"]["allowed_decisions"],
             ["submit", "skip", "refresh"],
+        )
+        self.assertFalse(
+            by_task["daily_ui.guild_order_submit"].metadata["guild_order_material_policy"]["custom_order_enabled"]
+        )
+        self.assertEqual(
+            by_task["daily_ui.guild_order_submit"].metadata["runtime_seam"]["runtime_bridge_probe"],
+            "roxauto.tasks.daily_ui.guild_order_submit.has_guild_order_submit_runtime_bridge",
         )
         self.assertEqual(
             by_task["daily_ui.merchant_commission_meow"].asset_requirement_ids,
@@ -422,23 +428,19 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
         )
         self.assertEqual(
             by_task["daily_ui.guild_order_submit"].builder_readiness_state.value,
-            "blocked_by_foundation",
+            "ready",
         )
         self.assertEqual(
             by_task["daily_ui.guild_order_submit"].implementation_readiness_state.value,
-            "blocked_by_foundation",
+            "ready",
         )
         self.assertEqual(
             [item.requirement_id for item in by_task["daily_ui.guild_order_submit"].builder_requirements],
-            [
-                "asset.daily_ui.guild_order_list",
-                "asset.daily_ui.guild_order_detail",
-                "asset.daily_ui.guild_order_submit_button",
-                "asset.daily_ui.guild_order_refresh_button",
-                "foundation.daily_ui.guild_order_visible_quantity_contract",
-                "foundation.daily_ui.guild_order_result_state_contract",
-                "foundation.daily_ui.guild_order_custom_option_contract",
-            ],
+            [],
+        )
+        self.assertEqual(
+            [item.requirement_id for item in by_task["daily_ui.guild_order_submit"].implementation_requirements],
+            ["runtime.daily_ui.dispatch_bridge"],
         )
         self.assertEqual(
             by_task["daily_ui.merchant_commission_meow"].builder_readiness_state.value,
@@ -495,7 +497,7 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
             [item.metadata["requirement_level"] for item in claim_rewards.warning_requirements],
             ["supporting"],
         )
-        self.assertEqual(guild_order_submit.builder_readiness_state.value, "blocked_by_foundation")
+        self.assertEqual(guild_order_submit.builder_readiness_state.value, "ready")
         self.assertEqual(merchant_commission_meow.builder_readiness_state.value, "blocked_by_asset")
 
     def test_guild_order_foundation_checks_ignore_golden_records(self) -> None:

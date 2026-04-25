@@ -62,7 +62,7 @@
       ]
     }
   ],
-  "implementation_state": "spec_only",
+  "implementation_state": "fixtured",
   "steps": [
     {
       "step_id": "open_guild_order_list",
@@ -74,35 +74,35 @@
     {
       "step_id": "inspect_visible_order",
       "action": "vision_verify",
-      "success_condition": "The current order slot, visible requirement or self-select order state, and visible available-material state can be classified honestly.",
+      "success_condition": "The current order slot, visible standard requirement or truthful custom-order state, and visible available-material state can be classified honestly.",
       "failure_condition": "The current standard requirement, custom-order state, or visible quantity state remains ambiguous.",
-      "notes": "No freeform OCR-only inference is allowed in this first cut."
+      "notes": "Bounded OCR evidence is allowed in this first cut, but every observed text must preserve raw_text, normalized_text, bbox, confidence, screenshot_ref, and reader."
     },
     {
       "step_id": "inspect_custom_order_options",
       "action": "vision_verify",
-      "success_condition": "When the current slot is a self-select order, the visible candidate options can be inspected honestly from the bounded custom-order list.",
-      "failure_condition": "The custom-order list, visible option requirements, or visible available-material state remains ambiguous.",
-      "notes": "This step applies only when the current guild-order slot is the self-select custom order."
+      "success_condition": "When the current slot is a self-select order, the task records that bounded custom-order handling is disabled in V1 and preserves the blocking evidence honestly.",
+      "failure_condition": "The current custom-order state cannot be classified honestly enough to record a bounded skip.",
+      "notes": "V1 does not inspect or choose custom-order candidates; it only preserves truthful evidence and keeps the slice bounded."
     },
     {
       "step_id": "decide_material_action",
       "action": "task_policy",
-      "success_condition": "The task chooses submit, skip, or refresh from machine-readable material policy and visible evidence only, including self-select order candidates when present.",
+      "success_condition": "The task chooses submit, skip, or refresh from machine-readable material policy and visible evidence only.",
       "failure_condition": "No truthful bounded decision can be made from visible state and configured policy.",
       "notes": "This step must not introduce crafting, gathering, or pathing as hidden dependencies."
     },
     {
       "step_id": "apply_material_decision",
       "action": "tap_anchor",
-      "success_condition": "The selected bounded decision path is applied without expanding beyond submit, skip, or refresh, including bounded self-select option picking when required before submission.",
+      "success_condition": "The selected bounded decision path is applied without expanding beyond submit, skip, or refresh.",
       "failure_condition": "Submit or refresh affordances are missing when the bounded decision requires them.",
-      "notes": "Skip remains an explicit no-action path that still records the reason honestly."
+      "notes": "Skip remains an explicit no-action path that still records the reason honestly. V1 does not pick custom-order options."
     },
     {
       "step_id": "verify_material_outcome",
       "action": "vision_verify",
-      "success_condition": "The task verifies the chosen submit, skip, or refresh outcome with truthful post-decision evidence, including custom-order selection outcomes when that path is taken.",
+      "success_condition": "The task verifies the chosen submit, skip, or refresh outcome with truthful post-decision evidence.",
       "failure_condition": "The bounded decision outcome cannot be verified from stable guild-order UI evidence.",
       "notes": "Round 9 requires honest verification instead of assuming the action succeeded."
     }
@@ -110,17 +110,11 @@
   "metadata": {
     "phase": "round-9",
     "task_pack_owner": "engine_d",
-    "asset_requirement_ids": [
-      "asset.daily_ui.guild_order_list",
-      "asset.daily_ui.guild_order_detail",
-      "asset.daily_ui.guild_order_submit_button",
-      "asset.daily_ui.guild_order_refresh_button"
+    "asset_requirement_ids": [],
+    "runtime_requirement_ids": [
+      "runtime.daily_ui.dispatch_bridge"
     ],
-    "foundation_requirement_ids": [
-      "foundation.daily_ui.guild_order_visible_quantity_contract",
-      "foundation.daily_ui.guild_order_result_state_contract",
-      "foundation.daily_ui.guild_order_custom_option_contract"
-    ],
+    "foundation_requirement_ids": [],
     "supporting_anchor_ids": [
       "daily_ui.guild_order_material_label",
       "daily_ui.guild_order_required_quantity",
@@ -151,11 +145,11 @@
       "reserve_quantity_by_material_label": {},
       "refresh_allowed": true,
       "max_refresh_attempts_per_run": 1,
-      "custom_order_enabled": true,
+      "custom_order_enabled": false,
       "custom_order_preferred_material_ids": [],
       "custom_order_preferred_material_labels": [],
       "custom_order_max_candidates_to_inspect": 8,
-      "custom_order_selection_boundary": "visible_custom_order_candidate_evidence_only",
+      "custom_order_selection_boundary": "disabled_in_v1_runtime",
       "decision_priority": [
         "submit",
         "refresh",
@@ -167,7 +161,7 @@
         "gathering",
         "pathing"
       ],
-      "notes": "Guild-order submission now includes the bounded self-select order path. The self-select order is a first-round bonus card, not a second-round mode. The task may inspect visible custom-order candidates and choose one truthful option using the same material-policy rules, but it still must not hide crafting, gathering, or pathing as dependencies."
+      "notes": "V1 supports standard-order submit / skip / refresh only. When a self-select custom order is visible, the runtime preserves evidence and records a truthful skip instead of widening into candidate selection."
     },
     "guild_order_decision_contract": {
       "allowed_decisions": [
@@ -184,12 +178,6 @@
         "refresh_not_allowed",
         "refresh_limit_reached",
         "custom_order_disabled",
-        "custom_order_list_unavailable",
-        "custom_order_no_viable_option",
-        "custom_order_option_selected",
-        "custom_order_selected_candidate_missing",
-        "custom_order_selected_candidate_blocked",
-        "custom_order_selected_candidate_insufficient",
         "submit_verification_failed",
         "refresh_verification_failed"
       ],
@@ -223,11 +211,11 @@
         "sufficiency"
       ],
       "decision_rules": {
-        "submit": "Visible standard requirements are allowed and sufficiently stocked, or a visible self-select option is chosen truthfully under the same material policy.",
-        "skip": "Visible order is already completed, self-select support is unavailable or disabled, refresh is disallowed, or no truthful bounded action remains after policy evaluation.",
-        "refresh": "Visible order or self-select option set is unsuitable and one bounded refresh remains allowed by policy."
+        "submit": "Visible standard requirements are allowed and sufficiently stocked from bounded evidence only.",
+        "skip": "Visible order is already completed, the state is still ambiguous, custom-order handling is disabled, refresh is disallowed, or no truthful bounded action remains after policy evaluation.",
+        "refresh": "Visible standard-order evidence is unsuitable and one bounded refresh remains allowed by policy."
       },
-      "notes": "Unknown order state should fail honestly instead of inventing a fourth hidden action path. Self-select orders stay inside the same submit / skip / refresh decision envelope as a first-round bonus path, must record the chosen option explicitly, and should preserve truthful failure reasons when an operator-selected candidate index is missing, blocked, or insufficient."
+      "notes": "Unknown order state must fail or skip honestly instead of inventing a hidden action path. V1 keeps custom-order handling outside scope and records that surface as a truthful skip."
     },
     "guild_order_visibility_contract": {
       "required_anchor_ids": [
@@ -267,18 +255,10 @@
         "slot_index",
         "material_label",
         "required_quantity",
-        "available_quantity",
-        "candidate_index",
-        "custom_option_material_label",
-        "custom_option_required_quantity",
-        "custom_option_available_quantity"
+        "available_quantity"
       ],
-      "foundation_requirement_ids": [
-        "foundation.daily_ui.guild_order_visible_quantity_contract",
-        "foundation.daily_ui.guild_order_result_state_contract",
-        "foundation.daily_ui.guild_order_custom_option_contract"
-      ],
-      "notes": "Guild-order submit remains blocked until visible quantities, self-select option surfaces, and post-decision result states are truthful and deterministic."
+      "foundation_requirement_ids": [],
+      "notes": "V1 uses bounded runtime OCR evidence and signature-based verification instead of template-blocked quantity contracts, but still preserves truthful supporting scene metadata for future evidence work."
     },
     "guild_order_handoff_fields": [
       "decision",
@@ -292,6 +272,32 @@
       "refresh_attempted",
       "verification_state"
     ],
+    "runtime_seam": {
+      "runtime_input_builder": "roxauto.tasks.daily_ui.guild_order_submit.build_guild_order_submit_runtime_input",
+      "runtime_seam_builder": "roxauto.tasks.daily_ui.guild_order_submit.build_guild_order_submit_runtime_seam",
+      "task_spec_builder": "roxauto.tasks.daily_ui.guild_order_submit.build_guild_order_submit_task_spec",
+      "runtime_bridge_probe": "roxauto.tasks.daily_ui.guild_order_submit.has_guild_order_submit_runtime_bridge",
+      "signal_contract_version": "guild_order_submit.v2",
+      "result_signal_keys": [
+        "decision",
+        "reason_id",
+        "slot_index",
+        "order_kind",
+        "requirements",
+        "availability",
+        "custom_options",
+        "selected_custom_option",
+        "refresh_attempted",
+        "verification_state",
+        "failure_reason_id",
+        "inspection_attempts",
+        "outcome_code",
+        "step_outcome",
+        "task_action",
+        "telemetry",
+        "text_evidence"
+      ]
+    },
     "guild_order_spec_builders": {
       "task_specification_builder": "roxauto.tasks.daily_ui.guild_order_submit.build_guild_order_submit_specification",
       "material_policy_loader": "roxauto.tasks.daily_ui.guild_order_submit.load_guild_order_submit_material_policy",
@@ -299,7 +305,7 @@
       "visibility_contract_loader": "roxauto.tasks.daily_ui.guild_order_submit.load_guild_order_submit_visibility_contract"
     }
   },
-  "notes": "Round-9 specification-only blueprint for deterministic guild-order submit / skip / refresh logic using visible material evidence only.",
+  "notes": "Round-9 fixtured blueprint for deterministic guild-order submit / skip / refresh using bounded runtime OCR evidence and truthful post-action verification.",
   "pack_id": "daily_ui",
   "required_anchors": [
     "common.close_button",
@@ -310,9 +316,9 @@
   ],
   "task_manifest": {
     "entry_condition": "Guild panel and guild-order list are reachable through deterministic menu navigation and the account belongs to a guild.",
-    "failure_condition": "The order state, visible material evidence, or bounded verification path cannot be classified honestly.",
+    "failure_condition": "The order state, preserved text evidence, or bounded verification path cannot be classified honestly.",
     "metadata": {
-      "implementation_state": "spec_only",
+      "implementation_state": "fixtured",
       "phase": "round-9",
       "signal_contract_version": "guild_order_submit.v2"
     },
@@ -355,7 +361,7 @@
         }
       }
     ],
-    "success_condition": "The task reaches a truthful submit, skip, or refresh outcome for either a standard or self-select guild order and records why that outcome was chosen.",
+    "success_condition": "The task reaches a truthful submit, skip, or refresh outcome for the current guild-order slot and records preserved text evidence for that outcome.",
     "task_id": "daily_ui.guild_order_submit",
     "version": "0.1.0"
   }
