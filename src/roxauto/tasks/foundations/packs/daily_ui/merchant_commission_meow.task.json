@@ -68,7 +68,7 @@
       ]
     }
   ],
-  "implementation_state": "spec_only",
+  "implementation_state": "fixtured",
   "steps": [
     {
       "step_id": "open_merchant_commission_entry",
@@ -125,6 +125,29 @@
       "asset.daily_ui.merchant_commission_buy_confirm_button",
       "asset.daily_ui.merchant_commission_submit_button"
     ],
+    "runtime_requirement_ids": [
+      "runtime.daily_ui.dispatch_bridge"
+    ],
+    "runtime_seam": {
+      "runtime_input_builder": "roxauto.tasks.daily_ui.merchant_commission_meow.build_merchant_commission_meow_runtime_input",
+      "runtime_seam_builder": "roxauto.tasks.daily_ui.merchant_commission_meow.build_merchant_commission_meow_runtime_seam",
+      "task_spec_builder": "roxauto.tasks.daily_ui.merchant_commission_meow.build_merchant_commission_meow_task_spec",
+      "runtime_bridge_probe": "roxauto.tasks.daily_ui.merchant_commission_meow.has_merchant_commission_meow_runtime_bridge",
+      "signal_contract_version": "merchant_commission_meow.v2",
+      "result_signal_keys": [
+        "anchor_id",
+        "decision",
+        "failure_reason_id",
+        "inspection_attempts",
+        "matched_anchor_ids",
+        "outcome_code",
+        "round_index",
+        "step_outcome",
+        "task_action",
+        "telemetry",
+        "text_evidence"
+      ]
+    },
     "supporting_anchor_ids": [
       "daily_ui.merchant_commission_round_counter",
       "daily_ui.merchant_commission_material_label",
@@ -245,7 +268,7 @@
       "loop_contract_loader": "roxauto.tasks.daily_ui.merchant_commission_meow.load_merchant_commission_meow_loop_contract"
     }
   },
-  "notes": "Specification-only blueprint for the bounded `商會委託 -> 喵手商團` first delivery slice.",
+  "notes": "Fixtured blueprint for the bounded `商會委託 -> 喵手商團` first delivery slice.",
   "pack_id": "daily_ui",
   "required_anchors": [
     "common.close_button",
@@ -268,9 +291,9 @@
     "entry_condition": "The account is on the validated main-city UI route and can reach Merchant Commission through the fixed Poring -> Carnival entry.",
     "failure_condition": "The Meow Group route leaves the validated fixed-UI entry, cannot re-enter through the left task list, or cannot verify round progression honestly.",
     "metadata": {
-      "implementation_state": "spec_only",
+      "implementation_state": "fixtured",
       "phase": "merchant_commission_transition",
-      "signal_contract_version": "merchant_commission_meow.v1"
+      "signal_contract_version": "merchant_commission_meow.v2"
     },
     "name": "Merchant Commission (Meow Group)",
     "recovery_policy": "abort",

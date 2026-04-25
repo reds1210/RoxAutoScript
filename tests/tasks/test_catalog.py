@@ -33,7 +33,7 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
                 "daily_ui.claim_rewards": "fixtured",
                 "daily_ui.guild_check_in": "spec_only",
                 "daily_ui.guild_order_submit": "spec_only",
-                "daily_ui.merchant_commission_meow": "spec_only",
+                "daily_ui.merchant_commission_meow": "fixtured",
                 "odin.preset_entry": "spec_only",
             },
         )
@@ -152,7 +152,7 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
         self.assertEqual(catalogs[0].entries[3].task_id, "daily_ui.merchant_commission_meow")
         self.assertEqual(
             catalogs[0].entries[3].metadata["signal_contract_version"],
-            "merchant_commission_meow.v1",
+            "merchant_commission_meow.v2",
         )
 
     def test_builds_asset_inventory(self) -> None:
@@ -260,6 +260,10 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
             "roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_task_spec",
         )
         self.assertEqual(
+            by_task["daily_ui.claim_rewards"].metadata["runtime_seam"]["runtime_bridge_probe"],
+            "roxauto.tasks.daily_ui.claim_rewards.has_claim_rewards_runtime_bridge",
+        )
+        self.assertEqual(
             by_task["daily_ui.claim_rewards"].metadata["runtime_seam"]["result_signal_keys"],
             [
                 "failure_reason_id",
@@ -334,6 +338,18 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
             ],
         )
         self.assertEqual(
+            by_task["daily_ui.merchant_commission_meow"].runtime_requirement_ids,
+            ["runtime.daily_ui.dispatch_bridge"],
+        )
+        self.assertEqual(
+            by_task["daily_ui.merchant_commission_meow"].metadata["runtime_seam"]["task_spec_builder"],
+            "roxauto.tasks.daily_ui.merchant_commission_meow.build_merchant_commission_meow_task_spec",
+        )
+        self.assertEqual(
+            by_task["daily_ui.merchant_commission_meow"].metadata["runtime_seam"]["runtime_bridge_probe"],
+            "roxauto.tasks.daily_ui.merchant_commission_meow.has_merchant_commission_meow_runtime_bridge",
+        )
+        self.assertEqual(
             by_task["daily_ui.merchant_commission_meow"].metadata["merchant_commission_meow_loop_contract"][
                 "preferred_reentry_mode"
             ],
@@ -385,6 +401,10 @@ class TaskFoundationRepositoryTests(unittest.TestCase):
         )
         self.assertIn(
             "runtime_seam_builder=roxauto.tasks.daily_ui.claim_rewards.build_claim_rewards_runtime_seam",
+            by_task["daily_ui.claim_rewards"].implementation_requirements[0].details,
+        )
+        self.assertIn(
+            "runtime_bridge_probe=roxauto.tasks.daily_ui.claim_rewards.has_claim_rewards_runtime_bridge",
             by_task["daily_ui.claim_rewards"].implementation_requirements[0].details,
         )
         self.assertEqual(
